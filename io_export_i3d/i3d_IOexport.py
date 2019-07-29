@@ -20,19 +20,22 @@
 
 # TODO: IK, Animations, Skin Weights
 
-import bpy, bmesh
-import time, inspect
-import math, mathutils
+import bpy
+import bmesh
+import time
+import inspect
+import math
+import mathutils
 import xml.etree.cElementTree as xml_ET
 
-BLENDER_CHECK_VERSION01 = ( 2, 70, 0 )
+BLENDER_CHECK_VERSION01 = (2, 80, 0 )
 
-class I3D_IOexport( object ):
+class I3D_IOexport(object):
     def __init__( self ):
-        self._i3d_exportIK                  = bpy.context.scene.I3D_export.I3D_exportIK
-        self._i3d_exportAnimation           = bpy.context.scene.I3D_export.I3D_exportAnimation
-        self._i3d_exportShapes              = bpy.context.scene.I3D_export.I3D_exportShapes
-        self._i3d_exportNurbsCurves         = bpy.context.scene.I3D_export.I3D_exportNurbsCurves
+        self._i3d_exportIK = bpy.context.scene.I3D_export.I3D_exportIK
+        self._i3d_exportAnimation = bpy.context.scene.I3D_export.I3D_exportAnimation
+        self._i3d_exportShapes = bpy.context.scene.I3D_export.I3D_exportShapes
+        self._i3d_exportNurbsCurves = bpy.context.scene.I3D_export.I3D_exportNurbsCurves
         self._i3d_exportLights              = bpy.context.scene.I3D_export.I3D_exportLights
         self._i3d_exportCameras             = bpy.context.scene.I3D_export.I3D_exportCameras
         self._i3d_exportParticleSystems     = bpy.context.scene.I3D_export.I3D_exportParticleSystems
