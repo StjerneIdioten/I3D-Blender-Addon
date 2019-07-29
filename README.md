@@ -1,37 +1,33 @@
-## Welcome to GitHub Pages
+## Description
+I3d Addon for Blender 2.8.
 
-You can use the [editor on GitHub](https://github.com/Tallion-07/I3d-Import-Export-Tools-for-Blender-2.8/edit/master/README.md) to maintain and preview the content for your website in Markdown files.
+## Suitability
+This is **IN DEVELOPMENT** in no way shape or form is this currently working. 
+(line added for **IDIOTS**).
 
-Whenever you commit to this repository, GitHub Pages will run [Jekyll](https://jekyllrb.com/) to rebuild the pages in your site, from the content in your Markdown files.
+## Purpose
 
-### Markdown
+A.The Main Objective is updating the Original Plugin written by GIANTS Software GmbH, to comply with Blender 2.8. 
 
-Markdown is a lightweight and easy-to-use syntax for styling your writing. It includes conventions for
+B. This Updated addon is not intended to be backwards compatible with any previous versions of Blender.
 
-```markdown
-Syntax highlighted code block
+## Objectives
+1. To update code to be compliant for python 3.7+.
+2. Improve where required to standards as outlined by Blender.org for any addons.
+3. Any added functionality (if requested or possible) by the contrubuting community.
 
-# Header 1
-## Header 2
-### Header 3
+## Access
+As it is under the GNU General Public License as published by the Free Software Foundation, and Giants have yet to commit to
+"Officially" update the add-on.
+I have posted it here for anyone that either wants to assist, and also for any community collaberation. 
+Access is not Guaranteed as I am new at using github so there may be some limitations that i am not aware of.
 
-- Bulleted
-- List
+## Licence
 
-1. Numbered
-2. List
+This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
 
-**Bold** and _Italic_ and `Code` text
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-[Link](url) and ![Image](src)
-```
+You should have received a copy of the GNU General Public License along with this program; if not, write to the Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
-For more details see [GitHub Flavored Markdown](https://guides.github.com/features/mastering-markdown/).
-
-### Jekyll Themes
-
-Your Pages site will use the layout and styles from the Jekyll theme you have selected in your [repository settings](https://github.com/Tallion-07/I3d-Import-Export-Tools-for-Blender-2.8/settings). The name of this theme is saved in the Jekyll `_config.yml` configuration file.
-
-### Support or Contact
-
-Having trouble with Pages? Check out our [documentation](https://help.github.com/categories/github-pages-basics/) or [contact support](https://github.com/contact) and we’ll help you sort it out.
+Copyright 2004 (C) GIANTS Software GmbH, Confidential, All Rights Reserved.
