@@ -1,5 +1,5 @@
 ## Description
-I3d Addon for Blender 2.8.
+I3d-Giants File Addon for Blender 2.8.
 
 ## Suitability
 This is **IN DEVELOPMENT** in no way shape or form is this currently working. 
