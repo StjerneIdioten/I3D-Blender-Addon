@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+# !/usr/bin/env python3
 # ##### BEGIN GPL LICENSE BLOCK #####
 #
 #  This program is free software; you can redistribute it and/or
@@ -33,18 +33,16 @@ bl_info = {
     "blender": (2, 80, 0),
     "location": "File > Import-Export",
     "warning": "Unofficial Version under testing",
-    "wiki_url": 
-("https://github.com/Tallion-07/I3d-Import-Export-for-Blender-2.8.wiki.git"),
-    "tracker_url": 
-("https://tallion-07.github.io/I3d-Import-Export-for-Blender-2.8"),
-    "support": "Testing",
+    "wiki_url": ("https://github.com/Tallion-07/I3d-Import-Export-for-Blender-2.8.wiki.git"),
+    "tracker_url": ("https://tallion-07.github.io/I3d-Import-Export-for-Blender-2.8"),
+    "support": "community",
     "category": "Import-Export"}
 
 global DCC_PLATFORM
 DCC_PLATFORM = "blender"
 
 if "bpy" in locals():
-from importlib import reload  # Python 3.4+ only
+    import importlib
     importlib.reload(i3d_ui)
     importlib.reload(dcc)
 else:
@@ -58,6 +56,12 @@ else:
 class I3D_Menu(bpy.types.Menu):
     bl_label = "GIANTS I3D"
     bl_idname = "i3d_menu"
+
+
+def draw(self, context):
+    layout = self.layout
+    layout.label(text="v {0}".format(bl_info["version"]))
+    layout.operator("i3d.menu_export")
 
 # ------------------------------------------------------------------------------
 #   I3D Menu Draw
