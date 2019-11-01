@@ -21,6 +21,8 @@ with future releases of either Farm Simulator or Blender
   - Python 3.6+
 
 ## Objectives
+Current Priorities listed in order
+
 1. To update code to be compliant for python 3.6+.
 2. Improve where required to standards as outlined by Blender.org for any addons.
 3. Any added functionality (if requested or possible) by the contrubuting community.
@@ -30,7 +32,7 @@ with future releases of either Farm Simulator or Blender
 
 ## Technologies
 - Python 3.6
-- PEP8-80 compliant (althought this may not always be possible
+- PEP8-80 compliant (althought this may not always be possible)
 - Blender 2.8
 
 ## Status
