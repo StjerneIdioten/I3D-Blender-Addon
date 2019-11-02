@@ -26,6 +26,8 @@ with future releases of either Farm Simulator or Blender
 
 ## Objectives
 
+Current Priorities listed in order
+
 1. To update code to be compliant for python 3.6+.
 2. Improve where required to standards as outlined by Blender.org for any addons.
 3. Any added functionality (if requested or possible) by the contrubuting community.
