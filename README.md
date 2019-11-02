@@ -1,6 +1,7 @@
 # i3D-Giants Addon for Blender 2.8.x
 
 ## Table of Contents
+
 * [Description](#description)
 * [Introduction](#introduction)
 * [Objectives](#objectives)
@@ -11,54 +12,82 @@
 * [Licence](#licence)
 
 ## Description
-I3d-Giants File Addon for Blender 2.8 and also for future developement and compatability 
+
+I3d-Giants File Addon for Blender 2.8 and also for future developement and compatability
 with future releases of either Farm Simulator or Blender
 
 ## Introduction
+
 * The Main Objective is updating the Original Plugin written by GIANTS Software GmbH, to comply with Blender 2.8.
-* This Updated addon is not intended to be backwards compatible with any previous versions of - 
-  - Blender 2.8+
-  - Python 3.6+
+* This Updated addon is not intended to be backwards compatible with any previous versions of
+
+  * Blender 2.8+
+  * Python 3.6+
 
 ## Objectives
+
 Current Priorities listed in order
 
 1. To update code to be compliant for python 3.6+.
 2. Improve where required to standards as outlined by Blender.org for any addons.
 3. Any added functionality (if requested or possible) by the contrubuting community.
 
-- to keep Addon current
-- keep developing for future Blender Changes
+* to keep Addon current
+* keep developing for future Blender Changes
 
 ## Technologies
-- Python 3.6
-- PEP8-80 compliant (althought this may not always be possible)
-- Blender 2.8
+
+* Programming text editor
+
+Visual code studio
+        addons
+
+        for vscode
+        1. vscode-icons (nice eye candy)
+
+        for github
+        1. YAML (only required if you are contributing to the read.me or Wiki files)
+
+        for Blender
+        1. Blender Developement
+
+        for Python programming
+        1. Code runner
+
+        for Git and GIThub
+        1. Git extension pack
+        2. gitlens
+
+* Python 3.6
+* PEP8-80 compliant (althought this may not always be possible
+* Blender 2.8
 
 ## Status
-- Currently Active
-- Identifying issues  Check project Board and Issues List
 
+* Currently Active
+* Identifying issues  Check project Board and Issues List
 
 ## Access
+
 As it is under the GNU General Public License as published by the Free Software Foundation, and Giants have yet to commit to
 "Officially" update the add-on.
 
-I have posted it here for anyone that either wants to assist, and also for any community collaberation. 
+I have posted it here for anyone that either wants to assist, and also for any community collaberation.
 
 Deveolpement Access is not Guaranteed, you must have "some" experiance at using  the following -
 
-- Github proceedures
-- Knowledge of Python 3.6+
-- knowledge of Blender 2.8
-- Keeping up to date as resonable to be aware of changes of the above for both current and future developement.
+1. Github proceedures
+2. Knowledge of Python 3.6+
+3. Knowledge of Blender 2.8
+4. Keeping up to date as resonable to be aware of changes of the above for both current and future developement.
 
-I am also a Interstate Truck driver and on the road frequently (usually six days a week).
+I am also an Interstate Truck driver and on the road frequently (usually five or six days a week).
 If you decide to apply, you are free too, but do not expect to get access immediately (as in right now).
 
 ## Sources
+
  Required reading for contributors.
- 
+
 [Blender's API reference](https://docs.blender.org/api/current/info_api_reference.html)
 
 [Blender's Best Practices](https://docs.blender.org/api/current/info_best_practice.html)
