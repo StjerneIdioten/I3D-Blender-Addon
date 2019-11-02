@@ -1,4 +1,4 @@
-# i3D-Giants Addon for Blender 2.8.x
+# Blender 2.8. Addon for i3D-Giants Game Engine
 
 ## Table of Contents
 
