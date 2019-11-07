@@ -2,7 +2,7 @@
 name: Wiki request
 about: 'Create a report for errors in Wiki or User documentation '
 title: ''
-labels: incoming, Wiki correction request
+labels: Wiki correction request, incoming
 assignees: ''
 
 ---
