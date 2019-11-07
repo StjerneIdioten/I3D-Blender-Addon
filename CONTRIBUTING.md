@@ -27,6 +27,8 @@ Suggest your change in the [forum](https://discord.gg/apnvtRw) and start writing
 
 Do you have questions about the source code?
 Ask any question about how to use, check the [forum](https://discord.gg/apnvtRw).
+
+### Are you good at writing?
 Do you want to contribute to the documentation, apply here using a wiki [request](https://github.com/Tallion-07/Blender-2.8-Plug-in-Giants-Engine/issues/new/choose)?
 
 This Plugin is a volunteer effort. We encourage you to pitch in and join the team!
