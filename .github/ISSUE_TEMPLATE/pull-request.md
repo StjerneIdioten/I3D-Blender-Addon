@@ -2,8 +2,8 @@
 name: Pull request
 about: 'Submission for a Pull Request '
 title: Pull Request
-labels: ''
-assignees: ''
+labels: Pull Request
+assignees: Tallion-07
 
 ---
 
