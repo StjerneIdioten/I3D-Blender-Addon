@@ -1,1 +1,1 @@
-theme: jekyll-theme-cayman
+cat codecov.yml | curl --data-binary @- https://codecov.io/validate
