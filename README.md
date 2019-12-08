@@ -25,7 +25,7 @@ with future releases of either Farm Simulator or Blender
 * This Updated addon is not intended to be backwards compatible with any previous versions of
 
   * Blender 2.8+
-  * Python 3.6+
+  * Python 3.7+
 
 ## Objectives
 
