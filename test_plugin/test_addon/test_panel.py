@@ -10,6 +10,7 @@ class TEST_ADDON_PT_center(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-
-        row = layout.row()
-        row.operator('view3d.cursor_center', text="Center 3D cursor")
+        obj = context.object
+        #row = layout.row()
+        #row.operator('view3d.cursor_center', text="Center 3D cursor")
+        layout.operator("view3d.cursor_center", icon="PLUGIN")

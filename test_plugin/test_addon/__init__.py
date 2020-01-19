@@ -13,23 +13,6 @@ import bpy
 
 print(__file__)
 
-"""             ##### BEGIN GPL LICENSE BLOCK #####.
-  This program is free software; you can redistribute it and/or
-  modify it under the terms of the GNU General Public License
-  as published by the Free Software Foundation; either version 2
-  of the License, or (at your option) any later version.
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-  You should have received a copy of the GNU General Public License
-  along with this program; if not, write to the Free Software Foundation,
-  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-                ##### END GPL LICENSE BLOCK #####
-TODO: check current programming
-<pep8-80 compliant>
-"""
-
 bl_info = {
     "name": "Test_addon",
     "author": "StjerneIdioten",
@@ -40,8 +23,22 @@ bl_info = {
     "category": "Generic"
 }
 
-classes = (test_op.TEST_ADDON_OT_center, test_panel.TEST_ADDON_PT_center)
+classes = (test_op.TEST_ADDON_OT_center,
+           test_panel.TEST_ADDON_PT_center,
+           test_op.TEST_ADDON_OT_export_i3d)
 
-register, unregister = bpy.utils.register_classes_factory(classes)
+factory_register, factory_unregister = bpy.utils.register_classes_factory(classes)
 
 
+def menu_func_export(self, context):
+    self.layout.operator(test_op.TEST_ADDON_OT_export_i3d.bl_idname, text="I3D (.i3d)")
+
+
+def register():
+    factory_register()
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
+
+
+def unregister():
+    factory_unregister()
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
