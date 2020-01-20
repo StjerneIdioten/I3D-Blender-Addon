@@ -37,6 +37,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     """Save i3d file"""
     bl_idname = "export_scene.i3d"
     bl_label = "Export I3D"
+    bl_options = {'PRESET'}
 
     filename_ext = ".i3d"
     filter_glob: StringProperty(default="*.i3d",
