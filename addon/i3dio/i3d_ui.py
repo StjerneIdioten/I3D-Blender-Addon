@@ -16,6 +16,7 @@
  ##### END GPL LICENSE BLOCK #####
 """
 
+import time
 import bpy
 from bpy.props import (
     StringProperty,
@@ -31,6 +32,8 @@ from bpy.types import (
     Panel,
     PropertyGroup
 )
+
+from . import i3d_exporter
 
 
 class I3D_IO_OT_export(Operator, ExportHelper):
@@ -98,7 +101,11 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     )
 
     def execute(self, context):
-        print("Path: " + self.filepath + ', Selection Only: ' + str(self.use_selection))
+        print("Exporting to " + self.filepath)
+        time_start = time.time()
+        exporter = i3d_exporter.Exporter(self.filepath)
+        time_elapsed = time.time() - time_start
+        print("Export took {0:.3f} seconds".format(time_elapsed))
         return {'FINISHED'}
 
     def draw(self, context):

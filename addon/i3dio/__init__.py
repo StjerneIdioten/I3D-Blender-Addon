@@ -19,6 +19,7 @@
 if "bpy" in locals():
     import importlib
     importlib.reload(i3d_ui)
+    importlib.reload(i3d_exporter)
     print("Reloaded multifiles")
 else:
     from . import i3d_ui
