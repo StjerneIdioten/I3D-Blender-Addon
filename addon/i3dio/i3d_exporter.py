@@ -37,7 +37,7 @@ class Exporter:
         https://gdn.giants-software.com/documentation_i3d.php
         """
         self._root_element = ET.Element('i3D')  # Create top level element
-        self._root_element.set('name', bpy.path.basename(self._filepath))  # Name attribute
+        self._root_element.set('name', bpy.path.display_name_from_filepath(self._filepath))  # Name attribute
 
         # Xml scheme attributes as required by the i3d standard, even though most of the links are dead.
         self._root_element.set('version', "1.6")
