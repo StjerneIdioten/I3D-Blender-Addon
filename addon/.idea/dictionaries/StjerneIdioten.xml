@@ -5,6 +5,8 @@
       <w>idname</w>
       <w>scenegraph</w>
       <w>sfile</w>
+      <w>typehint</w>
+      <w>typehints</w>
     </words>
   </dictionary>
 </component>

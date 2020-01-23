@@ -15,7 +15,7 @@
   Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  ##### END GPL LICENSE BLOCK #####
 """
-
+from __future__ import annotations  # Enables python 4.0 annotation typehints fx. using the class itself as a typehint to itself
 import sys
 # Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
@@ -30,57 +30,89 @@ class Exporter:
         self._export_only_selection = False
         self._filepath = filepath
 
-        self._xml_build()
+        self._generate_scene_graph()
+        self._xml_build_structure()
 
-    def _xml_build(self) -> int:
+        #self._xml_parse_from_blender()
+        #self._xml_export_to_file()
+
+    def _generate_scene_graph(self):
+        for obj in bpy.context.selected_objects:
+            # Objects directly in the scene only has the 'Master Collection' in the list,
+            # which disappears once the object is added to any other collection
+            if bpy.context.scene.collection in obj.users_collection and obj.parent is None:
+                print(f"{obj.name!r} is at scene root")
+
+    def _generate_scene_graph_item(self, blender_object, parent):
+        pass
+
+    def _xml_build_structure(self) -> None:
         """Builds the i3d file conforming to the standard specified at
         https://gdn.giants-software.com/documentation_i3d.php
         """
-        self._root_element = ET.Element('i3D')  # Create top level element
-        self._root_element.set('name', bpy.path.display_name_from_filepath(self._filepath))  # Name attribute
+        self._tree = ET.Element('i3D')  # Create top level element
+        self._tree.set('name', bpy.path.display_name_from_filepath(self._filepath))  # Name attribute
 
         # Xml scheme attributes as required by the i3d standard, even though most of the links are dead.
-        self._root_element.set('version', "1.6")
-        self._root_element.set('xmlns:xsi', "http://www.w3.org/2001/XMLSchema-instance")
-        self._root_element.set('xsi:noNamespaceSchemaLocation', "http://i3d.giants.ch/schema/i3d-1.6.xsd")
+        self._tree.set('version', "1.6")
+        self._tree.set('xmlns:xsi', "http://www.w3.org/2001/XMLSchema-instance")
+        self._tree.set('xsi:noNamespaceSchemaLocation', "http://i3d.giants.ch/schema/i3d-1.6.xsd")
 
         # Asset export: Currently just a notice of which tool was used for generating the file
-        element = ET.SubElement(self._root_element, 'Asset')
+        element = ET.SubElement(self._tree, 'Asset')
         element = ET.SubElement(element, 'Export')
         element.set('program', 'Blender Exporter (Community)')
         element.set('version', sys.modules['i3dio'].bl_info.get('version'))  # Fetch version directly from bl_info
 
         # File export: References to external files such as images for materials (diffuse, normals etc.)
-        ET.SubElement(self._root_element, 'Files')
+        ET.SubElement(self._tree, 'Files')
 
         # Material export: List of all materials used in the project
-        ET.SubElement(self._root_element, 'Materials')
+        ET.SubElement(self._tree, 'Materials')
 
         # Shapes export: All the shape data in the form of vertices and triangles. This section takes up a lot of space
         # and it would be preferable to export to an external shapes file (Giants Engine can do it by a binary save)
-        ET.SubElement(self._root_element, 'Shapes')
+        ET.SubElement(self._tree, 'Shapes')
 
         # Dynamics export: Particle systems
-        ET.SubElement(self._root_element, 'Dynamics')
+        ET.SubElement(self._tree, 'Dynamics')
 
         # Scenegraph export: The entire scenegraph structure, with references to light, cameras, transforms and shapes
-        ET.SubElement(self._root_element, 'Scene')
+        ET.SubElement(self._tree, 'Scene')
 
         # Animation export: Animation sets with keyframes
-        ET.SubElement(self._root_element, 'Animation')
+        ET.SubElement(self._tree, 'Animation')
 
         # User attributes export: User generated attributes that might be used in scripts etc.
-        ET.SubElement(self._root_element, 'UserAttributes')
+        ET.SubElement(self._tree, 'UserAttributes')
 
-        self._indent(self._root_element)
-        self._tree = ET.ElementTree(self._root_element)
+    # def _xml_parse_from_blender(self):
+    #
+    #     # Build a list of objects that should be used to build the scenegraph
+    #
+    #     #for obj in bpy.context.selected_objects:
+    #
+    #     for obj in bpy.context.selected_objects:
+    #         print(f"{obj.name!r}has type {obj.type!r}")
+    #         print(f"Instanced? {obj.is_instancer}")
+    #         if obj.parent is None:
+    #             print(f"{obj.name!r} has no parent")
+    #             if obj.type == 'MESH':
+    #                 pass
+    #             if obj.type == 'EMPTY':
+    #                 print(obj.instance_collection)
+    #         else:
+    #             print(f"{obj.name!r} has parent {obj.parent.name!r}")
+
+    def _xml_export_to_file(self) -> None:
+
+        self._indent(self._tree)
+
         try:
-            self._tree.write(self._filepath, xml_declaration=True, encoding='iso-8859-1', method='xml')
+            ET.ElementTree(self._tree).write(self._filepath, xml_declaration=True, encoding='iso-8859-1', method='xml')
             print(f"Exported to {self._filepath}")
         except Exception as exception:  # A bit slouchy exception handling. Should be more specific and not catch all
             print(exception)
-            return 1
-        return 0
 
     @staticmethod
     def _xml_write_int(element: ET.Element, attribute: str, value: int) -> None:
@@ -135,19 +167,29 @@ class Exporter:
 
 class SceneGraph(object):
 
+    class Node(object):
+        id = 0  # NodeID shared between all nodes and incremented upon new node creation
+
+        def __init__(self, blender_object: [bpy.types.Object] = None, parent: SceneGraph.Node = None):
+            self.children = {}
+            self.blender_object = blender_object
+            self.id = SceneGraph.Node.id
+            SceneGraph.Node.id += 1  # Increment the ID every time a node is created
+            self.parent = parent
+
+        def add_child(self, node: SceneGraph.Node):
+            self.children[node.id] = node
+
+        def remove_child(self, node: SceneGraph.Node):
+            del self.children[node.id]
+
     def __init__(self):
-        self.ids = {
-            'node':     0,
-            'shape':    0,
-            'mat':      0
-        }
         self._nodes = {}
         self._shapes = {}
         self._materials = {}
         self._files = {}
-        self._nodes["ROOT"] = SceneNode("ROOT")
+        self._nodes["ROOT"] = SceneGraph.Node(None)
 
+    def add_node(self, blender_object, parent):
+        self.ids['node'] += 1
 
-class SceneNode(object):
-    def __init__(self, node, parent="ROOT", node_id=0):
-        self.children = []
