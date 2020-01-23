@@ -105,7 +105,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         time_start = time.time()
         exporter = i3d_exporter.Exporter(self.filepath)
         time_elapsed = time.time() - time_start
-        print("Export took {0:.3f} seconds".format(time_elapsed))
+        print(f"Export took {time_elapsed:.3f} seconds")
         return {'FINISHED'}
 
     def draw(self, context):

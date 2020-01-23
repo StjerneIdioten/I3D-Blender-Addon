@@ -76,12 +76,31 @@ class Exporter:
         self._tree = ET.ElementTree(self._root_element)
         try:
             self._tree.write(self._filepath, xml_declaration=True, encoding='iso-8859-1', method='xml')
-            print("Exported to {0}".format(self._filepath))
+            print(f"Exported to {self._filepath}")
         except Exception as exception:  # A bit slouchy exception handling. Should be more specific and not catch all
             print(exception)
             return 1
         return 0
 
+    @staticmethod
+    def _xml_write_int(element: ET.Element, attribute: str, value: int) -> None:
+        """Writes the attribute into the element with formatting for ints"""
+        element.set(attribute, f"{value:d}")
+
+    @staticmethod
+    def _xml_write_float(element: ET.Element, attribute: str, value: float) -> None:
+        """Writes the attribute into the element with formatting for floats"""
+        element.set(attribute, f"{value:.7f}")
+
+    @staticmethod
+    def _xml_write_bool(element: ET.Element, attribute: str, value: bool) -> None:
+        """Writes the attribute into the element with formatting for booleans"""
+        element.set(attribute, f"{value!s}".lower())
+
+    @staticmethod
+    def _xml_write_string(element: ET.Element, attribute: str, value: str) -> None:
+        """Writes the attribute into the element with formatting for strings"""
+        element.set(attribute, value)
 
     @staticmethod
     def _indent(elem: ET.Element, level: int = 0) -> None:
