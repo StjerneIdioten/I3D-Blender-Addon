@@ -33,8 +33,8 @@ class Exporter:
         self._generate_scene_graph()
         self._xml_build_structure()
 
-        #self._xml_parse_from_blender()
-        #self._xml_export_to_file()
+        # self._xml_parse_from_blender()
+        # self._xml_export_to_file()
 
     def _generate_scene_graph(self):
         for obj in bpy.context.selected_objects:
@@ -42,9 +42,21 @@ class Exporter:
             # which disappears once the object is added to any other collection
             if bpy.context.scene.collection in obj.users_collection and obj.parent is None:
                 print(f"{obj.name!r} is at scene root")
+                self._generate_scene_graph_item(obj, self._scene_graph.nodes[0])
 
-    def _generate_scene_graph_item(self, blender_object, parent):
-        pass
+        print(f"Nodes: \n")
+        for ID, node in self._scene_graph.nodes.items():
+            print(f"{ID}: {'ROOT' if node.blender_object is None else node.blender_object.name}")
+
+    def _generate_scene_graph_item(self, blender_object: bpy.types.Object, parent: SceneGraph.Node):
+        node = self._scene_graph.add_node(blender_object, parent)
+        print(f"Added Node with ID {node.id}")
+        for child in blender_object.children:
+            print("There is a child")
+            self._generate_scene_graph_item(child, node)
+
+        #             if obj.type == 'EMPTY':
+        #                 print(obj.instance_collection)
 
     def _xml_build_structure(self) -> None:
         """Builds the i3d file conforming to the standard specified at
@@ -85,24 +97,6 @@ class Exporter:
 
         # User attributes export: User generated attributes that might be used in scripts etc.
         ET.SubElement(self._tree, 'UserAttributes')
-
-    # def _xml_parse_from_blender(self):
-    #
-    #     # Build a list of objects that should be used to build the scenegraph
-    #
-    #     #for obj in bpy.context.selected_objects:
-    #
-    #     for obj in bpy.context.selected_objects:
-    #         print(f"{obj.name!r}has type {obj.type!r}")
-    #         print(f"Instanced? {obj.is_instancer}")
-    #         if obj.parent is None:
-    #             print(f"{obj.name!r} has no parent")
-    #             if obj.type == 'MESH':
-    #                 pass
-    #             if obj.type == 'EMPTY':
-    #                 print(obj.instance_collection)
-    #         else:
-    #             print(f"{obj.name!r} has parent {obj.parent.name!r}")
 
     def _xml_export_to_file(self) -> None:
 
@@ -168,14 +162,14 @@ class Exporter:
 class SceneGraph(object):
 
     class Node(object):
-        id = 0  # NodeID shared between all nodes and incremented upon new node creation
-
-        def __init__(self, blender_object: [bpy.types.Object] = None, parent: SceneGraph.Node = None):
+        def __init__(self, node_id: int = 0, blender_object: bpy.types.Object = None, parent: SceneGraph.Node = None):
             self.children = {}
             self.blender_object = blender_object
-            self.id = SceneGraph.Node.id
-            SceneGraph.Node.id += 1  # Increment the ID every time a node is created
+            self.id = node_id
             self.parent = parent
+
+            if parent is not None:
+                parent.add_child(self)
 
         def add_child(self, node: SceneGraph.Node):
             self.children[node.id] = node
@@ -184,12 +178,18 @@ class SceneGraph(object):
             del self.children[node.id]
 
     def __init__(self):
-        self._nodes = {}
-        self._shapes = {}
-        self._materials = {}
-        self._files = {}
-        self._nodes["ROOT"] = SceneGraph.Node(None)
+        self.ids = {
+            'node': 0
+        }
+        self.nodes = {}
+        self.shapes = {}
+        self.materials = {}
+        self.files = {}
+        # Create the root node
+        self.nodes[self.ids['node']] = SceneGraph.Node(node_id=self.ids['node'], blender_object=None, parent=None)
 
-    def add_node(self, blender_object, parent):
+    def add_node(self, blender_object: bpy.types.Object, parent: SceneGraph.Node) -> SceneGraph.Node:
+        new_node = SceneGraph.Node(self.ids['node'], blender_object, parent)
         self.ids['node'] += 1
-
+        self.nodes[new_node.id] = new_node
+        return new_node
