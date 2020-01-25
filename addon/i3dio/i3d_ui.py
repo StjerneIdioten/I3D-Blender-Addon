@@ -33,7 +33,7 @@ from bpy.types import (
     PropertyGroup
 )
 
-from . import i3d_exporter
+from . import i3d_exporter, i3d_properties
 
 
 class I3D_IO_OT_export(Operator, ExportHelper):
@@ -48,57 +48,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                                 maxlen=255,
                                 )
 
-    use_selection: BoolProperty(
-        name="Export Selected",
-        description="Only export the selected object",
-        default=False,
-    )
-
-    export_ik1: BoolProperty(
-        name="IK1",
-        description="Export the inverse kinematics",
-        default=False,
-    )
-
-    export_animations: BoolProperty(
-        name="Animations",
-        description="Export the animations",
-        default=False,
-    )
-
-    export_shapes: BoolProperty(
-        name="Shapes",
-        description="Export the shapes",
-        default=False,
-    )
-
     # Add remaining properties from original addon as they get implemented
-
-    shape_normals: BoolProperty(
-        name="Normals",
-        description="Export shape normals",
-        default=False,
-    )
-
-    shape_uvs: BoolProperty(
-        name="UVs",
-        description="Export shape UVs",
-        default=False,
-    )
-
-    # Add remaining properties from original addon as they get implemented
-
-    misc_verbose: BoolProperty(
-        name="Verbose",
-        description="Verbose output to console",
-        default=False,
-    )
-
-    misc_relative_paths: BoolProperty(
-        name="Relative Paths",
-        description="Save relative paths in i3d",
-        default=False,
-    )
 
     def execute(self, context):
         print("Exporting to " + self.filepath)
@@ -134,7 +84,7 @@ class I3D_IO_PT_export_main(Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(operator, "use_selection")
+        layout.prop(bpy.context.scene.i3dio, "selection")
 
 
 class I3D_IO_PT_export_options(Panel):
@@ -157,8 +107,8 @@ class I3D_IO_PT_export_options(Panel):
         operator = sfile.active_operator
 
         row = layout.row()
-        row.prop(operator, "export_ik1")
-        row.prop(operator, "export_animations")
+        #row.prop(bpy.context.scene.i3dio, "export_ik1")
+        #row.prop(operator, "export_animations")
 
 
 class I3D_IO_PT_export_shape(Panel):
@@ -181,8 +131,8 @@ class I3D_IO_PT_export_shape(Panel):
         operator = sfile.active_operator
 
         row = layout.row()
-        row.prop(operator, "shape_normals")
-        row.prop(operator, "shape_uvs")
+        #row.prop(operator, "shape_normals")
+        #row.prop(operator, "shape_uvs")
 
 
 class I3D_IO_PT_export_misc(Panel):
@@ -205,8 +155,8 @@ class I3D_IO_PT_export_misc(Panel):
         operator = sfile.active_operator
 
         row = layout.row()
-        row.prop(operator, "misc_verbose")
-        row.prop(operator, "misc_relative_paths")
+        #row.prop(operator, "misc_verbose")
+        #row.prop(operator, "misc_relative_paths")
 
 
 classes = (I3D_IO_OT_export,

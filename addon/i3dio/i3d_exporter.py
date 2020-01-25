@@ -38,11 +38,13 @@ class Exporter:
         # self._xml_export_to_file()
 
     def _generate_scene_graph(self):
-        # Export the selected collection
 
-        # Export as top level item after root
-        self._generate_scene_graph_item(bpy.context.view_layer.active_layer_collection.collection,
-                                        self._scene_graph.nodes[0])
+        selection = bpy.context.scene.i3dio.selection
+        if selection == 'ALL':
+            self._generate_scene_graph_item(bpy.context.scene.collection, self._scene_graph.nodes[0])
+        elif selection == 'ACTIVE_COLLECTION':
+            self._generate_scene_graph_item(bpy.context.view_layer.active_layer_collection.collection,
+                                            self._scene_graph.nodes[0])
 
         # for obj in bpy.context.selected_objects:
         #    # Objects directly in the scene only has the 'Master Collection' in the list,
