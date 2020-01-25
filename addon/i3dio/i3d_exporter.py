@@ -15,7 +15,8 @@
   Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
  ##### END GPL LICENSE BLOCK #####
 """
-from __future__ import annotations  # Enables python 4.0 annotation typehints fx. using the class itself as a typehint to itself
+from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
+from typing import Union
 import sys
 # Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
@@ -37,23 +38,34 @@ class Exporter:
         # self._xml_export_to_file()
 
     def _generate_scene_graph(self):
-        for obj in bpy.context.selected_objects:
-            # Objects directly in the scene only has the 'Master Collection' in the list,
-            # which disappears once the object is added to any other collection
-            if bpy.context.scene.collection in obj.users_collection and obj.parent is None:
-                print(f"{obj.name!r} is at scene root")
-                self._generate_scene_graph_item(obj, self._scene_graph.nodes[0])
+        # Export the selected collection
 
-        print(f"Nodes: \n")
-        for ID, node in self._scene_graph.nodes.items():
-            print(f"{ID}: {'ROOT' if node.blender_object is None else node.blender_object.name}")
+        # Export as top level item after root
+        self._generate_scene_graph_item(bpy.context.view_layer.active_layer_collection.collection,
+                                        self._scene_graph.nodes[0])
 
-    def _generate_scene_graph_item(self, blender_object: bpy.types.Object, parent: SceneGraph.Node):
+        # for obj in bpy.context.selected_objects:
+        #    # Objects directly in the scene only has the 'Master Collection' in the list,
+        #    # which disappears once the object is added to any other collection
+        #    if bpy.context.scene.collection in obj.users_collection and obj.parent is None:
+        #       print(f"{obj.name!r} is at scene root")
+        #       self._generate_scene_graph_item(obj, self._scene_graph.nodes[0])
+
+        print(self._scene_graph)
+
+    def _generate_scene_graph_item(self,
+                                   blender_object: Union[bpy.types.Object, bpy.types.Collection],
+                                   parent: SceneGraph.Node):
+
         node = self._scene_graph.add_node(blender_object, parent)
-        print(f"Added Node with ID {node.id}")
+        print(f"Added Node with ID {node.id} and name {node.blender_object.name!r}")
+
         for child in blender_object.children:
-            print("There is a child")
             self._generate_scene_graph_item(child, node)
+
+        if isinstance(blender_object, bpy.types.Collection):
+            for child in blender_object.objects:
+                self._generate_scene_graph_item(child, node)
 
         #             if obj.type == 'EMPTY':
         #                 print(obj.instance_collection)
@@ -162,7 +174,11 @@ class Exporter:
 class SceneGraph(object):
 
     class Node(object):
-        def __init__(self, node_id: int = 0, blender_object: bpy.types.Object = None, parent: SceneGraph.Node = None):
+        def __init__(self,
+                     node_id: int = 0,
+                     blender_object: Union[bpy.types.Object, bpy.types.Collection] = None,
+                     parent: SceneGraph.Node = None):
+
             self.children = {}
             self.blender_object = blender_object
             self.id = node_id
@@ -170,6 +186,9 @@ class SceneGraph(object):
 
             if parent is not None:
                 parent.add_child(self)
+
+        def __str__(self):
+            return f"{self.id}|{self.blender_object.name!r}"
 
         def add_child(self, node: SceneGraph.Node):
             self.children[node.id] = node
@@ -186,10 +205,34 @@ class SceneGraph(object):
         self.materials = {}
         self.files = {}
         # Create the root node
-        self.nodes[self.ids['node']] = SceneGraph.Node(node_id=self.ids['node'], blender_object=None, parent=None)
+        self.add_node()  # Add the root node that contains the tree
 
-    def add_node(self, blender_object: bpy.types.Object, parent: SceneGraph.Node) -> SceneGraph.Node:
+    def __str__(self):
+        """Three represented as depth first"""
+        tree_string = ""
+        longest_string = 0
+
+        def traverse(node, indents=0):
+            nonlocal tree_string, longest_string
+            indent = indents * '  '
+            line = f"|{indent}{node}\n"
+            longest_string = len(line) if len(line) > longest_string else longest_string
+            tree_string += line
+            for child in node.children.values():
+                traverse(child, indents + 1)
+
+        traverse(self.nodes[1])  # Starts at the first element instead since the root isn't necessary to print out
+
+        tree_string += f"{longest_string * '-'}\n"
+
+        return f"{longest_string * '-'}\n" + tree_string
+
+    def add_node(self,
+                 blender_object: Union[bpy.types.Object, bpy.types.Collection] = None,
+                 parent: SceneGraph.Node = None) -> SceneGraph.Node:
         new_node = SceneGraph.Node(self.ids['node'], blender_object, parent)
-        self.ids['node'] += 1
         self.nodes[new_node.id] = new_node
+        self.ids['node'] += 1
         return new_node
+
+
