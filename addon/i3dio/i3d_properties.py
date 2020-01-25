@@ -36,6 +36,13 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         ]
     )
 
+    keep_collections_as_transformgroups: BoolProperty(
+        name="Keep Collections",
+        description="Keep organisational collections as transformgroups in the i3d file. If turned off collections "
+                    "will be ignored and the child objects will be added to the nearest parent in the hierarchy",
+        default=True
+    )
+
 
 classes = (I3DExportUIProperties,)
 

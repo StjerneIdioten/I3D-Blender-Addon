@@ -107,7 +107,7 @@ class I3D_IO_PT_export_options(Panel):
         operator = sfile.active_operator
 
         row = layout.row()
-        #row.prop(bpy.context.scene.i3dio, "export_ik1")
+        row.prop(bpy.context.scene.i3dio, "keep_collections_as_transformgroups")
         #row.prop(operator, "export_animations")
 
 
