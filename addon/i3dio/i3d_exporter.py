@@ -41,10 +41,13 @@ class Exporter:
 
         selection = bpy.context.scene.i3dio.selection
         if selection == 'ALL':
-            self._generate_scene_graph_item(bpy.context.scene.collection, self._scene_graph.nodes[0])
+            selection = bpy.context.scene.collection
         elif selection == 'ACTIVE_COLLECTION':
-            self._generate_scene_graph_item(bpy.context.view_layer.active_layer_collection.collection,
-                                            self._scene_graph.nodes[0])
+            selection = bpy.context.view_layer.active_layer_collection.collection
+        elif selection == 'SELECTED_OBJECTS':
+            pass
+
+        self._generate_scene_graph_item(selection, self._scene_graph.nodes[0])
 
         # for obj in bpy.context.selected_objects:
         #    # Objects directly in the scene only has the 'Master Collection' in the list,
@@ -52,7 +55,6 @@ class Exporter:
         #    if bpy.context.scene.collection in obj.users_collection and obj.parent is None:
         #       print(f"{obj.name!r} is at scene root")
         #       self._generate_scene_graph_item(obj, self._scene_graph.nodes[0])
-
         print(self._scene_graph)
 
     def _generate_scene_graph_item(self,
