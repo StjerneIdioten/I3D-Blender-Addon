@@ -143,6 +143,8 @@ class Exporter:
 
             self._xml_scene_object_general_data(node, parent_element)
 
+            # TODO: Categorize node and write other stuff like materials and shapes
+
             for child in node.children.values():
                 # print(f"{child.blender_object.name} : {Exporter.blender_to_i3d(child.blender_object)}")
                 child_element = ET.SubElement(parent_element,
@@ -166,9 +168,15 @@ class Exporter:
             self._xml_write_string(node_element, 'rotation', "0 0 0")
             self._xml_write_string(node_element, 'scale', "0 0 0")
         else:
-            self._xml_write_string(node_element, 'translation', "0 0 0")
-            self._xml_write_string(node_element, 'rotation', "0 0 0")
-            self._xml_write_string(node_element, 'scale', "0 0 0")
+            self._xml_write_string(node_element,
+                                   'translation',
+                                   "{0:.6f} {1:.6f} {2:.6f}".format(*node.blender_object.location))
+            self._xml_write_string(node_element,
+                                   'rotation',
+                                   "{0:.3f} {1:.3f} {2:.3f}".format(*node.blender_object.rotation_euler))
+            self._xml_write_string(node_element,
+                                   'scale',
+                                   "{0:.6f} {1:.6f} {2:.6f}".format(*node.blender_object.scale))
 
         # TODO: Check for visibility of object
         self._xml_write_bool(node_element, 'visibility', True)
