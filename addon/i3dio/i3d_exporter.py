@@ -39,14 +39,6 @@ class Exporter:
 
     def _generate_scene_graph(self):
 
-        selection = bpy.context.scene.i3dio.selection
-        if selection == 'ALL':
-            selection = bpy.context.scene.collection
-        elif selection == 'ACTIVE_COLLECTION':
-            selection = bpy.context.view_layer.active_layer_collection.collection
-        elif selection == 'SELECTED_OBJECTS':
-            pass
-
         def new_graph_node(blender_object: Union[bpy.types.Object, bpy.types.Collection],
                            parent: SceneGraph.Node,
                            unpack_collection: bool = False):
@@ -86,7 +78,16 @@ class Exporter:
             #             if obj.type == 'EMPTY':
             #                 print(obj.instance_collection)
 
-        new_graph_node(selection, self._scene_graph.nodes[0])
+        selection = bpy.context.scene.i3dio.selection
+        if selection == 'ALL':
+            selection = bpy.context.scene.collection
+            new_graph_node(selection, self._scene_graph.nodes[0])
+        elif selection == 'ACTIVE_COLLECTION':
+            selection = bpy.context.view_layer.active_layer_collection.collection
+            new_graph_node(selection, self._scene_graph.nodes[0])
+        elif selection == 'SELECTED_OBJECTS':
+            # Generate active object list and loop over that somehow
+            pass
 
         # for obj in bpy.context.selected_objects:
         #    # Objects directly in the scene only has the 'Master Collection' in the list,
