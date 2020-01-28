@@ -33,7 +33,8 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
             ('ALL', "Everything", "Export everything from the scene master collection"),
             ('ACTIVE_COLLECTION', "Active Collection", "Export only the active collection and all its children"),
             ('SELECTED_OBJECTS', "Selected Objects", "Export only the selected objects")
-        ]
+        ],
+        default='ACTIVE_COLLECTION'
     )
 
     keep_collections_as_transformgroups: BoolProperty(
