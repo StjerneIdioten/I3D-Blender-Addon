@@ -17,6 +17,7 @@
 """
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import Union
+from enum import Enum
 import sys
 # Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
@@ -31,13 +32,13 @@ class Exporter:
         self._export_only_selection = False
         self._filepath = filepath
 
-        self._generate_scene_graph()
-        self._xml_build_structure()
+        self._xml_build_skeleton_structure()
+        self._xml_build_scene_graph()
+        self._xml_parse_scene_graph()
 
-        # self._xml_parse_from_blender()
-        # self._xml_export_to_file()
+        self._xml_export_to_file()
 
-    def _generate_scene_graph(self):
+    def _xml_build_scene_graph(self):
 
         def new_graph_node(blender_object: Union[bpy.types.Object, bpy.types.Collection],
                            parent: SceneGraph.Node,
@@ -45,7 +46,6 @@ class Exporter:
 
             node = None
             if unpack_collection:
-                print(f'Unpack')
                 node = parent
             else:
                 node = self._scene_graph.add_node(blender_object, parent)
@@ -55,22 +55,22 @@ class Exporter:
             if isinstance(blender_object, bpy.types.Object):
                 if blender_object.type == 'EMPTY':
                     if blender_object.instance_collection is not None:
-                        print(f'This is a collection instance')
+                        # print(f'This is a collection instance')
                         new_graph_node(blender_object.instance_collection, node, unpack_collection=True)
 
             # Gets child objects/collections
             if isinstance(blender_object, bpy.types.Object):
-                print(f'Children of object')
+                # print(f'Children of object')
                 for child in blender_object.children:
                     new_graph_node(child, node)
 
             # Gets child objects if it is a collection
             if isinstance(blender_object, bpy.types.Collection):
-                print(f'Children collections')
+                # print(f'Children collections')
                 for child in blender_object.children:
                     new_graph_node(child, node)
 
-                print(f'Children objects in collection')
+                # print(f'Children objects in collection')
                 for child in blender_object.objects:
                     if child.parent is None:
                         new_graph_node(child, node)
@@ -97,9 +97,7 @@ class Exporter:
         #       self.new_graph_node(obj, self._scene_graph.nodes[0])
         print(self._scene_graph)
 
-
-
-    def _xml_build_structure(self) -> None:
+    def _xml_build_skeleton_structure(self) -> None:
         """Builds the i3d file conforming to the standard specified at
         https://gdn.giants-software.com/documentation_i3d.php
         """
@@ -138,6 +136,45 @@ class Exporter:
 
         # User attributes export: User generated attributes that might be used in scripts etc.
         ET.SubElement(self._tree, 'UserAttributes')
+
+    def _xml_parse_scene_graph(self):
+
+        def parse_node(node: SceneGraph.Node, parent_element: ET.Element):
+
+            self._xml_scene_object_general_data(node, parent_element)
+
+            for child in node.children.values():
+                # print(f"{child.blender_object.name} : {Exporter.blender_to_i3d(child.blender_object)}")
+                child_element = ET.SubElement(parent_element,
+                                              Exporter.blender_to_i3d(child.blender_object))
+                parse_node(child, child_element)
+
+        for root_child in self._scene_graph.nodes[0].children.values():
+            # print(f"{root_child.blender_object.name} : {Exporter.blender_to_i3d(root_child.blender_object)}")
+            root_child_element = ET.SubElement(self._tree.find('Scene'),
+                                               Exporter.blender_to_i3d(root_child.blender_object))
+            parse_node(root_child, root_child_element)
+
+    def _xml_scene_object_general_data(self, node: SceneGraph.Node, node_element: ET.Element):
+        # print("Writing general data")
+        self._xml_write_string(node_element, 'name', node.blender_object.name)
+        self._xml_write_int(node_element, 'nodeId', node.id)
+        if isinstance(node.blender_object, bpy.types.Collection):
+            # Collections dont have any physical properties, but the transformgroups in i3d has so it is set to 0
+            # in relation to it's parent so it stays purely organisational
+            self._xml_write_string(node_element, 'translation', "0 0 0")
+            self._xml_write_string(node_element, 'rotation', "0 0 0")
+            self._xml_write_string(node_element, 'scale', "0 0 0")
+        else:
+            self._xml_write_string(node_element, 'translation', "0 0 0")
+            self._xml_write_string(node_element, 'rotation', "0 0 0")
+            self._xml_write_string(node_element, 'scale', "0 0 0")
+
+        # TODO: Check for visibility of object
+        self._xml_write_bool(node_element, 'visibility', True)
+
+        # TODO: Check for clip distance
+        self._xml_write_string(node_element, 'clipDistance', '300')
 
     def _xml_export_to_file(self) -> None:
 
@@ -198,6 +235,23 @@ class Exporter:
         else:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = indents
+
+    @staticmethod
+    def blender_to_i3d(blender_object: Union[bpy.types.Object, bpy.types.Collection]):
+        # Collections don't have an object type since they aren't objects. If they are used for organisational purposes
+        # they are converted into transformgroups in the scenegraph
+        if isinstance(blender_object, bpy.types.Collection):
+            return 'TransformGroup'
+
+        switcher = {
+            'MESH': 'Shape',
+            'CURVE': 'Shape',
+            'EMPTY': 'TransformGroup',
+            'CAMERA': 'Camera',
+            'LIGHT': 'Light',
+            'COLLECTION': 'TransformGroup'
+        }
+        return switcher[blender_object.type]
 
 
 class SceneGraph(object):
