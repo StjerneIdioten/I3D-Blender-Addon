@@ -47,55 +47,56 @@ class Exporter:
         elif selection == 'SELECTED_OBJECTS':
             pass
 
-        self._generate_scene_graph_item(selection, self._scene_graph.nodes[0])
+        def new_graph_node(blender_object: Union[bpy.types.Object, bpy.types.Collection],
+                           parent: SceneGraph.Node,
+                           unpack_collection: bool = False):
+
+            node = None
+            if unpack_collection:
+                print(f'Unpack')
+                node = parent
+            else:
+                node = self._scene_graph.add_node(blender_object, parent)
+                print(f"Added Node with ID {node.id} and name {node.blender_object.name!r}")
+
+            # Expand collection tree into the collection instance
+            if isinstance(blender_object, bpy.types.Object):
+                if blender_object.type == 'EMPTY':
+                    if blender_object.instance_collection is not None:
+                        print(f'This is a collection instance')
+                        new_graph_node(blender_object.instance_collection, node, unpack_collection=True)
+
+            # Gets child objects/collections
+            if isinstance(blender_object, bpy.types.Object):
+                print(f'Children of object')
+                for child in blender_object.children:
+                    new_graph_node(child, node)
+
+            # Gets child objects if it is a collection
+            if isinstance(blender_object, bpy.types.Collection):
+                print(f'Children collections')
+                for child in blender_object.children:
+                    new_graph_node(child, node)
+
+                print(f'Children objects in collection')
+                for child in blender_object.objects:
+                    if child.parent is None:
+                        new_graph_node(child, node)
+
+            #             if obj.type == 'EMPTY':
+            #                 print(obj.instance_collection)
+
+        new_graph_node(selection, self._scene_graph.nodes[0])
 
         # for obj in bpy.context.selected_objects:
         #    # Objects directly in the scene only has the 'Master Collection' in the list,
         #    # which disappears once the object is added to any other collection
         #    if bpy.context.scene.collection in obj.users_collection and obj.parent is None:
         #       print(f"{obj.name!r} is at scene root")
-        #       self._generate_scene_graph_item(obj, self._scene_graph.nodes[0])
+        #       self.new_graph_node(obj, self._scene_graph.nodes[0])
         print(self._scene_graph)
 
-    def _generate_scene_graph_item(self,
-                                   blender_object: Union[bpy.types.Object, bpy.types.Collection],
-                                   parent: SceneGraph.Node,
-                                   unpack_collection: bool = False):
 
-        node = None
-        if unpack_collection:
-            print(f'Unpack')
-            node = parent
-        else:
-            node = self._scene_graph.add_node(blender_object, parent)
-            print(f"Added Node with ID {node.id} and name {node.blender_object.name!r}")
-
-        # Expand collection tree into the collection instance
-        if isinstance(blender_object, bpy.types.Object):
-            if blender_object.type == 'EMPTY':
-                if blender_object.instance_collection is not None:
-                    print(f'This is a collection instance')
-                    self._generate_scene_graph_item(blender_object.instance_collection, node, unpack_collection=True)
-
-        # Gets child objects/collections
-        if isinstance(blender_object, bpy.types.Object):
-            print(f'Children of object')
-            for child in blender_object.children:
-                self._generate_scene_graph_item(child, node)
-
-        # Gets child objects if it is a collection
-        if isinstance(blender_object, bpy.types.Collection):
-            print(f'Children collections')
-            for child in blender_object.children:
-                self._generate_scene_graph_item(child, node)
-
-            print(f'Children objects in collection')
-            for child in blender_object.objects:
-                if child.parent is None:
-                    self._generate_scene_graph_item(child, node)
-
-        #             if obj.type == 'EMPTY':
-        #                 print(obj.instance_collection)
 
     def _xml_build_structure(self) -> None:
         """Builds the i3d file conforming to the standard specified at
