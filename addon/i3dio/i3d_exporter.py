@@ -22,6 +22,7 @@ import sys
 # Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
 import bpy
+import bmesh
 
 
 # Exporter is a singleton
@@ -207,29 +208,156 @@ class Exporter:
         self._xml_write_string(node_element, 'clipDistance', '300')
 
     def _xml_scene_object_shape(self, node: SceneGraph.Node, node_element: ET.Element):
-        # TODO: Add parameters to UI and extract here
-        # print(f"This is a shape: {node.blender_object.name!r}")
+
+        ###############################################
+        # Mesh export section
+        ###############################################
 
         shape_root = self._tree.find('Shapes')
         obj = node.blender_object
 
         # Check if the mesh has already been defined in the i3d file
-        element = shape_root.find(f".IndexedTriangleSet[@name={obj.data.name!r}]")
-        if element is None:
+        indexed_triangle_element = shape_root.find(f".IndexedTriangleSet[@name={obj.data.name!r}]")
+        if indexed_triangle_element is None:
             shape_id = self.ids['shape']
             self.ids['shape'] += 1
 
-            element = ET.SubElement(shape_root, 'IndexedTriangleSet')
+            indexed_triangle_element = ET.SubElement(shape_root, 'IndexedTriangleSet')
 
-            self._xml_write_string(element, 'name', obj.data.name)
-            self._xml_write_int(element, 'shapeId', shape_id)
+            self._xml_write_string(indexed_triangle_element, 'name', obj.data.name)
+            self._xml_write_int(indexed_triangle_element, 'shapeId', shape_id)
 
             # TODO: All shape related parsing code
 
+            # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
+            # should only be 'heavy' to call the first time a mesh is exported.
+            # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
+            depsgraph = bpy.context.evaluated_depsgraph_get()
+
+            # Generate an object evaluated from the dependency graph
+            object_evaluated = obj.evaluated_get(depsgraph)
+
+            # Generates a mesh with all modifiers applied and access to all data layers
+            mesh = object_evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
+
+            # TODO: Look into if there is a smarter way to triangulate mesh data rather than using a bmesh operator
+            #  since this supposedly wrecks custom normals
+
+            # Triangulate mesh data
+            bm = bmesh.new()
+            bm.from_mesh(mesh)
+            bmesh.ops.triangulate(bm, faces=bm.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
+            bm.to_mesh(mesh)
+            bm.free()
+
+            vertices_element = ET.SubElement(indexed_triangle_element, 'Vertices')
+            triangles_element = ET.SubElement(indexed_triangle_element, 'Triangles')
+            subsets_element = ET.SubElement(indexed_triangle_element, 'Subsets')
+
+            self._xml_write_int(triangles_element, 'count', len(mesh.polygons))
+
+            polygon_subsets = {}
+
+            # Create and assign default material if it does not exist already. This material will persist in the blender
+            # file so you can change the default look if you want to through the blender interface
+            if len(mesh.materials) == 0:
+                if bpy.data.materials.get('i3d_default_material') is None:
+                    bpy.data.materials.new('i3d_default_material')
+
+                mesh.materials.append(bpy.data.materials.get('i3d_default_material'))
+
+            for polygon in mesh.polygons:
+
+                polygon_material = mesh.materials[polygon.material_index]
+                # Loops are divided into subsets based on materials
+                if polygon_material.name in polygon_subsets:
+                    print(f'{polygon_material.name!r} is already in material list')
+                    pass
+                else:
+                    print(f'{polygon_material.name!r} is a new material')
+                    polygon_subsets[polygon_material.name] = []
+
+                polygon_subsets[polygon_material.name].append(polygon)
+
+            self._xml_write_int(subsets_element, 'count', len(polygon_subsets))
+
+            added_vertices = {}  # Key is a unique vertex identifier and the value is a vertex index
+            vertex_counter = 0
+            indices_total = 0
+
+            # Vertices are written to the i3d vertex list in an order based on the subsets and the triangles then index
+            # into this list to define themselves
+
+            for mat, subset in polygon_subsets.items():
+                number_of_indices = 0
+                number_of_vertices = 0
+                subset_element = ET.SubElement(subsets_element, 'Subset')
+                self._xml_write_int(subset_element, 'firstIndex', indices_total)
+                self._xml_write_int(subset_element, 'firstVertex', vertex_counter)
+
+                print(f"Subset {mat}:")
+                # Go through every polygon on the subset and extract triangle information
+                for polygon in subset:
+                    triangle_element = ET.SubElement(triangles_element, 't')
+                    print(f'\tPolygon Index: {polygon.index}, length: {polygon.loop_total}')
+                    # Go through every loop in the polygon and extract vertex information
+                    polygon_vertex_index = ""  # The vertices from the vertex list that specify this triangle
+                    for loop_index in polygon.loop_indices:
+                        vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
+                        vertex_data = {'p': f"{vertex.co.xyz[0]:.6f} "
+                                            f"{vertex.co.xyz[2]:.6f} "
+                                            f"{-vertex.co.xyz[1]:.6f}",
+
+                                       'n': f"{vertex.normal.xyz[0]:.6f} "
+                                            f"{vertex.normal.xyz[2]:.6f} "
+                                            f"{-vertex.normal.xyz[1]:.6f}",
+
+                                       't0': f"{mesh.uv_layers[0].data[loop_index].uv[0]:.6f} "
+                                             f"{mesh.uv_layers[0].data[loop_index].uv[1]:.6f}"
+                                       }
+
+                        vertex_item = VertexItem(vertex_data, mat)
+
+                        if vertex_item not in added_vertices:
+                            added_vertices[vertex_item] = vertex_counter
+
+                            vertex_element = ET.SubElement(vertices_element, 'v')
+                            self._xml_write_string(vertex_element, 'n', vertex_data['n'])
+                            self._xml_write_string(vertex_element, 'p', vertex_data['p'])
+                            self._xml_write_string(vertex_element, 't0', vertex_data['t0'])
+
+                            vertex_counter += 1
+                            number_of_vertices += 1
+
+                        polygon_vertex_index += f"{added_vertices[vertex_item]} "
+                        number_of_indices += 1
+
+                    self._xml_write_string(triangle_element, 'vi', polygon_vertex_index.strip(' '))
+
+                self._xml_write_int(subset_element, 'numIndices', number_of_indices)
+                self._xml_write_int(subset_element, 'numVertices', number_of_vertices)
+                indices_total += number_of_indices
+
+            self._xml_write_int(vertices_element, 'count', vertex_counter)
+            self._xml_write_bool(vertices_element, 'normal', True)
+            self._xml_write_bool(vertices_element, 'tangent', True)
+            self._xml_write_bool(vertices_element, 'uv0', True)
+
+            #print(f"Number of vertices: {len(added_vertices)}")
+
+            # Clean out the generated mesh so it does not stay in blender memory
+            object_evaluated.to_mesh_clear()
+
+            # TODO: Write mesh related attributes
+
         else:
-            shape_id = int(element.get('shapeId'))
+            shape_id = int(indexed_triangle_element.get('shapeId'))
 
         self._xml_write_int(node_element, 'shapeId', shape_id)
+
+        ###############################################
+        # Material Export Section
+        ###############################################
 
     def _xml_scene_object_transform_group(self, node: SceneGraph.Node, node_element: ET.Element):
         # TODO: Add parameters to UI and extract here
@@ -379,3 +507,18 @@ class SceneGraph(object):
         return new_node
 
 
+class VertexItem:
+    """Used for defining unique vertex items (Could be the same vertex but with a different color or material uv"""
+    def __init__(self, vertex_item, material_name):
+        self._str = f"{material_name}"
+        for key, item in vertex_item.items():
+            self._str += f" {item}"
+
+    def __str__(self):
+        return self._str
+
+    def __hash__(self):
+        return hash(self._str)
+
+    def __eq__(self, other):
+        return self._str == f'{other!s}'
