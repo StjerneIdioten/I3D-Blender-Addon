@@ -145,6 +145,8 @@ class Exporter:
 
             # TODO: Categorize node and write other stuff like materials and shapes
 
+            
+
             for child in node.children.values():
                 # print(f"{child.blender_object.name} : {Exporter.blender_to_i3d(child.blender_object)}")
                 child_element = ET.SubElement(parent_element,
@@ -167,6 +169,9 @@ class Exporter:
             self._xml_write_string(node_element, 'translation', "0 0 0")
             self._xml_write_string(node_element, 'rotation', "0 0 0")
             self._xml_write_string(node_element, 'scale', "0 0 0")
+            # TODO: Make visibility check more elaborate since visibility can be many things. Right now it is only
+            #  viewport visibility that is taken into account. Issue #1
+            self._xml_write_bool(node_element, 'visibility', not node.blender_object.hide_viewport)
         else:
             self._xml_write_string(node_element,
                                    'translation',
@@ -178,8 +183,8 @@ class Exporter:
                                    'scale',
                                    "{0:.6f} {1:.6f} {2:.6f}".format(*node.blender_object.scale))
 
-        # TODO: Check for visibility of object
-        self._xml_write_bool(node_element, 'visibility', True)
+            # visible_get() should determine visibility based on all visibility flags
+            self._xml_write_bool(node_element, 'visibility', node.blender_object.visible_get())
 
         # TODO: Check for clip distance
         self._xml_write_string(node_element, 'clipDistance', '300')
