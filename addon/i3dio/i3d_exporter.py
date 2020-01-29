@@ -32,6 +32,16 @@ class Exporter:
         self._export_only_selection = False
         self._filepath = filepath
 
+        self.ids = {
+            'shape': 1,
+            'material': 1,
+            'file': 1
+        }
+
+        self.shapes = {}
+        self.materials = {}
+        self.files = {}
+
         self._xml_build_skeleton_structure()
         self._xml_build_scene_graph()
         self._xml_parse_scene_graph()
@@ -139,17 +149,24 @@ class Exporter:
 
     def _xml_parse_scene_graph(self):
 
-        def parse_node(node: SceneGraph.Node, parent_element: ET.Element):
+        def parse_node(node: SceneGraph.Node, node_element: ET.Element):
 
-            self._xml_scene_object_general_data(node, parent_element)
+            self._xml_scene_object_general_data(node, node_element)
 
             # TODO: Categorize node and write other stuff like materials and shapes
 
-            
+            if isinstance(node.blender_object, bpy.types.Collection):
+                self._xml_scene_object_transform_group(node, node_element)
+            else:
+                node_type = node.blender_object.type
+                if node_type == 'MESH':
+                    self._xml_scene_object_shape(node, node_element)
+                elif node_type == 'EMPTY':
+                    self._xml_scene_object_transform_group(node, node_element)
 
             for child in node.children.values():
                 # print(f"{child.blender_object.name} : {Exporter.blender_to_i3d(child.blender_object)}")
-                child_element = ET.SubElement(parent_element,
+                child_element = ET.SubElement(node_element,
                                               Exporter.blender_to_i3d(child.blender_object))
                 parse_node(child, child_element)
 
@@ -188,6 +205,36 @@ class Exporter:
 
         # TODO: Check for clip distance
         self._xml_write_string(node_element, 'clipDistance', '300')
+
+    def _xml_scene_object_shape(self, node: SceneGraph.Node, node_element: ET.Element):
+        # TODO: Add parameters to UI and extract here
+        # print(f"This is a shape: {node.blender_object.name!r}")
+
+        shape_root = self._tree.find('Shapes')
+        obj = node.blender_object
+
+        # Check if the mesh has already been defined in the i3d file
+        element = shape_root.find(f".IndexedTriangleSet[@name={obj.data.name!r}]")
+        if element is None:
+            shape_id = self.ids['shape']
+            self.ids['shape'] += 1
+
+            element = ET.SubElement(shape_root, 'IndexedTriangleSet')
+
+            self._xml_write_string(element, 'name', obj.data.name)
+            self._xml_write_int(element, 'shapeId', shape_id)
+
+            # TODO: All shape related parsing code
+
+        else:
+            shape_id = int(element.get('shapeId'))
+
+        self._xml_write_int(node_element, 'shapeId', shape_id)
+
+    def _xml_scene_object_transform_group(self, node: SceneGraph.Node, node_element: ET.Element):
+        # TODO: Add parameters to UI and extract here
+        pass
+        # print(f"This is a transformgroup: {node.blender_object.name!r}")
 
     def _xml_export_to_file(self) -> None:
 
