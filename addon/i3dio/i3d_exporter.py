@@ -19,9 +19,12 @@ from __future__ import annotations  # Enables python 4.0 annotation typehints fx
 from typing import Union
 from enum import Enum
 import sys
+import math
+import mathutils
 # Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
 import bpy
+import bpy_extras
 import bmesh
 
 
@@ -39,9 +42,7 @@ class Exporter:
             'file': 1
         }
 
-        self.shapes = {}
-        self.materials = {}
-        self.files = {}
+        self.shape_material_indexes = {}
 
         self._xml_build_skeleton_structure()
         self._xml_build_scene_graph()
@@ -186,26 +187,68 @@ class Exporter:
             # in relation to it's parent so it stays purely organisational
             self._xml_write_string(node_element, 'translation', "0 0 0")
             self._xml_write_string(node_element, 'rotation', "0 0 0")
-            self._xml_write_string(node_element, 'scale', "0 0 0")
+            self._xml_write_string(node_element, 'scale', "1 1 1")
             # TODO: Make visibility check more elaborate since visibility can be many things. Right now it is only
             #  viewport visibility that is taken into account. Issue #1
             self._xml_write_bool(node_element, 'visibility', not node.blender_object.hide_viewport)
         else:
+
+            # TODO: Investigate how to use the export helper functions to convert instead of hardcoding the rotations
+
+            # Perform rotation of object so it fits GE
+            matrix = mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
+            matrix @= node.blender_object.matrix_local
+            matrix @= mathutils.Matrix.Rotation(math.radians(90), 4, "X")
+
             self._xml_write_string(node_element,
                                    'translation',
-                                   "{0:.6f} {1:.6f} {2:.6f}".format(*node.blender_object.location))
+                                   "{0:.6f} {1:.6f} {2:.6f}".format(*matrix.to_translation()))
+
             self._xml_write_string(node_element,
                                    'rotation',
-                                   "{0:.3f} {1:.3f} {2:.3f}".format(*node.blender_object.rotation_euler))
+                                   "{0:.3f} {1:.3f} {2:.3f}".format(*[math.degrees(axis)
+                                                                      for axis in matrix.to_euler('XYZ')]))
+
             self._xml_write_string(node_element,
                                    'scale',
-                                   "{0:.6f} {1:.6f} {2:.6f}".format(*node.blender_object.scale))
+                                   "{0:.6f} {1:.6f} {2:.6f}".format(*matrix.to_scale()))
 
             # visible_get() should determine visibility based on all visibility flags
             self._xml_write_bool(node_element, 'visibility', node.blender_object.visible_get())
 
         # TODO: Check for clip distance
-        self._xml_write_string(node_element, 'clipDistance', '300')
+        # self._xml_write_string(node_element, 'clipDistance', '300')
+
+    def _xml_add_material(self, material):
+        materials_root = self._tree.find('Materials')
+        material_element = materials_root.find(f".Material[@name={material.name!r}]")
+        if material_element is None:
+            # print(f"New material")
+            material_element = ET.SubElement(materials_root, 'Material')
+            self._xml_write_string(material_element, 'name', material.name)
+            self._xml_write_int(material_element, 'materialId', self.ids['material'])
+
+            if material.use_nodes:
+                # print(f"{material.name!r} uses nodes, not supported for now so using defaults")
+                self._xml_write_string(material_element,
+                                       'diffuseColor',
+                                       f"{0.5:f} {0.5:f} {0.5:f} {1.0:f}")
+            else:
+                # print(f"{material.name!r} does not use nodes")
+                self._xml_write_string(material_element,
+                                       'diffuseColor',
+                                       "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*material.diffuse_color))
+
+            self._xml_write_string(material_element,
+                                   'specularColor',
+                                   f"{material.roughness:f} {1:.6f} {material.metallic:f}")
+
+            self.ids['material'] += 1
+
+        return int(material_element.get('materialId'))
+
+    def _xml_add_file(self, filename):
+        print("Adding file")
 
     def _xml_scene_object_shape(self, node: SceneGraph.Node, node_element: ET.Element):
 
@@ -270,12 +313,20 @@ class Exporter:
 
                 polygon_material = mesh.materials[polygon.material_index]
                 # Loops are divided into subsets based on materials
-                if polygon_material.name in polygon_subsets:
-                    print(f'{polygon_material.name!r} is already in material list')
-                    pass
-                else:
-                    print(f'{polygon_material.name!r} is a new material')
+                if polygon_material.name not in polygon_subsets:
+                    # print(f'{polygon_material.name!r} is a new material')
                     polygon_subsets[polygon_material.name] = []
+                    # Add material to material section in i3d file and append to the materialIds that the shape
+                    # object should have
+                    material_id = self._xml_add_material(polygon_material)
+                    # print(f"Mat id: {material_id:d}")
+
+                    if shape_id in self.shape_material_indexes.keys():
+                        # print(f"mat index: {self.shape_material_indexes[shape_id]}")
+                        self.shape_material_indexes[shape_id] += f",{material_id:d}"
+                    else:
+                        self.shape_material_indexes[shape_id] = f"{material_id:d}"
+                        # print(f"new mat index: {self.shape_material_indexes[shape_id]}")
 
                 polygon_subsets[polygon_material.name].append(polygon)
 
@@ -295,11 +346,11 @@ class Exporter:
                 self._xml_write_int(subset_element, 'firstIndex', indices_total)
                 self._xml_write_int(subset_element, 'firstVertex', vertex_counter)
 
-                print(f"Subset {mat}:")
+                # print(f"Subset {mat}:")
                 # Go through every polygon on the subset and extract triangle information
                 for polygon in subset:
                     triangle_element = ET.SubElement(triangles_element, 't')
-                    print(f'\tPolygon Index: {polygon.index}, length: {polygon.loop_total}')
+                    # print(f'\tPolygon Index: {polygon.index}, length: {polygon.loop_total}')
                     # Go through every loop in the polygon and extract vertex information
                     polygon_vertex_index = ""  # The vertices from the vertex list that specify this triangle
                     for loop_index in polygon.loop_indices:
@@ -343,8 +394,6 @@ class Exporter:
             self._xml_write_bool(vertices_element, 'tangent', True)
             self._xml_write_bool(vertices_element, 'uv0', True)
 
-            #print(f"Number of vertices: {len(added_vertices)}")
-
             # Clean out the generated mesh so it does not stay in blender memory
             object_evaluated.to_mesh_clear()
 
@@ -354,10 +403,8 @@ class Exporter:
             shape_id = int(indexed_triangle_element.get('shapeId'))
 
         self._xml_write_int(node_element, 'shapeId', shape_id)
-
-        ###############################################
-        # Material Export Section
-        ###############################################
+        self._xml_write_string(node_element, 'materialIds', self.shape_material_indexes[shape_id])
+        # print(self.shape_material_indexes[shape_id])
 
     def _xml_scene_object_transform_group(self, node: SceneGraph.Node, node_element: ET.Element):
         # TODO: Add parameters to UI and extract here
