@@ -17,14 +17,13 @@
 """
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import Union
-from enum import Enum
 import sys
 import math
 import mathutils
+
 # Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
 import bpy
-import bpy_extras
 import bmesh
 
 
@@ -107,7 +106,6 @@ class Exporter:
         #    if bpy.context.scene.collection in obj.users_collection and obj.parent is None:
         #       print(f"{obj.name!r} is at scene root")
         #       self.new_graph_node(obj, self._scene_graph.nodes[0])
-        print(self._scene_graph)
 
     def _xml_build_skeleton_structure(self) -> None:
         """Builds the i3d file conforming to the standard specified at
@@ -155,8 +153,6 @@ class Exporter:
 
             self._xml_scene_object_general_data(node, node_element)
 
-            # TODO: Categorize node and write other stuff like materials and shapes
-
             if isinstance(node.blender_object, bpy.types.Collection):
                 self._xml_scene_object_transform_group(node, node_element)
             else:
@@ -167,19 +163,16 @@ class Exporter:
                     self._xml_scene_object_transform_group(node, node_element)
 
             for child in node.children.values():
-                # print(f"{child.blender_object.name} : {Exporter.blender_to_i3d(child.blender_object)}")
                 child_element = ET.SubElement(node_element,
                                               Exporter.blender_to_i3d(child.blender_object))
                 parse_node(child, child_element)
 
         for root_child in self._scene_graph.nodes[0].children.values():
-            # print(f"{root_child.blender_object.name} : {Exporter.blender_to_i3d(root_child.blender_object)}")
             root_child_element = ET.SubElement(self._tree.find('Scene'),
                                                Exporter.blender_to_i3d(root_child.blender_object))
             parse_node(root_child, root_child_element)
 
     def _xml_scene_object_general_data(self, node: SceneGraph.Node, node_element: ET.Element):
-        # print("Writing general data")
         self._xml_write_string(node_element, 'name', node.blender_object.name)
         self._xml_write_int(node_element, 'nodeId', node.id)
         if isinstance(node.blender_object, bpy.types.Collection):
@@ -195,7 +188,7 @@ class Exporter:
 
             # TODO: Investigate how to use the export helper functions to convert instead of hardcoding the rotations
 
-            # Perform rotation of object so it fits GE
+            # Perform rotation of object so it fits GE format of Y-up, Z-forward
             matrix = mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
             matrix @= node.blender_object.matrix_local
             matrix @= mathutils.Matrix.Rotation(math.radians(90), 4, "X")
@@ -216,25 +209,22 @@ class Exporter:
             # visible_get() should determine visibility based on all visibility flags
             self._xml_write_bool(node_element, 'visibility', node.blender_object.visible_get())
 
-        # TODO: Check for clip distance
-        # self._xml_write_string(node_element, 'clipDistance', '300')
+        # TODO: Write other general attributes
 
     def _xml_add_material(self, material):
         materials_root = self._tree.find('Materials')
         material_element = materials_root.find(f".Material[@name={material.name!r}]")
         if material_element is None:
-            # print(f"New material")
             material_element = ET.SubElement(materials_root, 'Material')
             self._xml_write_string(material_element, 'name', material.name)
             self._xml_write_int(material_element, 'materialId', self.ids['material'])
 
             if material.use_nodes:
-                # print(f"{material.name!r} uses nodes, not supported for now so using defaults")
+                print(f"{material.name!r} uses nodes, not supported for now so using defaults")
                 self._xml_write_string(material_element,
                                        'diffuseColor',
                                        f"{0.5:f} {0.5:f} {0.5:f} {1.0:f}")
             else:
-                # print(f"{material.name!r} does not use nodes")
                 self._xml_write_string(material_element,
                                        'diffuseColor',
                                        "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*material.diffuse_color))
@@ -314,31 +304,25 @@ class Exporter:
                 polygon_material = mesh.materials[polygon.material_index]
                 # Loops are divided into subsets based on materials
                 if polygon_material.name not in polygon_subsets:
-                    # print(f'{polygon_material.name!r} is a new material')
                     polygon_subsets[polygon_material.name] = []
                     # Add material to material section in i3d file and append to the materialIds that the shape
                     # object should have
                     material_id = self._xml_add_material(polygon_material)
-                    # print(f"Mat id: {material_id:d}")
-
                     if shape_id in self.shape_material_indexes.keys():
-                        # print(f"mat index: {self.shape_material_indexes[shape_id]}")
                         self.shape_material_indexes[shape_id] += f",{material_id:d}"
                     else:
                         self.shape_material_indexes[shape_id] = f"{material_id:d}"
-                        # print(f"new mat index: {self.shape_material_indexes[shape_id]}")
 
                 polygon_subsets[polygon_material.name].append(polygon)
 
             self._xml_write_int(subsets_element, 'count', len(polygon_subsets))
 
             added_vertices = {}  # Key is a unique vertex identifier and the value is a vertex index
-            vertex_counter = 0
+            vertex_counter = 0   # Count the total number of unique vertices (across subsets)
             indices_total = 0
 
             # Vertices are written to the i3d vertex list in an order based on the subsets and the triangles then index
             # into this list to define themselves
-
             for mat, subset in polygon_subsets.items():
                 number_of_indices = 0
                 number_of_vertices = 0
@@ -346,11 +330,9 @@ class Exporter:
                 self._xml_write_int(subset_element, 'firstIndex', indices_total)
                 self._xml_write_int(subset_element, 'firstVertex', vertex_counter)
 
-                # print(f"Subset {mat}:")
                 # Go through every polygon on the subset and extract triangle information
                 for polygon in subset:
                     triangle_element = ET.SubElement(triangles_element, 't')
-                    # print(f'\tPolygon Index: {polygon.index}, length: {polygon.loop_total}')
                     # Go through every loop in the polygon and extract vertex information
                     polygon_vertex_index = ""  # The vertices from the vertex list that specify this triangle
                     for loop_index in polygon.loop_indices:
@@ -394,27 +376,22 @@ class Exporter:
             self._xml_write_bool(vertices_element, 'tangent', True)
             self._xml_write_bool(vertices_element, 'uv0', True)
 
-            # Clean out the generated mesh so it does not stay in blender memory
-            object_evaluated.to_mesh_clear()
+            object_evaluated.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
 
             # TODO: Write mesh related attributes
-
         else:
+            # Mesh already exists, so find its shape it.
             shape_id = int(indexed_triangle_element.get('shapeId'))
 
         self._xml_write_int(node_element, 'shapeId', shape_id)
         self._xml_write_string(node_element, 'materialIds', self.shape_material_indexes[shape_id])
-        # print(self.shape_material_indexes[shape_id])
 
     def _xml_scene_object_transform_group(self, node: SceneGraph.Node, node_element: ET.Element):
         # TODO: Add parameters to UI and extract here
         pass
-        # print(f"This is a transformgroup: {node.blender_object.name!r}")
 
     def _xml_export_to_file(self) -> None:
-
-        self._indent(self._tree)
-
+        self._indent(self._tree)  # Make the xml human readable by adding indents
         try:
             ET.ElementTree(self._tree).write(self._filepath, xml_declaration=True, encoding='iso-8859-1', method='xml')
             print(f"Exported to {self._filepath}")
@@ -423,22 +400,22 @@ class Exporter:
 
     @staticmethod
     def _xml_write_int(element: ET.Element, attribute: str, value: int) -> None:
-        """Writes the attribute into the element with formatting for ints"""
+        """Write the attribute into the element with formatting for ints"""
         element.set(attribute, f"{value:d}")
 
     @staticmethod
     def _xml_write_float(element: ET.Element, attribute: str, value: float) -> None:
-        """Writes the attribute into the element with formatting for floats"""
+        """Write the attribute into the element with formatting for floats"""
         element.set(attribute, f"{value:.7f}")
 
     @staticmethod
     def _xml_write_bool(element: ET.Element, attribute: str, value: bool) -> None:
-        """Writes the attribute into the element with formatting for booleans"""
+        """Write the attribute into the element with formatting for booleans"""
         element.set(attribute, f"{value!s}".lower())
 
     @staticmethod
     def _xml_write_string(element: ET.Element, attribute: str, value: str) -> None:
-        """Writes the attribute into the element with formatting for strings"""
+        """Write the attribute into the element with formatting for strings"""
         element.set(attribute, value)
 
     @staticmethod
@@ -526,7 +503,7 @@ class SceneGraph(object):
         self.add_node()  # Add the root node that contains the tree
 
     def __str__(self):
-        """Three represented as depth first"""
+        """Tree represented as depth first"""
         tree_string = ""
         longest_string = 0
 
@@ -539,7 +516,7 @@ class SceneGraph(object):
             for child in node.children.values():
                 traverse(child, indents + 1)
 
-        traverse(self.nodes[1])  # Starts at the first element instead since the root isn't necessary to print out
+        traverse(self.nodes[1])  # Start at the first element instead since the root isn't necessary to print out
 
         tree_string += f"{longest_string * '-'}\n"
 
@@ -555,7 +532,7 @@ class SceneGraph(object):
 
 
 class VertexItem:
-    """Used for defining unique vertex items (Could be the same vertex but with a different color or material uv"""
+    """Define unique vertex items (Could be the same vertex but with a different color or material uv"""
     def __init__(self, vertex_item, material_name):
         self._str = f"{material_name}"
         for key, item in vertex_item.items():

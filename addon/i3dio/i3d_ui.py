@@ -19,8 +19,7 @@
 import time
 import bpy
 from bpy.props import (
-    StringProperty,
-    BoolProperty
+    StringProperty
 )
 
 from bpy_extras.io_utils import (
@@ -29,8 +28,7 @@ from bpy_extras.io_utils import (
 
 from bpy.types import (
     Operator,
-    Panel,
-    PropertyGroup
+    Panel
 )
 
 from . import i3d_exporter, i3d_properties
@@ -40,7 +38,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     """Save i3d file"""
     bl_idname = "export_scene.i3d"
     bl_label = "Export I3D"
-    bl_options = {'PRESET'}
+    bl_options = {'PRESET'}  # 'PRESET' enables the preset dialog for saving settings as preset
 
     filename_ext = ".i3d"
     filter_glob: StringProperty(default="*.i3d",
@@ -161,9 +159,7 @@ class I3D_IO_PT_export_misc(Panel):
 
 classes = (I3D_IO_OT_export,
            I3D_IO_PT_export_main,
-           I3D_IO_PT_export_options,
-           I3D_IO_PT_export_shape,
-           I3D_IO_PT_export_misc
+           I3D_IO_PT_export_options
            )
 
 

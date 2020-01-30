@@ -16,6 +16,7 @@
 <pep8-80 compliant>
 """
 
+# Reimport modules when refreshing blender to show changes
 if "bpy" in locals():
     import importlib
     if 'i3d_properties' in locals():
@@ -46,6 +47,7 @@ bl_info = {
 }
 
 
+# File -> Export item
 def menu_func_export(self, context):
     self.layout.operator(i3d_ui.I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
 
