@@ -36,12 +36,12 @@ print(__file__)
 
 bl_info = {
     "name": "GIANTS I3D Exporter Tools",
-    "author": "GIANTS Software, Jason Oppermann - Rebuild by the community",
+    "author": "GIANTS Software, Jason Oppermann - Rebuild by StjerneIdioten",
     "description": "GIANTS i3D Game Engine Import-Export.",
     "version": (1, 0, 0),
     "blender": (2, 81, 0),
     "location": "File > Import-Export",
-    "warning": "Unofficial Version under testing",
+    "warning": "First Unofficial Alpha Version",
     "support": "COMMUNITY",
     "category": "Import-Export"
 }
