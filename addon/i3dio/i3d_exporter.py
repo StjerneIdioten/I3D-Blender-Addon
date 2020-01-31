@@ -220,10 +220,57 @@ class Exporter:
             self._xml_write_int(material_element, 'materialId', self.ids['material'])
 
             if material.use_nodes:
-                print(f"{material.name!r} uses nodes, not supported for now so using defaults")
-                self._xml_write_string(material_element,
-                                       'diffuseColor',
-                                       f"{0.5:f} {0.5:f} {0.5:f} {1.0:f}")
+                material_node = material.node_tree.nodes.get('Principled BSDF')
+                if material_node is not None:
+                    # Diffuse
+                    diffuse = None
+                    material_node_color_socket = material_node.inputs['Base Color']
+                    if material_node_color_socket.is_linked:
+                        material_node_color_connected_node = material_node_color_socket.links[0].from_node
+
+                        if material_node_color_connected_node.bl_idname == 'ShaderNodeRGB':
+                            diffuse = material_node_color_connected_node.outputs[0].default_value
+
+                        elif material_node_color_connected_node.bl_idname == 'ShaderNodeTexImage':
+                            if material_node_color_connected_node.image is not None:
+                                file_id = self._xml_add_file(material_node_color_connected_node.image.filepath)
+                                texture_element = ET.SubElement(material_element, 'Texture')
+                                self._xml_write_string(texture_element, 'fileId', f'{file_id:d}')
+
+                        else:
+                            print(f'Unsupported color input: {material_node_color_connected_node.bl_idname}')
+                    else:
+                        diffuse = material_node_color_socket.default_value
+
+                    self._xml_write_string(material_element,
+                                           'diffuseColor',
+                                           "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(
+                                               *diffuse))
+
+                    # Specular
+                    self._xml_write_string(material_element,
+                                           'specularColor',
+                                           f"{material_node.inputs['Roughness'].default_value:f} "
+                                           f"{material_node.inputs['Specular'].default_value:.6f} "
+                                           f"{material_node.inputs['Metallic'].default_value:f}")
+
+                    # Normal
+                    normal_node_socket = material_node.inputs['Normal']
+                    if normal_node_socket.is_linked:
+                        normal_map_node = normal_node_socket.links[0].from_node
+                        if normal_map_node.bl_idname == 'ShaderNodeNormalMap':
+                            normal_map_color_socket = normal_map_node.inputs['Color']
+                            if normal_map_color_socket.is_linked:
+                                texture_node = normal_map_color_socket.links[0].from_node
+                                if texture_node.bl_idname == 'ShaderNodeTexImage':
+                                    if texture_node.image is not None:
+                                        file_id = self._xml_add_file(texture_node.image.filepath)
+                                        normal_element = ET.SubElement(material_element, 'Normalmap')
+                                        self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
+                                else:
+                                    print(f"Unknown color input of type: {normal_map_node.bl_idname!r} for normal map")
+                        else:
+                            print(f"Unknown normal input of type: {normal_map_node.bl_idname!r} for bdsf")
             else:
                 self._xml_write_string(material_element,
                                        'diffuseColor',
@@ -237,8 +284,25 @@ class Exporter:
 
         return int(material_element.get('materialId'))
 
-    def _xml_add_file(self, filename):
-        print("Adding file")
+    def _xml_add_file(self, filename) -> int:
+        files_root = self._tree.find('Files')
+
+        # TODO: Filename resolving code for relative paths
+        filename_resolved = filename
+
+        # Predicate search does NOT play nicely with the filepath names, so we loop the old fashioned way
+        file_element = None
+        for child in list(files_root):
+            if child.get('filename') == filename_resolved:
+                file_element = child
+
+        if file_element is None:
+            file_element = ET.SubElement(files_root, 'File')
+            self._xml_write_int(file_element, 'fileId', self.ids['file'])
+            self.ids['file'] += 1
+            self._xml_write_string(file_element, 'filename', filename_resolved)
+
+        return int(file_element.get('fileId'))
 
     def _xml_scene_object_shape(self, node: SceneGraph.Node, node_element: ET.Element):
 
