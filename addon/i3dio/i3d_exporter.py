@@ -86,9 +86,6 @@ class Exporter:
                     if child.parent is None:
                         new_graph_node(child, node)
 
-            #             if obj.type == 'EMPTY':
-            #                 print(obj.instance_collection)
-
         selection = bpy.context.scene.i3dio.selection
         if selection == 'ALL':
             selection = bpy.context.scene.collection

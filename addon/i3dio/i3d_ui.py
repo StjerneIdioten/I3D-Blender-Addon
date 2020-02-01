@@ -106,7 +106,6 @@ class I3D_IO_PT_export_options(Panel):
 
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, "keep_collections_as_transformgroups")
-        #row.prop(operator, "export_animations")
 
 
 class I3D_IO_PT_export_shape(Panel):
@@ -129,8 +128,6 @@ class I3D_IO_PT_export_shape(Panel):
         operator = sfile.active_operator
 
         row = layout.row()
-        #row.prop(operator, "shape_normals")
-        #row.prop(operator, "shape_uvs")
 
 
 class I3D_IO_PT_export_misc(Panel):
@@ -153,8 +150,6 @@ class I3D_IO_PT_export_misc(Panel):
         operator = sfile.active_operator
 
         row = layout.row()
-        #row.prop(operator, "misc_verbose")
-        #row.prop(operator, "misc_relative_paths")
 
 
 classes = (I3D_IO_OT_export,
