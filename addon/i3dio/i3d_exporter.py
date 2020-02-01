@@ -223,11 +223,10 @@ class Exporter:
                 material_node = material.node_tree.nodes.get('Principled BSDF')
                 if material_node is not None:
                     # Diffuse
-                    diffuse = None
                     material_node_color_socket = material_node.inputs['Base Color']
+                    diffuse = material_node_color_socket.default_value
                     if material_node_color_socket.is_linked:
                         material_node_color_connected_node = material_node_color_socket.links[0].from_node
-
                         if material_node_color_connected_node.bl_idname == 'ShaderNodeRGB':
                             diffuse = material_node_color_connected_node.outputs[0].default_value
 
@@ -238,9 +237,8 @@ class Exporter:
                                 self._xml_write_string(texture_element, 'fileId', f'{file_id:d}')
 
                         else:
-                            print(f'Unsupported color input: {material_node_color_connected_node.bl_idname}')
-                    else:
-                        diffuse = material_node_color_socket.default_value
+                            print(f"Unsupported input {material_node_color_connected_node.bl_idname!r} "
+                                  f"on 'Color' socket in 'Principled BSDF' of material {material.name!r}")
 
                     self._xml_write_string(material_element,
                                            'diffuseColor',
