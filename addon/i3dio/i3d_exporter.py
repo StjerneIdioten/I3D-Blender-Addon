@@ -158,6 +158,8 @@ class Exporter:
                     self._xml_scene_object_shape(node, node_element)
                 elif node_type == 'EMPTY':
                     self._xml_scene_object_transform_group(node, node_element)
+                elif node_type == 'LIGHT':
+                    self._xml_scene_object_light(node, node_element)
 
             for child in node.children.values():
                 child_element = ET.SubElement(node_element,
@@ -189,6 +191,9 @@ class Exporter:
             matrix = mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
             matrix @= node.blender_object.matrix_local
             matrix @= mathutils.Matrix.Rotation(math.radians(90), 4, "X")
+
+            if node.blender_object.type == 'LIGHT':
+                matrix @= mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
 
             self._xml_write_string(node_element,
                                    'translation',
@@ -463,6 +468,40 @@ class Exporter:
     def _xml_scene_object_transform_group(self, node: SceneGraph.Node, node_element: ET.Element):
         # TODO: Add parameters to UI and extract here
         pass
+
+    def _xml_scene_object_light(self, node: SceneGraph.Node, node_element: ET.Element):
+        light = node.blender_object.data
+        light_type = light.type
+        falloff_type = None
+        if light_type == 'POINT':
+            light_type = 'point'
+            falloff_type = light.fallof_type
+        elif light_type == 'SUN':
+            light_type = 'directional'
+        elif light_type == 'SPOT':
+            light_type = 'spot'
+            falloff_type = light.falloff_type
+            self._xml_write_float(node_element, 'coneAngle', math.degrees(light.spot_size))
+            # Blender spot 0.0 -> 1.0, GE spot 0.0 -> 5.0
+            self._xml_write_float(node_element, 'dropOff', 5.0 * light.spot_blend)
+        elif light_type == 'AREA':
+            light_type = 'point'
+            print('Area lights not supported in giants engine, defaulting to point')
+
+
+        self._xml_write_string(node_element, 'type', light_type)
+        self._xml_write_string(node_element, 'color', "{0:f} {1:f} {2:f}".format(*light.color))
+        self._xml_write_float(node_element, 'range', light.distance)
+        self._xml_write_bool(node_element, 'castShadowMap', light.use_shadow)
+
+        if falloff_type is not None:
+            if falloff_type == 'CONSTANT':
+                falloff_type = 0
+            elif falloff_type == 'INVERSE_LINEAR':
+                falloff_type = 1
+            elif falloff_type == 'INVERSE_SQUARE':
+                falloff_type = 2
+            self._xml_write_int(node_element, 'decayRate', falloff_type)
 
     def _xml_export_to_file(self) -> None:
         self._indent(self._tree)  # Make the xml human readable by adding indents
