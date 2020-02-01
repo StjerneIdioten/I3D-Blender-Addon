@@ -1,0 +1,30 @@
+---
+name: "pre-release"
+
+on:
+  push:
+    branches:
+      - "develop"
+
+jobs:
+  pre-release:
+    name: "Pre Release"
+    runs-on: "ubuntu-latest"
+
+    steps:
+      # ...
+      - uses: actions/checkout@v2
+            
+      - name: "Build & test"
+        run: |
+          sudo apt-get install -y zip
+          zip -r i3d_exporter.zip $GITHUB_WORKSPACE/addon/i3dio
+
+      - uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "latest"
+          prerelease: true
+          title: "Development Build"
+          files: |
+            i3d_exporter.zip
