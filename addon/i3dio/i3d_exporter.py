@@ -338,22 +338,6 @@ class Exporter:
             # TODO: Look into if there is a smarter way to triangulate mesh data rather than using a bmesh operator
             #  since this supposedly wrecks custom normals
 
-            # FaceWeightedVertexNormals: has_custom_normals = true
-            #                            use_auto_smooth = true
-            #                            polygon.use_smooth = true
-            #
-            # NormalSoftShading:         use_auto_smooth = true
-            #                            has_custom_normals = false
-            #                            polygon.use_smooth = true
-            #
-            # HardShaded:                use_auto_smooth = false
-            #                            has_custom_normals = false
-            #                            polygon.use_smooth = false
-            #
-            # SoftShaded:                use_auto_smooth = false
-            #                            has_custom_normals = false
-            #                            polygon.use_smooth = true
-
             # Triangulate mesh data
             bm = bmesh.new()
             bm.from_mesh(mesh)
@@ -416,12 +400,8 @@ class Exporter:
                     # Go through every loop in the polygon and extract vertex information
                     polygon_vertex_index = ""  # The vertices from the vertex list that specify this triangle
 
-                    #normals = polygon.normal
-
                     for loop_index in polygon.loop_indices:
                         vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
-                        #if polygon.use_smooth:
-                           # normals = vertex.normal
                         normals = mesh.loops[loop_index].normal
 
                         vertex_data = {'p': f"{vertex.co.xyz[0]:.6f} "
@@ -432,9 +412,18 @@ class Exporter:
                                             f"{normals.xyz[2]:.6f} "
                                             f"{-normals.xyz[1]:.6f}",
 
-                                       't0': f"{mesh.uv_layers[0].data[loop_index].uv[0]:.6f} "
-                                             f"{mesh.uv_layers[0].data[loop_index].uv[1]:.6f}"
+                                       'uvs': {}
                                        }
+
+                        # TODO: Check uv limit in GE
+                        # Old addon only supported 4
+                        for count, uv in enumerate(mesh.uv_layers):
+                            if count < 4:
+                                self._xml_write_bool(vertices_element, f'uv{count}', True)
+                                vertex_data['uvs'][f't{count:d}'] = f"{uv.data[loop_index].uv[0]:.6f} " \
+                                                    f"{uv.data[loop_index].uv[1]:.6f}"
+                            else:
+                                print(f"Currently only supports four uv layers per vertex")
 
                         vertex_item = VertexItem(vertex_data, mat)
 
@@ -444,7 +433,9 @@ class Exporter:
                             vertex_element = ET.SubElement(vertices_element, 'v')
                             self._xml_write_string(vertex_element, 'n', vertex_data['n'])
                             self._xml_write_string(vertex_element, 'p', vertex_data['p'])
-                            self._xml_write_string(vertex_element, 't0', vertex_data['t0'])
+
+                            for uv_key, uv_data in vertex_data['uvs'].items():
+                                self._xml_write_string(vertex_element, uv_key, uv_data)
 
                             vertex_counter += 1
                             number_of_vertices += 1
@@ -461,7 +452,6 @@ class Exporter:
             self._xml_write_int(vertices_element, 'count', vertex_counter)
             self._xml_write_bool(vertices_element, 'normal', True)
             self._xml_write_bool(vertices_element, 'tangent', True)
-            self._xml_write_bool(vertices_element, 'uv0', True)
 
             object_evaluated.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
 
