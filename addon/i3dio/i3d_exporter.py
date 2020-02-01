@@ -364,6 +364,8 @@ class Exporter:
             bm.to_mesh(mesh)
             bm.free()
 
+            mesh.calc_normals()
+
             vertices_element = ET.SubElement(indexed_triangle_element, 'Vertices')
             triangles_element = ET.SubElement(indexed_triangle_element, 'Triangles')
             subsets_element = ET.SubElement(indexed_triangle_element, 'Subsets')
@@ -416,15 +418,21 @@ class Exporter:
                     triangle_element = ET.SubElement(triangles_element, 't')
                     # Go through every loop in the polygon and extract vertex information
                     polygon_vertex_index = ""  # The vertices from the vertex list that specify this triangle
+
+                    normals = polygon.normal
+
                     for loop_index in polygon.loop_indices:
                         vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
+                        if polygon.use_smooth:
+                            normals = vertex.normal
+
                         vertex_data = {'p': f"{vertex.co.xyz[0]:.6f} "
                                             f"{vertex.co.xyz[2]:.6f} "
                                             f"{-vertex.co.xyz[1]:.6f}",
 
-                                       'n': f"{vertex.normal.xyz[0]:.6f} "
-                                            f"{vertex.normal.xyz[2]:.6f} "
-                                            f"{-vertex.normal.xyz[1]:.6f}",
+                                       'n': f"{normals.xyz[0]:.6f} "
+                                            f"{normals.xyz[2]:.6f} "
+                                            f"{-normals.xyz[1]:.6f}",
 
                                        't0': f"{mesh.uv_layers[0].data[loop_index].uv[0]:.6f} "
                                              f"{mesh.uv_layers[0].data[loop_index].uv[1]:.6f}"
