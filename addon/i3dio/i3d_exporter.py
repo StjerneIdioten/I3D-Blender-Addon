@@ -379,7 +379,7 @@ class Exporter:
             self._xml_write_int(subsets_element, 'count', len(polygon_subsets))
 
             added_vertices = {}  # Key is a unique vertex identifier and the value is a vertex index
-            vertex_counter = 0   # Count the total number of unique vertices (across subsets)
+            vertex_counter = 0  # Count the total number of unique vertices (across subsets)
             indices_total = 0
 
             # Vertices are written to the i3d vertex list in an order based on the subsets and the triangles then index
@@ -418,7 +418,7 @@ class Exporter:
                             if count < 4:
                                 self._xml_write_bool(vertices_element, f'uv{count}', True)
                                 vertex_data['uvs'][f't{count:d}'] = f"{uv.data[loop_index].uv[0]:.6f} " \
-                                                    f"{uv.data[loop_index].uv[1]:.6f}"
+                                                                    f"{uv.data[loop_index].uv[1]:.6f}"
                             else:
                                 print(f"Currently only supports four uv layers per vertex")
 
@@ -541,13 +541,11 @@ class Exporter:
 
 
 class SceneGraph(object):
-
     class Node(object):
         def __init__(self,
                      node_id: int = 0,
                      blender_object: Union[bpy.types.Object, bpy.types.Collection] = None,
                      parent: SceneGraph.Node = None):
-
             self.children = {}
             self.blender_object = blender_object
             self.id = node_id
@@ -607,6 +605,7 @@ class SceneGraph(object):
 
 class VertexItem:
     """Define unique vertex items (Could be the same vertex but with a different color or material uv"""
+
     def __init__(self, vertex_item, material_name):
         self._str = f"{material_name}"
         for key, item in vertex_item.items():
