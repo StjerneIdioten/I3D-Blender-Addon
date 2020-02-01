@@ -160,6 +160,8 @@ class Exporter:
                     self._xml_scene_object_transform_group(node, node_element)
                 elif node_type == 'LIGHT':
                     self._xml_scene_object_light(node, node_element)
+                elif node_type == 'CAMERA':
+                    self._xml_scene_object_camera(node, node_element)
 
             for child in node.children.values():
                 child_element = ET.SubElement(node_element,
@@ -186,14 +188,18 @@ class Exporter:
         else:
 
             # TODO: Investigate how to use the export helper functions to convert instead of hardcoding the rotations
+            #  as was done in the old addon
 
             # Perform rotation of object so it fits GE format of Y-up, Z-forward
             matrix = mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
             matrix @= node.blender_object.matrix_local
             matrix @= mathutils.Matrix.Rotation(math.radians(90), 4, "X")
 
-            if node.blender_object.type == 'LIGHT':
+            if node.blender_object.type == 'LIGHT' or node.blender_object.type == 'CAMERA':
                 matrix @= mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
+            if node.blender_object.parent is not None:
+                if node.blender_object.parent.type == 'CAMERA' or node.blender_object.parent.type == 'LIGHT':
+                    matrix = mathutils.Matrix.Rotation(math.radians(90), 4, "X") @ matrix
 
             self._xml_write_string(node_element,
                                    'translation',
@@ -468,6 +474,17 @@ class Exporter:
     def _xml_scene_object_transform_group(self, node: SceneGraph.Node, node_element: ET.Element):
         # TODO: Add parameters to UI and extract here
         pass
+
+    def _xml_scene_object_camera(self, node: SceneGraph.Node, node_element: ET.Element):
+        camera = node.blender_object.data
+
+        self._xml_write_float(node_element, 'fov', camera.lens)
+        self._xml_write_float(node_element, 'nearClip', camera.clip_start)
+        self._xml_write_float(node_element, 'farClip', camera.clip_end)
+        if camera.type == 'ORTHO':
+            self._xml_write_bool(node_element, 'orthographic', True)
+            self._xml_write_float(node_element, 'orthographicHeight', camera.ortho_scale)
+
 
     def _xml_scene_object_light(self, node: SceneGraph.Node, node_element: ET.Element):
         light = node.blender_object.data
