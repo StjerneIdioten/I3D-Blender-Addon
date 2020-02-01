@@ -354,9 +354,6 @@ class Exporter:
             #                            has_custom_normals = false
             #                            polygon.use_smooth = true
 
-            for poly in mesh.polygons:
-                print(f'{mesh.name}:Poly: {poly.use_smooth}')
-
             # Triangulate mesh data
             bm = bmesh.new()
             bm.from_mesh(mesh)
@@ -364,7 +361,7 @@ class Exporter:
             bm.to_mesh(mesh)
             bm.free()
 
-            mesh.calc_normals()
+            mesh.calc_normals_split()
 
             vertices_element = ET.SubElement(indexed_triangle_element, 'Vertices')
             triangles_element = ET.SubElement(indexed_triangle_element, 'Triangles')
@@ -419,12 +416,13 @@ class Exporter:
                     # Go through every loop in the polygon and extract vertex information
                     polygon_vertex_index = ""  # The vertices from the vertex list that specify this triangle
 
-                    normals = polygon.normal
+                    #normals = polygon.normal
 
                     for loop_index in polygon.loop_indices:
                         vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
-                        if polygon.use_smooth:
-                            normals = vertex.normal
+                        #if polygon.use_smooth:
+                           # normals = vertex.normal
+                        normals = mesh.loops[loop_index].normal
 
                         vertex_data = {'p': f"{vertex.co.xyz[0]:.6f} "
                                             f"{vertex.co.xyz[2]:.6f} "
