@@ -274,9 +274,9 @@ class Exporter:
                                        'diffuseColor',
                                        "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*material.diffuse_color))
 
-            self._xml_write_string(material_element,
-                                   'specularColor',
-                                   f"{material.roughness:f} {1:.6f} {material.metallic:f}")
+                self._xml_write_string(material_element,
+                                       'specularColor',
+                                       f"{material.roughness:f} {1:.6f} {material.metallic:f}")
 
             self.ids['material'] += 1
 
@@ -337,6 +337,25 @@ class Exporter:
 
             # TODO: Look into if there is a smarter way to triangulate mesh data rather than using a bmesh operator
             #  since this supposedly wrecks custom normals
+
+            # FaceWeightedVertexNormals: has_custom_normals = true
+            #                            use_auto_smooth = true
+            #                            polygon.use_smooth = true
+            #
+            # NormalSoftShading:         use_auto_smooth = true
+            #                            has_custom_normals = false
+            #                            polygon.use_smooth = true
+            #
+            # HardShaded:                use_auto_smooth = false
+            #                            has_custom_normals = false
+            #                            polygon.use_smooth = false
+            #
+            # SoftShaded:                use_auto_smooth = false
+            #                            has_custom_normals = false
+            #                            polygon.use_smooth = true
+
+            for poly in mesh.polygons:
+                print(f'{mesh.name}:Poly: {poly.use_smooth}')
 
             # Triangulate mesh data
             bm = bmesh.new()
