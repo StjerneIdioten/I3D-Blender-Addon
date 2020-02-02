@@ -492,7 +492,7 @@ class Exporter:
         falloff_type = None
         if light_type == 'POINT':
             light_type = 'point'
-            falloff_type = light.fallof_type
+            falloff_type = light.falloff_type
         elif light_type == 'SUN':
             light_type = 'directional'
         elif light_type == 'SPOT':
