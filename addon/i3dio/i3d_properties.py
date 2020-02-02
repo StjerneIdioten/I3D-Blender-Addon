@@ -21,7 +21,8 @@ from bpy.props import (
     StringProperty,
     BoolProperty,
     EnumProperty,
-    PointerProperty
+    PointerProperty,
+    FloatProperty
 )
 
 
@@ -44,16 +45,77 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
     )
 
 
-classes = (I3DExportUIProperties,)
+class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
+
+    clip_distance: FloatProperty(
+        name="Clip Distance",
+        description="Anything above this distance to the camera, wont be rendered",
+        default=1000000.0,
+        min=0.0
+    )
+
+    min_clip_distance: FloatProperty(
+        name="Min Clip Distance",
+        description="Anything below this distance to the camera, wont be rendered",
+        default=0.0,
+        min=0.0
+    )
+
+
+class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
+
+    casts_shadows: BoolProperty(
+        name="Cast Shadowmap",
+        description="Cast Shadowmap",
+        default=False
+    )
+
+    receive_shadows: BoolProperty(
+        name="Receive Shadowmap",
+        description="Receive Shadowmap",
+        default=False
+    )
+
+
+class I3DNodeLightAttributes(bpy.types.PropertyGroup):
+
+    depth_map_bias: FloatProperty(
+        name="Shadow Map Bias",
+        description="Shadow Map Bias",
+        default=0.0012,
+        min=0.0,
+        max=10.0
+    )
+
+    depth_map_slope_scale_bias: FloatProperty(
+        name="Shadow Map Slope Scale Bias",
+        description="Shadow Map Slope Scale Bias",
+        default=2.0,
+        min=-10.0,
+        max=10.0
+    )
+
+
+classes = (I3DExportUIProperties,
+           I3DNodeTransformAttributes,
+           I3DNodeShapeAttributes,
+           I3DNodeLightAttributes
+           )
 
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
+    bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeTransformAttributes)
+    bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
+    bpy.types.Light.i3d_attributes = PointerProperty(type=I3DNodeLightAttributes)
 
 
 def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
     del bpy.types.Scene.i3dio
+    del bpy.types.Object.i3d_attributes
+    del bpy.types.Mesh.i3d_attributes
+    del bpy.types.Light.i3d_attributes

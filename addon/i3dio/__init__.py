@@ -23,11 +23,13 @@ if "bpy" in locals():
         importlib.reload(i3d_properties)
     if 'i3d_ui' in locals():
         importlib.reload(i3d_ui)
+    if 'i3d_ui_attributes' in locals():
+        importlib.reload(i3d_ui_attributes)
     if 'i3d_exporter' in locals():
         importlib.reload(i3d_exporter)
     print("Reloaded multifiles")
 else:
-    from . import i3d_ui, i3d_properties
+    from . import i3d_ui, i3d_ui_attributes, i3d_properties
     print("Imported multifiles")
 
 import bpy
@@ -54,6 +56,7 @@ def menu_func_export(self, context):
 
 def register():
     i3d_properties.register()
+    i3d_ui_attributes.register()
     i3d_ui.register()
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
@@ -61,5 +64,6 @@ def register():
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     i3d_ui.unregister()
+    i3d_ui_attributes.unregister()
     i3d_properties.unregister()
 
