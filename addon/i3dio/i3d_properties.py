@@ -25,7 +25,22 @@ from bpy.props import (
     FloatProperty
 )
 
+classes = []
 
+# Used for comparison when needed in the exporter, since it is near impossible to reach the default defined in the
+# properties themselves
+defaults = {
+    'clipDistance': 1000000.0,
+    'minClipDistance': 0.0
+            }
+
+
+def register(cls):
+    classes.append(cls)
+    return cls
+
+
+@register
 class I3DExportUIProperties(bpy.types.PropertyGroup):
     selection: EnumProperty(
         name="Export",
@@ -45,23 +60,34 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
     )
 
 
+@register
 class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
 
-    clip_distance: FloatProperty(
-        name="Clip Distance",
-        description="Anything above this distance to the camera, wont be rendered",
-        default=1000000.0,
-        min=0.0
-    )
+    @register
+    class clip_Distance(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='clipDistance', options={'SKIP_SAVE'})
+        value_i3d: FloatProperty(
+            name="Clip Distance",
+            description="Anything above this distance to the camera, wont be rendered",
+            default=defaults['clipDistance'],
+            min=0.0
+        )
 
-    min_clip_distance: FloatProperty(
-        name="Min Clip Distance",
-        description="Anything below this distance to the camera, wont be rendered",
-        default=0.0,
-        min=0.0
-    )
+    @register
+    class min_clip_distance(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='minClipDistance', options={'SKIP_SAVE'})
+        value_i3d: FloatProperty(
+            name="Min Clip Distance",
+            description="Anything below this distance to the camera, wont be rendered",
+            default=defaults['minClipDistance'],
+            min=0.0
+        )
+
+    clip_distance: PointerProperty(type=clip_Distance)
+    min_clip_distance: PointerProperty(type=min_clip_distance)
 
 
+@register
 class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
 
     casts_shadows: BoolProperty(
@@ -77,6 +103,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     )
 
 
+@register
 class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     depth_map_bias: FloatProperty(
@@ -96,13 +123,6 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
     )
 
 
-classes = (I3DExportUIProperties,
-           I3DNodeTransformAttributes,
-           I3DNodeShapeAttributes,
-           I3DNodeLightAttributes
-           )
-
-
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -113,7 +133,7 @@ def register():
 
 
 def unregister():
-    for cls in classes:
+    for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     del bpy.types.Scene.i3dio
     del bpy.types.Object.i3d_attributes

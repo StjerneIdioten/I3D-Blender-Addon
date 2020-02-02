@@ -26,6 +26,8 @@ import xml.etree.ElementTree as ET  # Technically not following pep8, but this i
 import bpy
 import bmesh
 
+from . import i3d_properties
+
 
 # Exporter is a singleton
 class Exporter:
@@ -217,7 +219,26 @@ class Exporter:
             # visible_get() should determine visibility based on all visibility flags
             self._xml_write_bool(node_element, 'visibility', node.blender_object.visible_get())
 
-        # TODO: Write other general attributes
+            # Write the object properties from the blender UI into the object
+            self._xml_object_properties(node.blender_object.i3d_attributes, node_element)
+
+    def _xml_object_properties(self, propertygroup, element):
+        for key in propertygroup.__annotations__.keys():
+            prop = getattr(propertygroup, key)
+
+            # Check if property is default somehow
+            name = prop.name_i3d
+            val = prop.value_i3d
+
+            if val != i3d_properties.defaults[name]:
+                if isinstance(val, float):
+                    self._xml_write_float(element, prop.name_i3d, val)
+                elif isinstance(val, int):
+                    self._xml_write_int(element, prop.name_i3d, val)
+                elif isinstance(val, bool):
+                    self._xml_write_bool(element, prop.name_i3d, val)
+                elif isinstance(val, str):
+                    self._xml_write_string(element, prop.name_i3d, val)
 
     def _xml_add_material(self, material):
         materials_root = self._tree.find('Materials')
@@ -484,7 +505,6 @@ class Exporter:
         if camera.type == 'ORTHO':
             self._xml_write_bool(node_element, 'orthographic', True)
             self._xml_write_float(node_element, 'orthographicHeight', camera.ortho_scale)
-
 
     def _xml_scene_object_light(self, node: SceneGraph.Node, node_element: ET.Element):
         light = node.blender_object.data
