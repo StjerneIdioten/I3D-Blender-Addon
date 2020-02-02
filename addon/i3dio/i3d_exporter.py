@@ -277,6 +277,20 @@ class Exporter:
                                     print(f"Unknown color input of type: {normal_map_node.bl_idname!r} for normal map")
                         else:
                             print(f"Unknown normal input of type: {normal_map_node.bl_idname!r} for bdsf")
+
+                separate_rgb_node = material.node_tree.nodes.get('Separate RGB')
+                if separate_rgb_node is not None:
+                    image_socket = separate_rgb_node.inputs['Image']
+                    if image_socket.is_linked:
+                        gloss_image_node = image_socket.links[0].from_node
+                        if gloss_image_node.bl_idname == 'ShaderNodeTexImage':
+                            if gloss_image_node.image is not None:
+                                file_id = self._xml_add_file(gloss_image_node.image.filepath)
+                                normal_element = ET.SubElement(material_element, 'Glossmap')
+                                self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
+                        else:
+                            print(f"Unknown image input of type: {gloss_image_node.bl_idname!r} for Separate RGB")
+
             else:
                 self._xml_write_string(material_element,
                                        'diffuseColor',
