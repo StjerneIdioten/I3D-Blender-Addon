@@ -22,7 +22,8 @@ from bpy.props import (
     BoolProperty,
     EnumProperty,
     PointerProperty,
-    FloatProperty
+    FloatProperty,
+    IntProperty
 )
 
 classes = []
@@ -30,8 +31,15 @@ classes = []
 # Used for comparison when needed in the exporter, since it is near impossible to reach the default defined in the
 # properties themselves
 defaults = {
+    'disabled': True,            # Used for certain properties like Enum, to tell the exporter not to export
     'clipDistance': 1000000.0,
-    'minClipDistance': 0.0
+    'minClipDistance': 0.0,
+    'objectMask': 0,
+    'castsShadows': False,
+    'receiveShadows': False,
+    'depthMapBias': 0.0012,
+    'depthMapSlopeScaleBias': 2.0,
+    'collision': True
             }
 
 
@@ -83,50 +91,111 @@ class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
             min=0.0
         )
 
+    @register
+    class object_mask(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='minClipDistance', options={'SKIP_SAVE'})
+        value_i3d: IntProperty(
+            name="Object Mask",
+            description="Used for determining if the object interacts with certain rendering effects",
+            default=defaults['objectMask'],
+            min=0,
+            max=4294967295
+        )
+
+    @register
+    class rigid_body_type(bpy.types.PropertyGroup):
+
+        name_i3d: EnumProperty(
+            name="Rigid Body Type",
+            description="Select rigid body type",
+            items=[
+                ('disabled', 'Disabled', "Disable rigidbody for this object"),
+                ('static', 'Static', "Inanimate object with infinite mass"),
+                ('dynamic', 'Dynamic', "Object moves with physics"),
+                ('kinematic', 'Kinematic', "Object moves without physics")
+            ],
+            default='disabled'
+        )
+
+        value_i3d: BoolProperty(default=True, options={'SKIP_SAVE'})
+
+    @register
+    class collision(bpy.types.PropertyGroup):
+
+        name_i3d: StringProperty(default='collision', options={'SKIP_SAVE'})
+        value_i3d: BoolProperty(
+            name="Collision",
+            description="Does the object take part in collisions",
+            default=defaults['collision']
+        )
+
     clip_distance: PointerProperty(type=clip_Distance)
     min_clip_distance: PointerProperty(type=min_clip_distance)
+    object_mask: PointerProperty(type=object_mask)
+
+    rigid_body_type = PointerProperty(type=rigid_body_type)
+    collision = PointerProperty(type=collision)
 
 
 @register
 class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
 
-    casts_shadows: BoolProperty(
-        name="Cast Shadowmap",
-        description="Cast Shadowmap",
-        default=False
-    )
+    @register
+    class casts_shadows(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='castsShadows', options={'SKIP_SAVE'})
+        value_i3d: BoolProperty(
+            name="Cast Shadowmap",
+            description="Cast Shadowmap",
+            default=defaults['castsShadows']
+        )
 
-    receive_shadows: BoolProperty(
-        name="Receive Shadowmap",
-        description="Receive Shadowmap",
-        default=False
-    )
+    @register
+    class receive_shadows(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='receiveShadows', options={'SKIP_SAVE'})
+        value_i3d: BoolProperty(
+            name="Cast Shadowmap",
+            description="Cast Shadowmap",
+            default=defaults['castsShadows']
+        )
+
+    casts_shadows: PointerProperty(type=casts_shadows)
+    receive_shadows: PointerProperty(type=receive_shadows)
 
 
 @register
 class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
-    depth_map_bias: FloatProperty(
-        name="Shadow Map Bias",
-        description="Shadow Map Bias",
-        default=0.0012,
-        min=0.0,
-        max=10.0
-    )
+    @register
+    class depth_map_bias(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='depthMapBias', options={'SKIP_SAVE'})
+        value_i3d: FloatProperty(
+            name="Shadow Map Bias",
+            description="Shadow Map Bias",
+            default=defaults['depthMapBias'],
+            min=0.0,
+            max=10.0
+        )
 
-    depth_map_slope_scale_bias: FloatProperty(
-        name="Shadow Map Slope Scale Bias",
-        description="Shadow Map Slope Scale Bias",
-        default=2.0,
-        min=-10.0,
-        max=10.0
-    )
+    @register
+    class depth_map_slope_scale_bias(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='depthMapSlopeScaleBias', options={'SKIP_SAVE'})
+        value_i3d: FloatProperty(
+            name="Shadow Map Slope Scale Bias",
+            description="Shadow Map Slope Scale Bias",
+            default=defaults['depthMapSlopeScaleBias'],
+            min=-10.0,
+            max=10.0
+        )
+
+    depth_map_bias = PointerProperty(type=depth_map_bias)
+    depth_map_slope_scale_bias = PointerProperty(type=depth_map_slope_scale_bias)
 
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
+    bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeTransformAttributes)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeTransformAttributes)
     bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
     bpy.types.Light.i3d_attributes = PointerProperty(type=I3DNodeLightAttributes)

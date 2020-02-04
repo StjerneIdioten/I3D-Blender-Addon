@@ -28,6 +28,15 @@ from bpy.props import (
 from . import i3d_properties
 
 
+classes = []
+
+
+def register(cls):
+    classes.append(cls)
+    return cls
+
+
+@register
 class I3D_IO_PT_transform_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -44,10 +53,36 @@ class I3D_IO_PT_transform_attributes(Panel):
         layout.use_property_decorate = False
         obj = bpy.context.active_object
 
-        layout.prop(obj.i3d_attributes.clip_distance, "value_i3d")
-        layout.prop(obj.i3d_attributes.min_clip_distance, "value_i3d")
+        layout.prop(obj.i3d_attributes.clip_distance, 'value_i3d')
+        layout.prop(obj.i3d_attributes.min_clip_distance, 'value_i3d')
 
 
+@register
+class I3D_IO_PT_rigid_body_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = 'Rigidbody'
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_transform_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
+        row = layout.row()
+        row.prop(obj.i3d_attributes.rigid_body_type, 'name_i3d')
+
+        if obj.i3d_attributes.rigid_body_type.name_i3d != 'disabled':
+            row = layout.row()
+            row.prop(obj.i3d_attributes.collision, 'value_i3d')
+
+
+@register
 class I3D_IO_PT_shape_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -65,10 +100,11 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.use_property_decorate = False
         obj = bpy.context.active_object.data
 
-        layout.prop(obj.i3d_attributes, "casts_shadows")
-        layout.prop(obj.i3d_attributes, "receive_shadows")
+        layout.prop(obj.i3d_attributes.casts_shadows, "value_i3d")
+        layout.prop(obj.i3d_attributes.receive_shadows, "value_i3d")
 
 
+@register
 class I3D_IO_PT_light_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -86,14 +122,8 @@ class I3D_IO_PT_light_attributes(Panel):
         layout.use_property_decorate = False
         obj = bpy.context.active_object.data
 
-        layout.prop(obj.i3d_attributes, "depth_map_bias")
-        layout.prop(obj.i3d_attributes, "depth_map_slope_scale_bias")
-
-
-classes = (I3D_IO_PT_transform_attributes,
-           I3D_IO_PT_shape_attributes,
-           I3D_IO_PT_light_attributes
-           )
+        layout.prop(obj.i3d_attributes.depth_map_bias, "value_i3d")
+        layout.prop(obj.i3d_attributes.depth_map_slope_scale_bias, "value_i3d")
 
 
 def register():
@@ -102,5 +132,6 @@ def register():
 
 
 def unregister():
-    for cls in classes:
+    for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
+
