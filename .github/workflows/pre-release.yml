@@ -20,7 +20,7 @@ jobs:
           sudo apt-get install -y zip
           cd $GITHUB_WORKSPACE/addon
           zip -r i3d_exporter.zip i3dio
-          mv i3d_exporter.zip @OLDPWD
+          mv i3d_exporter.zip $OLDPWD
           cd -
 
       - uses: "marvinpinto/action-automatic-releases@latest"
