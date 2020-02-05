@@ -51,10 +51,16 @@ class Exporter:
 
     def _xml_build_scene_graph(self):
 
+        objects_to_export = bpy.context.scene.i3dio.object_types_to_export
+
         def new_graph_node(blender_object: Union[bpy.types.Object, bpy.types.Collection],
                            parent: SceneGraph.Node,
                            unpack_collection: bool = False):
 
+            if not isinstance(blender_object, bpy.types.Collection):
+                if blender_object.type not in objects_to_export:
+                    return
+            
             node = None
             if unpack_collection:
                 node = parent
@@ -164,6 +170,7 @@ class Exporter:
                     self._xml_scene_object_camera(node, node_element)
 
             for child in node.children.values():
+
                 child_element = ET.SubElement(node_element,
                                               Exporter.blender_to_i3d(child.blender_object))
                 parse_node(child, child_element)
@@ -504,7 +511,6 @@ class Exporter:
             self._xml_write_bool(node_element, 'orthographic', True)
             self._xml_write_float(node_element, 'orthographicHeight', camera.ortho_scale)
 
-
     def _xml_scene_object_light(self, node: SceneGraph.Node, node_element: ET.Element):
         light = node.blender_object.data
         light_type = light.type
@@ -523,7 +529,6 @@ class Exporter:
         elif light_type == 'AREA':
             light_type = 'point'
             print('Area lights not supported in giants engine, defaulting to point')
-
 
         self._xml_write_string(node_element, 'type', light_type)
         self._xml_write_string(node_element, 'color', "{0:f} {1:f} {2:f}".format(*light.color))

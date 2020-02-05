@@ -107,7 +107,12 @@ class I3D_IO_PT_export_options(Panel):
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
         row = layout.row()
-        row.prop(bpy.context.scene.i3dio,'relative_paths')
+        row.prop(bpy.context.scene.i3dio, 'relative_paths')
+        box = layout.box()
+        row = box.row()
+        row.label(text='Object types to export')
+        column = box.column()
+        column.props_enum(bpy.context.scene.i3dio, 'object_types_to_export')
 
 
 class I3D_IO_PT_export_shape(Panel):

@@ -49,6 +49,19 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=True
     )
 
+    object_types_to_export: EnumProperty(
+        name="Object types",
+        description="Select which objects should be included in the exported",
+        items=(
+            ('EMPTY', "Empty", "Export empties"),
+            ('CAMERA', "Camera", "Export cameras"),
+            ('LIGHT', "Light", "Export lights"),
+            ('MESH', "Mesh", "Export meshes")
+        ),
+        options={'ENUM_FLAG'},
+        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH'},
+    )
+
 
 classes = (I3DExportUIProperties,)
 
