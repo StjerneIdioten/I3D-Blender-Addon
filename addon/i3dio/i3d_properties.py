@@ -43,6 +43,12 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=True
     )
 
+    relative_paths: BoolProperty(
+        name="Relative Paths",
+        description="Replace absolute paths to resources from FS data folder with relative paths as $data/path/to/file",
+        default=True
+    )
+
 
 classes = (I3DExportUIProperties,)
 

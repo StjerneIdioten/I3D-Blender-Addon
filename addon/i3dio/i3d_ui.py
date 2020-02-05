@@ -64,7 +64,7 @@ class I3D_IO_PT_export_main(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
     bl_label = ""
-    bl_parent_id = "FILE_PT_operator"
+    bl_parent_id = 'FILE_PT_operator'
     bl_options = {'HIDE_HEADER'}
 
     @classmethod
@@ -72,7 +72,7 @@ class I3D_IO_PT_export_main(Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        return operator.bl_idname == "EXPORT_SCENE_OT_i3d"
+        return operator.bl_idname == 'EXPORT_SCENE_OT_i3d'
 
     def draw(self, context):
         layout = self.layout
@@ -82,7 +82,7 @@ class I3D_IO_PT_export_main(Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        layout.prop(bpy.context.scene.i3dio, "selection")
+        layout.prop(bpy.context.scene.i3dio, 'selection')
 
 
 class I3D_IO_PT_export_options(Panel):
@@ -96,7 +96,7 @@ class I3D_IO_PT_export_options(Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        return operator.bl_idname == "EXPORT_SCENE_OT_i3d"
+        return operator.bl_idname == 'EXPORT_SCENE_OT_i3d'
 
     def draw(self, context):
         layout = self.layout
@@ -105,7 +105,9 @@ class I3D_IO_PT_export_options(Panel):
         operator = sfile.active_operator
 
         row = layout.row()
-        row.prop(bpy.context.scene.i3dio, "keep_collections_as_transformgroups")
+        row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
+        row = layout.row()
+        row.prop(bpy.context.scene.i3dio,'relative_paths')
 
 
 class I3D_IO_PT_export_shape(Panel):

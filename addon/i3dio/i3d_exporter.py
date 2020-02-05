@@ -307,8 +307,13 @@ class Exporter:
     def _xml_add_file(self, filename) -> int:
         files_root = self._tree.find('Files')
 
-        # TODO: Filename resolving code for relative paths
         filename_resolved = filename
+        if bpy.context.scene.i3dio.relative_paths:
+            relative_filter = 'data\shared'
+            try:
+                filename_resolved = filename.replace(filename[0:filename.index(relative_filter)], '$')
+            except ValueError:
+                pass
 
         # Predicate search does NOT play nicely with the filepath names, so we loop the old fashioned way
         file_element = None
