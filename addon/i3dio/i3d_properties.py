@@ -62,6 +62,24 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH'},
     )
 
+    copy_files: BoolProperty(
+        name="Copy Files",
+        description="Copies the files to have them together with the i3d file. Structure is determined by 'File "
+                    "Structure' parameter",
+        default=True
+    )
+
+    file_structure: EnumProperty(
+        name="File Structure",
+        description="Determine the file structure of the copied files",
+        items=(
+            ('FLAT', "Flat", "The hierarchy is flattened, everything is in the same folder as the i3d"),
+            ('BLENDER', "Blender", "The hierarchy is mimiced from around the blend file"),
+            ('MODHUB', "Modhub", "The hierarchy is setup according to modhub guidelines, sorted by filetype")
+        ),
+        default='MODHUB'
+    )
+
 
 classes = (I3DExportUIProperties,)
 

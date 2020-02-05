@@ -18,6 +18,7 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import Union
 import sys
+import shutil
 import math
 import mathutils
 
@@ -60,7 +61,7 @@ class Exporter:
             if not isinstance(blender_object, bpy.types.Collection):
                 if blender_object.type not in objects_to_export:
                     return
-            
+
             node = None
             if unpack_collection:
                 node = parent
@@ -247,7 +248,7 @@ class Exporter:
 
                         elif material_node_color_connected_node.bl_idname == 'ShaderNodeTexImage':
                             if material_node_color_connected_node.image is not None:
-                                file_id = self._xml_add_file(material_node_color_connected_node.image.filepath)
+                                file_id = self._xml_add_file(bpy.path.abspath(material_node_color_connected_node.image.filepath))
                                 texture_element = ET.SubElement(material_element, 'Texture')
                                 self._xml_write_string(texture_element, 'fileId', f'{file_id:d}')
 
@@ -277,7 +278,7 @@ class Exporter:
                                 texture_node = normal_map_color_socket.links[0].from_node
                                 if texture_node.bl_idname == 'ShaderNodeTexImage':
                                     if texture_node.image is not None:
-                                        file_id = self._xml_add_file(texture_node.image.filepath)
+                                        file_id = self._xml_add_file(bpy.path.abspath(texture_node.image.filepath))
                                         normal_element = ET.SubElement(material_element, 'Normalmap')
                                         self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
                                 else:
@@ -292,7 +293,7 @@ class Exporter:
                         gloss_image_node = image_socket.links[0].from_node
                         if gloss_image_node.bl_idname == 'ShaderNodeTexImage':
                             if gloss_image_node.image is not None:
-                                file_id = self._xml_add_file(gloss_image_node.image.filepath)
+                                file_id = self._xml_add_file(bpy.path.abspath(gloss_image_node.image.filepath))
                                 normal_element = ET.SubElement(material_element, 'Glossmap')
                                 self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
                         else:
@@ -311,28 +312,40 @@ class Exporter:
 
         return int(material_element.get('materialId'))
 
-    def _xml_add_file(self, filename) -> int:
+    def _xml_add_file(self, filepath) -> int:
         files_root = self._tree.find('Files')
 
-        filename_resolved = filename
+        filepath_resolved = filepath
         if bpy.context.scene.i3dio.relative_paths:
             relative_filter = 'data\shared'
             try:
-                filename_resolved = filename.replace(filename[0:filename.index(relative_filter)], '$')
+                filepath_resolved = filepath.replace(filepath[0:filepath.index(relative_filter)], '$')
             except ValueError:
                 pass
 
         # Predicate search does NOT play nicely with the filepath names, so we loop the old fashioned way
         file_element = None
         for child in list(files_root):
-            if child.get('filename') == filename_resolved:
+            if child.get('filename') == filepath_resolved:
                 file_element = child
 
         if file_element is None:
+            # Copy the file if option is checked
+            if bpy.context.scene.i3dio.copy_files and filepath_resolved[0] != '$':
+                file_structure = bpy.context.scene.i3dio.file_structure
+                if file_structure == 'FLAT':
+                    fil = self._filepath[0:self._filepath.rfind('\\') + 1]
+                    shutil.copy(filepath, fil)
+                    filepath_resolved = filepath[filepath.rfind('\\') + 1:len(filepath)]
+                elif file_structure == 'BLENDER':
+                    print(f"Blender file structure is not supported yet")
+                elif file_structure == 'MODHUB':
+                    print(f"Modhub file structure is not supported yet")
+
             file_element = ET.SubElement(files_root, 'File')
             self._xml_write_int(file_element, 'fileId', self.ids['file'])
             self.ids['file'] += 1
-            self._xml_write_string(file_element, 'filename', filename_resolved)
+            self._xml_write_string(file_element, 'filename', filepath_resolved)
 
         return int(file_element.get('fileId'))
 
