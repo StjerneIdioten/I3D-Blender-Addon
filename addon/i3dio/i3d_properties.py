@@ -69,6 +69,12 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=True
     )
 
+    overwrite_files: BoolProperty(
+        name="Overwrite Files",
+        description="Overwrites files if they already exist, currently it is only evaluated for material files!",
+        default=True
+    )
+
     file_structure: EnumProperty(
         name="File Structure",
         description="Determine the file structure of the copied files",

@@ -18,6 +18,7 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import Union
 import sys
+import os
 import shutil
 import math
 import mathutils
@@ -332,11 +333,15 @@ class Exporter:
         if file_element is None:
             # Copy the file if option is checked
             if bpy.context.scene.i3dio.copy_files and filepath_resolved[0] != '$':
+                # Get the folder where the i3d file is going to be located
+                filepath_i3d = self._filepath[0:self._filepath.rfind('\\') + 1]
+                filename = filepath_resolved = filepath[filepath.rfind('\\') + 1:len(filepath)]
+
                 file_structure = bpy.context.scene.i3dio.file_structure
                 if file_structure == 'FLAT':
-                    fil = self._filepath[0:self._filepath.rfind('\\') + 1]
-                    shutil.copy(filepath, fil)
-                    filepath_resolved = filepath[filepath.rfind('\\') + 1:len(filepath)]
+                    if bpy.context.scene.i3dio.overwrite_files or not os.path.exists(filepath_i3d + filename):
+                        shutil.copy(filepath, filepath_i3d)
+                    filepath_resolved = filename
                 elif file_structure == 'BLENDER':
                     print(f"Blender file structure is not supported yet")
                 elif file_structure == 'MODHUB':

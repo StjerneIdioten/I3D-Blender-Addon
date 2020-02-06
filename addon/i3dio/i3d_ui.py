@@ -112,6 +112,10 @@ class I3D_IO_PT_export_options(Panel):
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'copy_files')
         row = layout.row()
+        row.prop(bpy.context.scene.i3dio, 'overwrite_files')
+        row.enabled = bpy.context.scene.i3dio.copy_files
+
+        row = layout.row()
         row.enabled = bpy.context.scene.i3dio.copy_files
         row.alignment = 'RIGHT'
         row.prop(bpy.context.scene.i3dio, 'file_structure', )
