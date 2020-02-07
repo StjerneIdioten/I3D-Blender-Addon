@@ -314,7 +314,7 @@ class Exporter:
 
         return int(material_element.get('materialId'))
 
-    def _xml_add_file(self, filepath, file_type='texture') -> int:
+    def _xml_add_file(self, filepath, file_folder='textures') -> int:
         print("Relative path: " + filepath)
         filepath_absolute = bpy.path.abspath(filepath)
         print("Absolute path: " + filepath_absolute)
@@ -337,7 +337,7 @@ class Exporter:
             if file_structure == 'FLAT':
                 pass  # Default settings, kept for clarity when viewing code
             elif file_structure == 'MODHUB':
-                output_dir = file_type + '\\'
+                output_dir = file_folder + '\\'
             elif file_structure == 'BLENDER':
                 if filepath.count("..\\") <= 3:  # Limits the distance a file can be from the blend file to three
                     # relative steps to avoid copying entire folder structures ny mistake. Defaults to a absolute path.
