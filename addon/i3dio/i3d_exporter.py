@@ -250,7 +250,7 @@ class Exporter:
 
                         elif material_node_color_connected_node.bl_idname == 'ShaderNodeTexImage':
                             if material_node_color_connected_node.image is not None:
-                                file_id = self._xml_add_file(bpy.path.abspath(material_node_color_connected_node.image.filepath))
+                                file_id = self._xml_add_file(material_node_color_connected_node.image.filepath)
                                 texture_element = ET.SubElement(material_element, 'Texture')
                                 self._xml_write_string(texture_element, 'fileId', f'{file_id:d}')
 
@@ -280,7 +280,7 @@ class Exporter:
                                 texture_node = normal_map_color_socket.links[0].from_node
                                 if texture_node.bl_idname == 'ShaderNodeTexImage':
                                     if texture_node.image is not None:
-                                        file_id = self._xml_add_file(bpy.path.abspath(texture_node.image.filepath))
+                                        file_id = self._xml_add_file(texture_node.image.filepath)
                                         normal_element = ET.SubElement(material_element, 'Normalmap')
                                         self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
                                 else:
@@ -295,7 +295,7 @@ class Exporter:
                         gloss_image_node = image_socket.links[0].from_node
                         if gloss_image_node.bl_idname == 'ShaderNodeTexImage':
                             if gloss_image_node.image is not None:
-                                file_id = self._xml_add_file(bpy.path.abspath(gloss_image_node.image.filepath))
+                                file_id = self._xml_add_file(gloss_image_node.image.filepath)
                                 normal_element = ET.SubElement(material_element, 'Glossmap')
                                 self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
                         else:
@@ -315,18 +315,18 @@ class Exporter:
         return int(material_element.get('materialId'))
 
     def _xml_add_file(self, filepath, file_type='texture') -> int:
+        filepath_absolute = bpy.path.abspath(filepath)
         files_root = self._tree.find('Files')
-        filename = filepath[filepath.rfind('\\') + 1:len(filepath)]
-        filepath_resolved = filepath
+        filename = filepath_absolute[filepath_absolute.rfind('\\') + 1:len(filepath_absolute)]
+        filepath_resolved = filepath_absolute
         filepath_i3d = self._filepath[0:self._filepath.rfind('\\') + 1]
         file_structure = bpy.context.scene.i3dio.file_structure
 
-        if bpy.context.scene.i3dio.relative_paths:
-            relative_filter = 'data\shared'
-            try:
-                filepath_resolved = filepath.replace(filepath[0:filepath.index(relative_filter)], '$')
-            except ValueError:
-                pass
+        relative_filter = 'data\shared'
+        try:
+            filepath_resolved = filepath_absolute.replace(filepath_absolute[0:filepath_absolute.index(relative_filter)], '$')
+        except ValueError:
+            pass
 
         # Resolve the filename and write the file
         if filepath_resolved[0] != '$' and bpy.context.scene.i3dio.copy_files:
@@ -348,7 +348,7 @@ class Exporter:
                 if bpy.context.scene.i3dio.overwrite_files or not os.path.exists(filepath_i3d + output_dir + filename):
                     print("Path: " + filepath_i3d + output_dir)
                     os.makedirs(filepath_i3d + output_dir, exist_ok=True)
-                    shutil.copy(filepath, filepath_i3d + output_dir)
+                    shutil.copy(filepath_absolute, filepath_i3d + output_dir)
 
         # Predicate search does NOT play nicely with the filepath names, so we loop the old fashioned way
         if filepath_resolved in self._file_indexes:
