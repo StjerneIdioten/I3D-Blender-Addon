@@ -36,6 +36,7 @@ class Exporter:
         self._scene_graph = SceneGraph()
         self._export_only_selection = False
         self._filepath = filepath
+        self._file_indexes = {}
 
         self.ids = {
             'shape': 1,
@@ -313,10 +314,13 @@ class Exporter:
 
         return int(material_element.get('materialId'))
 
-    def _xml_add_file(self, filepath) -> int:
+    def _xml_add_file(self, filepath, file_type='texture') -> int:
         files_root = self._tree.find('Files')
-
+        filename = filepath[filepath.rfind('\\') + 1:len(filepath)]
         filepath_resolved = filepath
+        filepath_i3d = self._filepath[0:self._filepath.rfind('\\') + 1]
+        file_structure = bpy.context.scene.i3dio.file_structure
+
         if bpy.context.scene.i3dio.relative_paths:
             relative_filter = 'data\shared'
             try:
@@ -324,35 +328,40 @@ class Exporter:
             except ValueError:
                 pass
 
+        # Resolve the filename and write the file
+        if filepath_resolved[0] != '$' and bpy.context.scene.i3dio.copy_files:
+            output_dir = ""
+            if file_structure == 'FLAT':
+                filepath_resolved = filename
+            elif file_structure == 'MODHUB':
+                output_dir = file_type + '\\'
+                filepath_resolved = output_dir + filename
+            elif file_structure == 'BLENDER':
+             print(f"Blender file structure is not supported yet")
+
+            # print("Filepath org:" + filepath)
+            # print("Filename: " + filename)
+            # print("Filepath i3d: " + filepath_i3d)
+            # print("Out Dir: " + output_dir)
+
+            if filepath_resolved not in self._file_indexes:
+                if bpy.context.scene.i3dio.overwrite_files or not os.path.exists(filepath_i3d + output_dir + filename):
+                    print("Path: " + filepath_i3d + output_dir)
+                    os.makedirs(filepath_i3d + output_dir, exist_ok=True)
+                    shutil.copy(filepath, filepath_i3d + output_dir)
+
         # Predicate search does NOT play nicely with the filepath names, so we loop the old fashioned way
-        file_element = None
-        for child in list(files_root):
-            if child.get('filename') == filepath_resolved:
-                file_element = child
-
-        if file_element is None:
-            # Copy the file if option is checked
-            if bpy.context.scene.i3dio.copy_files and filepath_resolved[0] != '$':
-                # Get the folder where the i3d file is going to be located
-                filepath_i3d = self._filepath[0:self._filepath.rfind('\\') + 1]
-                filename = filepath_resolved = filepath[filepath.rfind('\\') + 1:len(filepath)]
-
-                file_structure = bpy.context.scene.i3dio.file_structure
-                if file_structure == 'FLAT':
-                    if bpy.context.scene.i3dio.overwrite_files or not os.path.exists(filepath_i3d + filename):
-                        shutil.copy(filepath, filepath_i3d)
-                    filepath_resolved = filename
-                elif file_structure == 'BLENDER':
-                    print(f"Blender file structure is not supported yet")
-                elif file_structure == 'MODHUB':
-                    print(f"Modhub file structure is not supported yet")
-
+        if filepath_resolved in self._file_indexes:
+            return self._file_indexes[filepath_resolved]
+        else:
             file_element = ET.SubElement(files_root, 'File')
-            self._xml_write_int(file_element, 'fileId', self.ids['file'])
+            file_id = self.ids['file']
             self.ids['file'] += 1
-            self._xml_write_string(file_element, 'filename', filepath_resolved)
+            self._file_indexes[filepath_resolved] = file_id
 
-        return int(file_element.get('fileId'))
+            self._xml_write_int(file_element, 'fileId', file_id)
+            self._xml_write_string(file_element, 'filename', filepath_resolved)
+            return file_id
 
     def _xml_scene_object_shape(self, node: SceneGraph.Node, node_element: ET.Element):
 
