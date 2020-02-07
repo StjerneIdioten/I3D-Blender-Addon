@@ -107,6 +107,32 @@ class I3D_IO_PT_export_options(Panel):
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
 
+        box = layout.box()
+        row = box.row()
+        row.label(text='Object types to export')
+        column = box.column()
+        column.props_enum(bpy.context.scene.i3dio, 'object_types_to_export')
+
+
+class I3D_IO_PT_export_files(Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "File Options"
+    bl_parent_id = 'FILE_PT_operator'
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == 'EXPORT_SCENE_OT_i3d'
+
+    def draw(self, context):
+        layout = self.layout
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'copy_files')
         row = layout.row()
@@ -117,14 +143,6 @@ class I3D_IO_PT_export_options(Panel):
         row.enabled = bpy.context.scene.i3dio.copy_files
         row.alignment = 'RIGHT'
         row.prop(bpy.context.scene.i3dio, 'file_structure', )
-
-        box = layout.box()
-        row = box.row()
-        row.label(text='Object types to export')
-        column = box.column()
-        column.props_enum(bpy.context.scene.i3dio, 'object_types_to_export')
-
-
 
 class I3D_IO_PT_export_shape(Panel):
     bl_space_type = 'FILE_BROWSER'
@@ -172,7 +190,8 @@ class I3D_IO_PT_export_misc(Panel):
 
 classes = (I3D_IO_OT_export,
            I3D_IO_PT_export_main,
-           I3D_IO_PT_export_options
+           I3D_IO_PT_export_options,
+           I3D_IO_PT_export_files
            )
 
 
