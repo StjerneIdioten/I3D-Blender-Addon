@@ -315,7 +315,10 @@ class Exporter:
         return int(material_element.get('materialId'))
 
     def _xml_add_file(self, filepath, file_type='texture') -> int:
+        print("Relative path: " + filepath)
         filepath_absolute = bpy.path.abspath(filepath)
+        print("Absolute path: " + filepath_absolute)
+        print("Path sep: " + bpy.path.native_pathsep(filepath))
         files_root = self._tree.find('Files')
         filename = filepath_absolute[filepath_absolute.rfind('\\') + 1:len(filepath_absolute)]
         filepath_resolved = filepath_absolute
@@ -332,23 +335,30 @@ class Exporter:
         if filepath_resolved[0] != '$' and bpy.context.scene.i3dio.copy_files:
             output_dir = ""
             if file_structure == 'FLAT':
-                filepath_resolved = filename
+                pass  # Default settings, kept for clarity when viewing code
             elif file_structure == 'MODHUB':
                 output_dir = file_type + '\\'
-                filepath_resolved = output_dir + filename
             elif file_structure == 'BLENDER':
-             print(f"Blender file structure is not supported yet")
+                if filepath.count("..\\") <= 3:  # Limits the distance a file can be from the blend file to three
+                    # relative steps to avoid copying entire folder structures ny mistake. Defaults to a absolute path.
+                    output_dir = filepath[2:filepath.rfind('\\') + 1]  # Remove blender relative notation and filename
+                else:
+                    output_dir = filepath_absolute[0:filepath_absolute.rfind('\\') + 1]
 
+            filepath_resolved = output_dir + filename
             # print("Filepath org:" + filepath)
             # print("Filename: " + filename)
             # print("Filepath i3d: " + filepath_i3d)
             # print("Out Dir: " + output_dir)
 
-            if filepath_resolved not in self._file_indexes:
+            if filepath_resolved != filepath_absolute and filepath_resolved not in self._file_indexes:
                 if bpy.context.scene.i3dio.overwrite_files or not os.path.exists(filepath_i3d + output_dir + filename):
                     print("Path: " + filepath_i3d + output_dir)
                     os.makedirs(filepath_i3d + output_dir, exist_ok=True)
-                    shutil.copy(filepath_absolute, filepath_i3d + output_dir)
+                    try:
+                        shutil.copy(filepath_absolute, filepath_i3d + output_dir)
+                    except shutil.SameFileError:
+                        pass  # Ignore writing file if it already exist
 
         # Predicate search does NOT play nicely with the filepath names, so we loop the old fashioned way
         if filepath_resolved in self._file_indexes:
