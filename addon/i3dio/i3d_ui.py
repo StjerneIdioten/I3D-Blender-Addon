@@ -106,8 +106,6 @@ class I3D_IO_PT_export_options(Panel):
 
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
-        row = layout.row()
-        row.prop(bpy.context.scene.i3dio, 'relative_paths')
 
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'copy_files')

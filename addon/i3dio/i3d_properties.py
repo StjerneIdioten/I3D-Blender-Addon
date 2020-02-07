@@ -43,12 +43,6 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=True
     )
 
-    relative_paths: BoolProperty(
-        name="Relative Paths",
-        description="Replace absolute paths to resources from FS data folder with relative paths as $data/path/to/file",
-        default=True
-    )
-
     object_types_to_export: EnumProperty(
         name="Object types",
         description="Select which objects should be included in the exported",
@@ -65,7 +59,8 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
     copy_files: BoolProperty(
         name="Copy Files",
         description="Copies the files to have them together with the i3d file. Structure is determined by 'File "
-                    "Structure' parameter",
+                    "Structure' parameter. If turned off files are referenced by their absolute path instead."
+                    "Files from the FS data folder are always converted to relative $data\\shared\\path\\to\\file.",
         default=True
     )
 
