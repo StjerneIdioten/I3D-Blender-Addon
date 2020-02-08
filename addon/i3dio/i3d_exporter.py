@@ -26,25 +26,36 @@ import mathutils
 # Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
 import bpy
-import bmesh
+
+from bpy_extras.io_utils import (
+    axis_conversion
+)
 
 
 # Exporter is a singleton
 class Exporter:
 
-    def __init__(self, filepath: str):
+    def __init__(self, filepath: str, axis_forward, axis_up):
         self._scene_graph = SceneGraph()
         self._export_only_selection = False
         self._filepath = filepath
         self._file_indexes = {}
-
+        self.shape_material_indexes = {}
         self.ids = {
             'shape': 1,
             'material': 1,
             'file': 1
         }
 
-        self.shape_material_indexes = {}
+        self._global_matrix = axis_conversion(
+            to_forward=axis_forward,
+            to_up=axis_up,
+        ).to_4x4()
+
+        # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
+        # should only be 'heavy' to call the first time a mesh is exported.
+        # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
+        self._depsgraph = bpy.context.evaluated_depsgraph_get()
 
         self._xml_build_skeleton_structure()
         self._xml_build_scene_graph()
@@ -378,53 +389,33 @@ class Exporter:
         ###############################################
         # Mesh export section
         ###############################################
-
         shape_root = self._tree.find('Shapes')
-        obj = node.blender_object
 
         # Check if the mesh has already been defined in the i3d file
-        indexed_triangle_element = shape_root.find(f".IndexedTriangleSet[@name={obj.data.name!r}]")
+        indexed_triangle_element = shape_root.find(f".IndexedTriangleSet[@name={node.blender_object.data.name!r}]")
         if indexed_triangle_element is None:
             shape_id = self.ids['shape']
             self.ids['shape'] += 1
 
             indexed_triangle_element = ET.SubElement(shape_root, 'IndexedTriangleSet')
 
-            self._xml_write_string(indexed_triangle_element, 'name', obj.data.name)
+            self._xml_write_string(indexed_triangle_element, 'name', node.blender_object.data.name)
             self._xml_write_int(indexed_triangle_element, 'shapeId', shape_id)
 
-            # TODO: All shape related parsing code
-
-            # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
-            # should only be 'heavy' to call the first time a mesh is exported.
-            # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
-            depsgraph = bpy.context.evaluated_depsgraph_get()
-
             # Generate an object evaluated from the dependency graph
-            object_evaluated = obj.evaluated_get(depsgraph)
+            object_evaluated = node.blender_object.evaluated_get(self._depsgraph)
 
             # Generates a mesh with all modifiers applied and access to all data layers
-            mesh = object_evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
+            mesh = object_evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
 
-            # TODO: Look into if there is a smarter way to triangulate mesh data rather than using a bmesh operator
-            #  since this supposedly wrecks custom normals
-
-            # Triangulate mesh data
-            bm = bmesh.new()
-            bm.from_mesh(mesh)
-            bmesh.ops.triangulate(bm, faces=bm.faces, quad_method='BEAUTY', ngon_method='BEAUTY')
-            bm.to_mesh(mesh)
-            bm.free()
-
+            mesh.calc_loop_triangles()
             mesh.calc_normals_split()
 
             vertices_element = ET.SubElement(indexed_triangle_element, 'Vertices')
             triangles_element = ET.SubElement(indexed_triangle_element, 'Triangles')
             subsets_element = ET.SubElement(indexed_triangle_element, 'Subsets')
 
-            self._xml_write_int(triangles_element, 'count', len(mesh.polygons))
-
-            polygon_subsets = {}
+            self._xml_write_int(triangles_element, 'count', len(mesh.loop_triangles))
 
             # Create and assign default material if it does not exist already. This material will persist in the blender
             # file so you can change the default look if you want to through the blender interface
@@ -434,54 +425,54 @@ class Exporter:
 
                 mesh.materials.append(bpy.data.materials.get('i3d_default_material'))
 
-            for polygon in mesh.polygons:
-
-                polygon_material = mesh.materials[polygon.material_index]
-                # Loops are divided into subsets based on materials
-                if polygon_material.name not in polygon_subsets:
-                    polygon_subsets[polygon_material.name] = []
+            # Group triangles by subset, since they need to be exported in correct order per material subset to the i3d
+            triangle_subsets = {}
+            for triangle in mesh.loop_triangles:
+                triangle_material = mesh.materials[triangle.material_index]
+                if triangle_material.name not in triangle_subsets:
+                    triangle_subsets[triangle_material.name] = []
                     # Add material to material section in i3d file and append to the materialIds that the shape
                     # object should have
-                    material_id = self._xml_add_material(polygon_material)
+                    material_id = self._xml_add_material(triangle_material)
                     if shape_id in self.shape_material_indexes.keys():
                         self.shape_material_indexes[shape_id] += f",{material_id:d}"
                     else:
                         self.shape_material_indexes[shape_id] = f"{material_id:d}"
 
-                polygon_subsets[polygon_material.name].append(polygon)
+                # Add triangle to subset
+                triangle_subsets[triangle_material.name].append(triangle)
 
-            self._xml_write_int(subsets_element, 'count', len(polygon_subsets))
+            self._xml_write_int(subsets_element, 'count', len(triangle_subsets))
 
-            added_vertices = {}  # Key is a unique vertex identifier and the value is a vertex index
-            vertex_counter = 0  # Count the total number of unique vertices (across subsets)
-            indices_total = 0
+            added_vertices = {}  # Key is a unique hashable vertex identifier and the value is a vertex index
+            vertex_counter = 0  # Count the total number of unique vertices (total across all subsets)
+            indices_total = 0  # Total amount of indices, since i3d format needs this number (for some reason)
 
             # Vertices are written to the i3d vertex list in an order based on the subsets and the triangles then index
             # into this list to define themselves
-            for mat, subset in polygon_subsets.items():
+            for mat, subset in triangle_subsets.items():
                 number_of_indices = 0
                 number_of_vertices = 0
                 subset_element = ET.SubElement(subsets_element, 'Subset')
                 self._xml_write_int(subset_element, 'firstIndex', indices_total)
                 self._xml_write_int(subset_element, 'firstVertex', vertex_counter)
 
-                # Go through every polygon on the subset and extract triangle information
-                for polygon in subset:
+                # Go through every triangle on the subset and extract triangle information
+                i = 0
+                for triangle in subset:
                     triangle_element = ET.SubElement(triangles_element, 't')
-                    # Go through every loop in the polygon and extract vertex information
-                    polygon_vertex_index = ""  # The vertices from the vertex list that specify this triangle
-
-                    for loop_index in polygon.loop_indices:
+                    # Go through every loop that the triangle consists of and extract vertex information
+                    triangle_vertex_index = ""  # The vertices from the vertex list that specify this triangle
+                    for loop_index in triangle.loops:
                         vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
-                        normals = mesh.loops[loop_index].normal
-
+                        normal = mesh.loops[loop_index].normal
                         vertex_data = {'p': f"{vertex.co.xyz[0]:.6f} "
                                             f"{vertex.co.xyz[2]:.6f} "
                                             f"{-vertex.co.xyz[1]:.6f}",
 
-                                       'n': f"{normals.xyz[0]:.6f} "
-                                            f"{normals.xyz[2]:.6f} "
-                                            f"{-normals.xyz[1]:.6f}",
+                                       'n': f"{normal.xyz[0]:.6f} "
+                                            f"{normal.xyz[2]:.6f} "
+                                            f"{-normal.xyz[1]:.6f}",
 
                                        'uvs': {}
                                        }
@@ -511,10 +502,10 @@ class Exporter:
                             vertex_counter += 1
                             number_of_vertices += 1
 
-                        polygon_vertex_index += f"{added_vertices[vertex_item]} "
-                        number_of_indices += 1
+                        triangle_vertex_index += f"{added_vertices[vertex_item]} "
 
-                    self._xml_write_string(triangle_element, 'vi', polygon_vertex_index.strip(' '))
+                    number_of_indices += 3  # 3 loops = 3 indices per triangle
+                    self._xml_write_string(triangle_element, 'vi', triangle_vertex_index.strip(' '))
 
                 self._xml_write_int(subset_element, 'numIndices', number_of_indices)
                 self._xml_write_int(subset_element, 'numVertices', number_of_vertices)

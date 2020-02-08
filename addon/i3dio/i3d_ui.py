@@ -23,7 +23,8 @@ from bpy.props import (
 )
 
 from bpy_extras.io_utils import (
-    ExportHelper
+    ExportHelper,
+    orientation_helper
 )
 
 from bpy.types import (
@@ -34,6 +35,7 @@ from bpy.types import (
 from . import i3d_exporter, i3d_properties
 
 
+@orientation_helper(axis_forward='-Z', axis_up='Y')
 class I3D_IO_OT_export(Operator, ExportHelper):
     """Save i3d file"""
     bl_idname = "export_scene.i3d"
@@ -51,7 +53,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     def execute(self, context):
         print("Exporting to " + self.filepath)
         time_start = time.time()
-        exporter = i3d_exporter.Exporter(self.filepath)
+        exporter = i3d_exporter.Exporter(self.filepath, self.axis_forward, self.axis_up)
         time_elapsed = time.time() - time_start
         print(f"Export took {time_elapsed:.3f} seconds")
         return {'FINISHED'}
@@ -83,6 +85,8 @@ class I3D_IO_PT_export_main(Panel):
         operator = sfile.active_operator
 
         layout.prop(bpy.context.scene.i3dio, 'selection')
+        layout.prop(operator, "axis_forward")
+        layout.prop(operator, "axis_up")
 
 
 class I3D_IO_PT_export_options(Panel):
