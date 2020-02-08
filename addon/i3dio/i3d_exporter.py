@@ -402,11 +402,14 @@ class Exporter:
             self._xml_write_string(indexed_triangle_element, 'name', node.blender_object.data.name)
             self._xml_write_int(indexed_triangle_element, 'shapeId', shape_id)
 
-            # Generate an object evaluated from the dependency graph
-            object_evaluated = node.blender_object.evaluated_get(self._depsgraph)
+            if bpy.context.scene.i3dio.apply_modifiers:
+                # Generate an object evaluated from the dependency graph
+                obj = node.blender_object.evaluated_get(self._depsgraph)
+            else:
+                obj = node.blender_object
 
-            # Generates a mesh with all modifiers applied and access to all data layers
-            mesh = object_evaluated.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
+            # Generates a new mesh to not interfere with the existing one.
+            mesh = obj.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
 
             mesh.calc_loop_triangles()
             mesh.calc_normals_split()
@@ -515,7 +518,7 @@ class Exporter:
             self._xml_write_bool(vertices_element, 'normal', True)
             self._xml_write_bool(vertices_element, 'tangent', True)
 
-            object_evaluated.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
+            obj.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
 
             # TODO: Write mesh related attributes
         else:

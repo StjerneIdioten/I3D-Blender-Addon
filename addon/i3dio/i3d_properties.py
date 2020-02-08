@@ -43,6 +43,12 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=True
     )
 
+    apply_modifiers: BoolProperty(
+        name="Apply Modifiers",
+        description="Apply modifiers on objects before exporting mesh (Non destructive)",
+        default=True
+    )
+
     object_types_to_export: EnumProperty(
         name="Object types",
         description="Select which objects should be included in the exported",

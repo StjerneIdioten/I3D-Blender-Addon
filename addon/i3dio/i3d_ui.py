@@ -111,6 +111,9 @@ class I3D_IO_PT_export_options(Panel):
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
 
+        row = layout.row()
+        row.prop(bpy.context.scene.i3dio, 'apply_modifiers')
+
         box = layout.box()
         row = box.row()
         row.label(text='Object types to export')
