@@ -207,20 +207,18 @@ class Exporter:
             #  viewport visibility that is taken into account. Issue #1
             self._xml_write_bool(node_element, 'visibility', not node.blender_object.hide_viewport)
         else:
-
-            # TODO: Investigate how to use the export helper functions to convert instead of hardcoding the rotations
-            #  as was done in the old addon
-
-            # Perform rotation of object so it fits GE format of Y-up, Z-forward
-            matrix = mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
-            matrix @= node.blender_object.matrix_local
-            matrix @= mathutils.Matrix.Rotation(math.radians(90), 4, "X")
-
+            # Apply the space transformations depending on object, since lights and cameras has their z-axis reversed
+            # in GE
+            # If you want an explanation for A * B * A^-1 then go look up Transformation Matrices cause I can't
+            # remember the specifics
             if node.blender_object.type == 'LIGHT' or node.blender_object.type == 'CAMERA':
-                matrix @= mathutils.Matrix.Rotation(math.radians(-90), 4, "X")
+                matrix = self._global_matrix @ node.blender_object.matrix_local
+            else:
+                matrix = self._global_matrix @ node.blender_object.matrix_local @ self._global_matrix.inverted()
+
             if node.blender_object.parent is not None:
                 if node.blender_object.parent.type == 'CAMERA' or node.blender_object.parent.type == 'LIGHT':
-                    matrix = mathutils.Matrix.Rotation(math.radians(90), 4, "X") @ matrix
+                    matrix = self._global_matrix.inverted() @ matrix
 
             self._xml_write_string(node_element,
                                    'translation',
@@ -411,8 +409,13 @@ class Exporter:
             # Generates a new mesh to not interfere with the existing one.
             mesh = obj.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
 
+            conversion_matrix = self._global_matrix
+            mesh.transform(conversion_matrix)
+            if conversion_matrix.is_negative:
+                mesh.flip_normals()
+
             mesh.calc_loop_triangles()
-            mesh.calc_normals_split()
+            # mesh.calc_normals_split()
 
             vertices_element = ET.SubElement(indexed_triangle_element, 'Vertices')
             triangles_element = ET.SubElement(indexed_triangle_element, 'Triangles')
@@ -470,12 +473,12 @@ class Exporter:
                         vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
                         normal = mesh.loops[loop_index].normal
                         vertex_data = {'p': f"{vertex.co.xyz[0]:.6f} "
-                                            f"{vertex.co.xyz[2]:.6f} "
-                                            f"{-vertex.co.xyz[1]:.6f}",
+                                            f"{vertex.co.xyz[1]:.6f} "
+                                            f"{vertex.co.xyz[2]:.6f}",
 
                                        'n': f"{normal.xyz[0]:.6f} "
-                                            f"{normal.xyz[2]:.6f} "
-                                            f"{-normal.xyz[1]:.6f}",
+                                            f"{normal.xyz[1]:.6f} "
+                                            f"{normal.xyz[2]:.6f}",
 
                                        'uvs': {}
                                        }

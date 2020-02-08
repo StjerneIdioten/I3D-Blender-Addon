@@ -85,8 +85,6 @@ class I3D_IO_PT_export_main(Panel):
         operator = sfile.active_operator
 
         layout.prop(bpy.context.scene.i3dio, 'selection')
-        layout.prop(operator, "axis_forward")
-        layout.prop(operator, "axis_up")
 
 
 class I3D_IO_PT_export_options(Panel):
@@ -119,6 +117,9 @@ class I3D_IO_PT_export_options(Panel):
         row.label(text='Object types to export')
         column = box.column()
         column.props_enum(bpy.context.scene.i3dio, 'object_types_to_export')
+
+        layout.prop(operator, "axis_forward")
+        layout.prop(operator, "axis_up")
 
 
 class I3D_IO_PT_export_files(Panel):
