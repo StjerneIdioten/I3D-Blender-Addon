@@ -32,6 +32,9 @@ classes = []
 # properties themselves
 defaults = {
     'disabled': True,            # Used for certain properties like Enum, to tell the exporter not to export
+    'dynamic': False,
+    'static': False,
+    'kinematic': False,
     'clipDistance': 1000000.0,
     'minClipDistance': 0.0,
     'objectMask': 0,
@@ -122,7 +125,7 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
 class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
 
     @register
-    class clip_Distance(bpy.types.PropertyGroup):
+    class clip_distance(bpy.types.PropertyGroup):
         name_i3d: StringProperty(default='clipDistance', options={'SKIP_SAVE'})
         value_i3d: FloatProperty(
             name="Clip Distance",
@@ -143,13 +146,13 @@ class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
 
     @register
     class object_mask(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='minClipDistance', options={'SKIP_SAVE'})
+        name_i3d: StringProperty(default='objectMask', options={'SKIP_SAVE'})
         value_i3d: IntProperty(
             name="Object Mask",
             description="Used for determining if the object interacts with certain rendering effects",
             default=defaults['objectMask'],
             min=0,
-            max=4294967295
+            max=2147483647
         )
 
     @register
@@ -179,12 +182,12 @@ class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
             default=defaults['collision']
         )
 
-    clip_distance: PointerProperty(type=clip_Distance)
+    clip_distance: PointerProperty(type=clip_distance)
     min_clip_distance: PointerProperty(type=min_clip_distance)
     object_mask: PointerProperty(type=object_mask)
 
-    rigid_body_type = PointerProperty(type=rigid_body_type)
-    collision = PointerProperty(type=collision)
+    rigid_body_type: PointerProperty(type=rigid_body_type)
+    collision: PointerProperty(type=collision)
 
 
 @register
@@ -237,15 +240,14 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
             max=10.0
         )
 
-    depth_map_bias = PointerProperty(type=depth_map_bias)
-    depth_map_slope_scale_bias = PointerProperty(type=depth_map_slope_scale_bias)
+    depth_map_bias: PointerProperty(type=depth_map_bias)
+    depth_map_slope_scale_bias: PointerProperty(type=depth_map_slope_scale_bias)
 
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
-    bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeTransformAttributes)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeTransformAttributes)
     bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
     bpy.types.Light.i3d_attributes = PointerProperty(type=I3DNodeLightAttributes)

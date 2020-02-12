@@ -253,7 +253,9 @@ class Exporter:
             name = prop.name_i3d
             val = prop.value_i3d
 
-            if val != i3d_properties.defaults[name]:
+            print(f"Name: {name}, Value: {val}")
+
+            if name != 'disabled' and val != i3d_properties.defaults[name]:
                 if isinstance(val, float):
                     self._xml_write_float(element, prop.name_i3d, val)
                 elif isinstance(val, int):
