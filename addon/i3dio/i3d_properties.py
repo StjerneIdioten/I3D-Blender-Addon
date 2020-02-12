@@ -31,19 +31,22 @@ classes = []
 # Used for comparison when needed in the exporter, since it is near impossible to reach the default defined in the
 # properties themselves
 defaults = {
-    'disabled': True,            # Used for certain properties like Enum, to tell the exporter not to export
-    'dynamic': False,
-    'static': False,
-    'kinematic': False,
+    'visibility': True,
     'clipDistance': 1000000.0,
     'minClipDistance': 0.0,
     'objectMask': 0,
     'castsShadows': False,
     'receiveShadows': False,
+    'nonRenderable': False,
+    'distanceBlending': True,
     'depthMapBias': 0.0012,
     'depthMapSlopeScaleBias': 2.0,
-    'collision': True
-            }
+    'collision': True,
+    'disabled': True,            # Used for certain properties like Enum, to tell the exporter not to export
+    'dynamic': False,
+    'static': False,
+    'kinematic': False,
+    }
 
 
 def register(cls):
@@ -125,6 +128,15 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
 class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
 
     @register
+    class visibility(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='visibility', options={'SKIP_SAVE'})
+        value_i3d: BoolProperty(
+            name="Visibility",
+            description="Visibility flag inside of Giants Engine, decoupled from blender visibility",
+            default=defaults['visibility']
+        )
+
+    @register
     class clip_distance(bpy.types.PropertyGroup):
         name_i3d: StringProperty(default='clipDistance', options={'SKIP_SAVE'})
         value_i3d: FloatProperty(
@@ -182,6 +194,7 @@ class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
             default=defaults['collision']
         )
 
+    visibility: PointerProperty(type=visibility)
     clip_distance: PointerProperty(type=clip_distance)
     min_clip_distance: PointerProperty(type=min_clip_distance)
     object_mask: PointerProperty(type=object_mask)
@@ -211,9 +224,28 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
             default=defaults['castsShadows']
         )
 
+    @register
+    class non_renderable(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='nonRenderable', options={'SKIP_SAVE'})
+        value_i3d: BoolProperty(
+            name="Non Renderable",
+            description="Don't render the mesh, used for collision boxes etc.",
+            default=defaults['nonRenderable']
+        )
+
+    @register
+    class distance_blending(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='distanceBlending', options={'SKIP_SAVE'})
+        value_i3d: BoolProperty(
+            name="Distance Blending",
+            description="Distance Blending",
+            default=defaults['distanceBlending']
+        )
+
     casts_shadows: PointerProperty(type=casts_shadows)
     receive_shadows: PointerProperty(type=receive_shadows)
-
+    non_renderable: PointerProperty(type=non_renderable)
+    distance_blending: PointerProperty(type=distance_blending)
 
 @register
 class I3DNodeLightAttributes(bpy.types.PropertyGroup):

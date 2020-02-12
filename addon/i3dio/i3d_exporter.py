@@ -184,6 +184,8 @@ class Exporter:
                     self._xml_scene_object_light(node, node_element)
                 elif node_type == 'CAMERA':
                     self._xml_scene_object_camera(node, node_element)
+                if hasattr(node.blender_object.data, 'i3d_attributes'):
+                    self._xml_object_properties(node.blender_object.data.i3d_attributes, node_element)
 
             for child in node.children.values():
 
@@ -205,9 +207,6 @@ class Exporter:
             self._xml_write_string(node_element, 'translation', "0 0 0")
             self._xml_write_string(node_element, 'rotation', "0 0 0")
             self._xml_write_string(node_element, 'scale', "1 1 1")
-            # TODO: Make visibility check more elaborate since visibility can be many things. Right now it is only
-            #  viewport visibility that is taken into account. Issue #1
-            self._xml_write_bool(node_element, 'visibility', not node.blender_object.hide_viewport)
         else:
             # Apply the space transformations depending on object, since lights and cameras has their z-axis reversed
             # in GE
@@ -223,12 +222,11 @@ class Exporter:
                 if node.blender_object.parent.type == 'CAMERA' or node.blender_object.parent.type == 'LIGHT':
                     matrix = self._global_matrix.inverted() @ matrix
 
-            #if bpy.context.scene.i3dio.apply_unit_scale:
-            #    matrix = mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) @ matrix
-
             self._xml_write_string(node_element,
                                    'translation',
-                                   "{0:.6f} {1:.6f} {2:.6f}".format(*[x * bpy.context.scene.unit_settings.scale_length for x in matrix.to_translation()]))
+                                   "{0:.6f} {1:.6f} {2:.6f}".format(
+                                       *[x * bpy.context.scene.unit_settings.scale_length
+                                         for x in matrix.to_translation()]))
 
             self._xml_write_string(node_element,
                                    'rotation',
@@ -239,10 +237,7 @@ class Exporter:
                                    'scale',
                                    "{0:.6f} {1:.6f} {2:.6f}".format(*matrix.to_scale()))
 
-            # visible_get() should determine visibility based on all visibility flags
-            self._xml_write_bool(node_element, 'visibility', node.blender_object.visible_get())
-
-            # Write the object properties from the blender UI into the object
+            # Write the object transform properties from the blender UI into the object
             self._xml_object_properties(node.blender_object.i3d_attributes, node_element)
 
     def _xml_object_properties(self, propertygroup, element):
@@ -253,16 +248,21 @@ class Exporter:
             name = prop.name_i3d
             val = prop.value_i3d
 
-            print(f"Name: {name}, Value: {val}")
+            print(f"Name: {name}, Value: {val}, Type: {type(val)}, IsInstance: {isinstance(val, bool)}")
 
             if name != 'disabled' and val != i3d_properties.defaults[name]:
+                print("Exporting property")
                 if isinstance(val, float):
+                    print("float")
                     self._xml_write_float(element, prop.name_i3d, val)
-                elif isinstance(val, int):
-                    self._xml_write_int(element, prop.name_i3d, val)
-                elif isinstance(val, bool):
+                elif isinstance(val, bool):  # Order matters, since bool is an int subclass!
+                    print("bool")
                     self._xml_write_bool(element, prop.name_i3d, val)
+                elif isinstance(val, int):
+                    print("int")
+                    self._xml_write_int(element, prop.name_i3d, val)
                 elif isinstance(val, str):
+                    print("string")
                     self._xml_write_string(element, prop.name_i3d, val)
 
     def _xml_add_material(self, material):

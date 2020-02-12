@@ -53,6 +53,7 @@ class I3D_IO_PT_transform_attributes(Panel):
         layout.use_property_decorate = False
         obj = bpy.context.active_object
 
+        layout.prop(obj.i3d_attributes.visibility, 'value_i3d')
         layout.prop(obj.i3d_attributes.clip_distance, 'value_i3d')
         layout.prop(obj.i3d_attributes.min_clip_distance, 'value_i3d')
 
@@ -102,6 +103,8 @@ class I3D_IO_PT_shape_attributes(Panel):
 
         layout.prop(obj.i3d_attributes.casts_shadows, "value_i3d")
         layout.prop(obj.i3d_attributes.receive_shadows, "value_i3d")
+        layout.prop(obj.i3d_attributes.non_renderable, "value_i3d")
+        layout.prop(obj.i3d_attributes.distance_blending, "value_i3d")
 
 
 @register
