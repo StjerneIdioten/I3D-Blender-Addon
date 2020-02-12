@@ -67,6 +67,56 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=True
     )
 
+    apply_modifiers: BoolProperty(
+        name="Apply Modifiers",
+        description="Apply modifiers on objects before exporting mesh (Non destructive)",
+        default=True
+    )
+
+    apply_unit_scale: BoolProperty(
+        name="Apply Unit Scale",
+        description="Apply the unit scale setting to the exported mesh and transform data",
+        default=True
+    )
+
+    object_types_to_export: EnumProperty(
+        name="Object types",
+        description="Select which objects should be included in the exported",
+        items=(
+            ('EMPTY', "Empty", "Export empties"),
+            ('CAMERA', "Camera", "Export cameras"),
+            ('LIGHT', "Light", "Export lights"),
+            ('MESH', "Mesh", "Export meshes")
+        ),
+        options={'ENUM_FLAG'},
+        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH'},
+    )
+
+    copy_files: BoolProperty(
+        name="Copy Files",
+        description="Copies the files to have them together with the i3d file. Structure is determined by 'File "
+                    "Structure' parameter. If turned off files are referenced by their absolute path instead."
+                    "Files from the FS data folder are always converted to relative $data\\shared\\path\\to\\file.",
+        default=True
+    )
+
+    overwrite_files: BoolProperty(
+        name="Overwrite Files",
+        description="Overwrites files if they already exist, currently it is only evaluated for material files!",
+        default=True
+    )
+
+    file_structure: EnumProperty(
+        name="File Structure",
+        description="Determine the file structure of the copied files",
+        items=(
+            ('FLAT', "Flat", "The hierarchy is flattened, everything is in the same folder as the i3d"),
+            ('BLENDER', "Blender", "The hierarchy is mimiced from around the blend file"),
+            ('MODHUB', "Modhub", "The hierarchy is setup according to modhub guidelines, sorted by filetype")
+        ),
+        default='MODHUB'
+    )
+
 
 @register
 class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
