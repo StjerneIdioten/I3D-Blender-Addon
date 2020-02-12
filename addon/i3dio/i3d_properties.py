@@ -49,6 +49,12 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=True
     )
 
+    apply_unit_scale: BoolProperty(
+        name="Apply Unit Scale",
+        description="Apply the unit scale setting to the exported mesh and transform data",
+        default=True
+    )
+
     object_types_to_export: EnumProperty(
         name="Object types",
         description="Select which objects should be included in the exported",

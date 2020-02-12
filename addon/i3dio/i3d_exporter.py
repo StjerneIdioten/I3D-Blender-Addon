@@ -211,7 +211,8 @@ class Exporter:
             # in GE
             # If you want an explanation for A * B * A^-1 then go look up Transformation Matrices cause I can't
             # remember the specifics
-            if node.blender_object.type == 'LIGHT' or node.blender_object.type == 'CAMERA':
+
+            if node.blender_object == 'LIGHT' or node.blender_object.type == 'CAMERA':
                 matrix = self._global_matrix @ node.blender_object.matrix_local
             else:
                 matrix = self._global_matrix @ node.blender_object.matrix_local @ self._global_matrix.inverted()
@@ -220,9 +221,12 @@ class Exporter:
                 if node.blender_object.parent.type == 'CAMERA' or node.blender_object.parent.type == 'LIGHT':
                     matrix = self._global_matrix.inverted() @ matrix
 
+            #if bpy.context.scene.i3dio.apply_unit_scale:
+            #    matrix = mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) @ matrix
+
             self._xml_write_string(node_element,
                                    'translation',
-                                   "{0:.6f} {1:.6f} {2:.6f}".format(*matrix.to_translation()))
+                                   "{0:.6f} {1:.6f} {2:.6f}".format(*[x * bpy.context.scene.unit_settings.scale_length for x in matrix.to_translation()]))
 
             self._xml_write_string(node_element,
                                    'rotation',
@@ -402,20 +406,27 @@ class Exporter:
 
             if bpy.context.scene.i3dio.apply_modifiers:
                 # Generate an object evaluated from the dependency graph
-                obj = node.blender_object.evaluated_get(self._depsgraph)
+                # The copy is important since the depsgraph will store changes to the evaluated object
+                obj = node.blender_object.evaluated_get(self._depsgraph).copy()
             else:
-                obj = node.blender_object
+                obj = node.blender_object.copy()
 
             # Generates a new mesh to not interfere with the existing one.
             mesh = obj.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
 
             conversion_matrix = self._global_matrix
+            if bpy.context.scene.i3dio.apply_unit_scale:
+                conversion_matrix = mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) \
+                                    @ conversion_matrix
+
             mesh.transform(conversion_matrix)
             if conversion_matrix.is_negative:
                 mesh.flip_normals()
 
+            # Calculates triangles from mesh polygons
             mesh.calc_loop_triangles()
-            # mesh.calc_normals_split()
+            # Recalculates normals after the scaling has messed with them
+            mesh.calc_normals_split()
 
             vertices_element = ET.SubElement(indexed_triangle_element, 'Vertices')
             triangles_element = ET.SubElement(indexed_triangle_element, 'Triangles')
