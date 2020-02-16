@@ -16,7 +16,6 @@
  ##### END GPL LICENSE BLOCK #####
 """
 
-import time
 import bpy
 from bpy.props import (
     StringProperty
@@ -51,11 +50,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     # Add remaining properties from original addon as they get implemented
 
     def execute(self, context):
-        print("Exporting to " + self.filepath)
-        time_start = time.time()
         exporter = i3d_exporter.Exporter(self.filepath, self.axis_forward, self.axis_up)
-        time_elapsed = time.time() - time_start
-        print(f"Export took {time_elapsed:.3f} seconds")
         return {'FINISHED'}
 
     def draw(self, context):

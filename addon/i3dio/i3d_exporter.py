@@ -19,6 +19,7 @@ from __future__ import annotations  # Enables python 4.0 annotation typehints fx
 from typing import Union
 import sys
 import os
+import time
 import shutil
 import math
 import mathutils
@@ -64,10 +65,12 @@ class Exporter:
         self.logger.addHandler(console_handler)
         self.logger.info('Console logger initialized')
 
+        self.logger.info(f"Exporting to {filepath}")
+        time_start = time.time()
+
         # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
         try:
             self._scene_graph = SceneGraph()
-            self._export_only_selection = False
             self._filepath = filepath
             self._file_indexes = {}
             self.shape_material_indexes = {}
@@ -97,12 +100,15 @@ class Exporter:
         except Exception as e:
             self.logger.exception("Exception that stopped the exporter")
 
+        self.logger.info(f"Export took {time.time() - time_start:.3f} seconds")
+
         if bpy.context.scene.i3dio.log_to_file:
             self._log_file_handler.close()
 
     def _xml_build_scene_graph(self):
 
         objects_to_export = bpy.context.scene.i3dio.object_types_to_export
+        self.logger.info(f"Object types selected for export: {objects_to_export}")
 
         def new_graph_node(blender_object: Union[bpy.types.Object, bpy.types.Collection],
                            parent: SceneGraph.Node,
@@ -110,6 +116,9 @@ class Exporter:
 
             if not isinstance(blender_object, bpy.types.Collection):
                 if blender_object.type not in objects_to_export:
+                    self.logger.debug(f"Object {blender_object.name!r} has type {blender_object.type!r}, "
+                                      f"which is not a type selected for exporting")
+
                     return
 
             node = None
@@ -117,38 +126,48 @@ class Exporter:
                 node = parent
             else:
                 node = self._scene_graph.add_node(blender_object, parent)
-                print(f"Added Node with ID {node.id} and name {node.blender_object.name!r}")
+                self.logger.debug(f"Added Node with ID {node.id} and name {node.blender_object.name!r}")
 
             # Expand collection tree into the collection instance
             if isinstance(blender_object, bpy.types.Object):
                 if blender_object.type == 'EMPTY':
                     if blender_object.instance_collection is not None:
+                        self.logger.debug(f'{blender_object.name!r} is a collection instance and will be unpacked')
                         # print(f'This is a collection instance')
                         new_graph_node(blender_object.instance_collection, node, unpack_collection=True)
 
             # Gets child objects/collections
             if isinstance(blender_object, bpy.types.Object):
-                # print(f'Children of object')
-                for child in blender_object.children:
-                    new_graph_node(child, node)
+                if len(blender_object.children):
+                    self.logger.debug(f"Adding child objects of object {blender_object.name!r}")
+                    # print(f'Children of object')
+                    for child in blender_object.children:
+                        new_graph_node(child, node)
+                    self.logger.debug(f"Done adding child objects of object {blender_object.name!r}")
 
             # Gets child objects if it is a collection
             if isinstance(blender_object, bpy.types.Collection):
-                # print(f'Children collections')
-                for child in blender_object.children:
-                    new_graph_node(child, node)
-
-                # print(f'Children objects in collection')
-                for child in blender_object.objects:
-                    if child.parent is None:
+                if len(blender_object.children):
+                    self.logger.debug(f"Adding child collections of collection {blender_object.name!r}")
+                    for child in blender_object.children:
                         new_graph_node(child, node)
+                    self.logger.debug(f"Done adding child collections of collection {blender_object.name!r}")
+
+                if len(blender_object.objects):
+                    self.logger.debug(f"Adding objects of collection {blender_object.name!r}")
+                    for child in blender_object.objects:
+                        if child.parent is None:
+                            new_graph_node(child, node)
+                    self.logger.debug(f"Done adding objects of collection {blender_object.name!r}")
 
         selection = bpy.context.scene.i3dio.selection
         if selection == 'ALL':
+            self.logger.info("Export selection is master collection 'Scene Collection'")
             selection = bpy.context.scene.collection
             new_graph_node(selection, self._scene_graph.nodes[0])
         elif selection == 'ACTIVE_COLLECTION':
             selection = bpy.context.view_layer.active_layer_collection.collection
+            self.logger.info(f"Export selection is collection {selection.name!r}")
             new_graph_node(selection, self._scene_graph.nodes[0])
         elif selection == 'SELECTED_OBJECTS':
             # Generate active object list and loop over that somehow
@@ -322,8 +341,9 @@ class Exporter:
                                 self._xml_write_string(texture_element, 'fileId', f'{file_id:d}')
 
                         else:
-                            print(f"Unsupported input {material_node_color_connected_node.bl_idname!r} "
-                                  f"on 'Color' socket in 'Principled BSDF' of material {material.name!r}")
+                            pass
+                            #print(f"Unsupported input {material_node_color_connected_node.bl_idname!r} "
+                            #      f"on 'Color' socket in 'Principled BSDF' of material {material.name!r}")
 
                     self._xml_write_string(material_element,
                                            'diffuseColor',
@@ -351,9 +371,11 @@ class Exporter:
                                         normal_element = ET.SubElement(material_element, 'Normalmap')
                                         self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
                                 else:
-                                    print(f"Unknown color input of type: {normal_map_node.bl_idname!r} for normal map")
+                                    pass
+                                    # print(f"Unknown color input of type: {normal_map_node.bl_idname!r} for normal map")
                         else:
-                            print(f"Unknown normal input of type: {normal_map_node.bl_idname!r} for bdsf")
+                            pass
+                            # print(f"Unknown normal input of type: {normal_map_node.bl_idname!r} for bdsf")
 
                 separate_rgb_node = material.node_tree.nodes.get('Separate RGB')
                 if separate_rgb_node is not None:
@@ -366,7 +388,8 @@ class Exporter:
                                 normal_element = ET.SubElement(material_element, 'Glossmap')
                                 self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
                         else:
-                            print(f"Unknown image input of type: {gloss_image_node.bl_idname!r} for Separate RGB")
+                            pass
+                            # print(f"Unknown image input of type: {gloss_image_node.bl_idname!r} for Separate RGB")
 
             else:
                 self._xml_write_string(material_element,
@@ -382,10 +405,10 @@ class Exporter:
         return int(material_element.get('materialId'))
 
     def _xml_add_file(self, filepath, file_folder='textures') -> int:
-        print("Relative path: " + filepath)
+        # print("Relative path: " + filepath)
         filepath_absolute = bpy.path.abspath(filepath)
-        print("Absolute path: " + filepath_absolute)
-        print("Path sep: " + bpy.path.native_pathsep(filepath))
+        # print("Absolute path: " + filepath_absolute)
+        # print("Path sep: " + bpy.path.native_pathsep(filepath))
         files_root = self._tree.find('Files')
         filename = filepath_absolute[filepath_absolute.rfind('\\') + 1:len(filepath_absolute)]
         filepath_resolved = filepath_absolute
@@ -423,7 +446,7 @@ class Exporter:
 
             if filepath_resolved != filepath_absolute and filepath_resolved not in self._file_indexes:
                 if bpy.context.scene.i3dio.overwrite_files or not os.path.exists(filepath_i3d + output_dir + filename):
-                    print("Path: " + filepath_i3d + output_dir)
+                    # print("Path: " + filepath_i3d + output_dir)
                     os.makedirs(filepath_i3d + output_dir, exist_ok=True)
                     try:
                         shutil.copy(filepath_absolute, filepath_i3d + output_dir)
@@ -559,7 +582,8 @@ class Exporter:
                                 vertex_data['uvs'][f't{count:d}'] = f"{uv.data[loop_index].uv[0]:.6f} " \
                                                                     f"{uv.data[loop_index].uv[1]:.6f}"
                             else:
-                                print(f"Currently only supports four uv layers per vertex")
+                                pass
+                                # print(f"Currently only supports four uv layers per vertex")
 
                         vertex_item = VertexItem(vertex_data, mat)
 
@@ -630,7 +654,7 @@ class Exporter:
             self._xml_write_float(node_element, 'dropOff', 5.0 * light.spot_blend)
         elif light_type == 'AREA':
             light_type = 'point'
-            print('Area lights not supported in giants engine, defaulting to point')
+            # print('Area lights not supported in giants engine, defaulting to point')
 
         self._xml_write_string(node_element, 'type', light_type)
         self._xml_write_string(node_element, 'color', "{0:f} {1:f} {2:f}".format(*light.color))
@@ -650,9 +674,10 @@ class Exporter:
         self._indent(self._tree)  # Make the xml human readable by adding indents
         try:
             ET.ElementTree(self._tree).write(self._filepath, xml_declaration=True, encoding='iso-8859-1', method='xml')
-            print(f"Exported to {self._filepath}")
+            # print(f"Exported to {self._filepath}")
         except Exception as exception:  # A bit slouchy exception handling. Should be more specific and not catch all
-            print(exception)
+            pass
+            # print(exception)
 
     @staticmethod
     def _xml_write_int(element: ET.Element, attribute: str, value: int) -> None:
