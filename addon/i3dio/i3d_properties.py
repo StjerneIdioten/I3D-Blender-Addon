@@ -123,6 +123,18 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default='MODHUB'
     )
 
+    verbose_output: BoolProperty(
+        name="Verbose Output",
+        description="Print out info to console",
+        default=True
+    )
+
+    log_to_file: BoolProperty(
+        name="Generate logfile",
+        description="Generates a log file in the same folder as the exported i3d",
+        default=True
+    )
+
 
 @register
 class I3DNodeTransformAttributes(bpy.types.PropertyGroup):

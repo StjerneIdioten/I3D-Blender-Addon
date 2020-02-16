@@ -155,6 +155,7 @@ class I3D_IO_PT_export_files(Panel):
         row.alignment = 'RIGHT'
         row.prop(bpy.context.scene.i3dio, 'file_structure', )
 
+
 class I3D_IO_PT_export_shape(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -199,10 +200,35 @@ class I3D_IO_PT_export_misc(Panel):
         row = layout.row()
 
 
+class I3D_IO_PT_export_debug(Panel):
+    bl_space_type = 'FILE_BROWSER'
+    bl_region_type = 'TOOL_PROPS'
+    bl_label = "Debug Options"
+    bl_parent_id = 'FILE_PT_operator'
+
+    @classmethod
+    def poll(cls, context):
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        return operator.bl_idname == 'EXPORT_SCENE_OT_i3d'
+
+    def draw(self, context):
+        layout = self.layout
+
+        sfile = context.space_data
+        operator = sfile.active_operator
+
+        row = layout.row()
+        layout.prop(bpy.context.scene.i3dio, 'verbose_output')
+        layout.prop(bpy.context.scene.i3dio, 'log_to_file')
+
+
 classes = (I3D_IO_OT_export,
            I3D_IO_PT_export_main,
            I3D_IO_PT_export_options,
-           I3D_IO_PT_export_files
+           I3D_IO_PT_export_files,
+           I3D_IO_PT_export_debug
            )
 
 

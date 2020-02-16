@@ -22,6 +22,7 @@ import os
 import shutil
 import math
 import mathutils
+import logging
 
 # Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
@@ -38,32 +39,66 @@ from . import i3d_properties
 class Exporter:
 
     def __init__(self, filepath: str, axis_forward, axis_up):
-        self._scene_graph = SceneGraph()
-        self._export_only_selection = False
-        self._filepath = filepath
-        self._file_indexes = {}
-        self.shape_material_indexes = {}
-        self.ids = {
-            'shape': 1,
-            'material': 1,
-            'file': 1
-        }
+        self.logger = logging.getLogger(__name__)
+        self.logger.setLevel(logging.DEBUG)
+        self.logger.handlers = []  # Clear handlers between runs since the logging module keeps track outside addon
 
-        self._global_matrix = axis_conversion(
-            to_forward=axis_forward,
-            to_up=axis_up,
-        ).to_4x4()
+        formatter = logging.Formatter('%(name)s:%(funcName)s:%(levelname)s: %(message)s')
 
-        # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
-        # should only be 'heavy' to call the first time a mesh is exported.
-        # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
-        self._depsgraph = bpy.context.evaluated_depsgraph_get()
+        if bpy.context.scene.i3dio.log_to_file:
+            filename = filepath[0:filepath.rindex('\\') + 1] + 'export_log.txt'
+            self._log_file_handler = logging.FileHandler(filename, mode='w')
+            self._log_file_handler.setLevel(logging.DEBUG)
 
-        self._xml_build_skeleton_structure()
-        self._xml_build_scene_graph()
-        self._xml_parse_scene_graph()
+            self._log_file_handler.setFormatter(formatter)
 
-        self._xml_export_to_file()
+            self.logger.addHandler(self._log_file_handler)
+            self.logger.info('File logger initialized')
+
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        if bpy.context.scene.i3dio.verbose_output:
+            console_handler.setLevel(logging.DEBUG)
+        else:
+            console_handler.setLevel(logging.WARNING)
+        self.logger.addHandler(console_handler)
+        self.logger.info('Console logger initialized')
+
+        # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
+        try:
+            self._scene_graph = SceneGraph()
+            self._export_only_selection = False
+            self._filepath = filepath
+            self._file_indexes = {}
+            self.shape_material_indexes = {}
+            self.ids = {
+                'shape': 1,
+                'material': 1,
+                'file': 1
+            }
+
+            self._global_matrix = axis_conversion(
+                to_forward=axis_forward,
+                to_up=axis_up,
+            ).to_4x4()
+
+            # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
+            # should only be 'heavy' to call the first time a mesh is exported.
+            # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
+            self._depsgraph = bpy.context.evaluated_depsgraph_get()
+
+            self._xml_build_skeleton_structure()
+            self._xml_build_scene_graph()
+            self._xml_parse_scene_graph()
+
+            self._xml_export_to_file()
+
+        # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
+        except Exception as e:
+            self.logger.exception("Exception that stopped the exporter")
+
+        if bpy.context.scene.i3dio.log_to_file:
+            self._log_file_handler.close()
 
     def _xml_build_scene_graph(self):
 
