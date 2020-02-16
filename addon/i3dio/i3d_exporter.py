@@ -298,7 +298,7 @@ class Exporter:
                     # Specular
                     self._xml_write_string(material_element,
                                            'specularColor',
-                                           f"{material_node.inputs['Roughness'].default_value:f} "
+                                           f"{1.0 - material_node.inputs['Roughness'].default_value:f} "
                                            f"{material_node.inputs['Specular'].default_value:.6f} "
                                            f"{material_node.inputs['Metallic'].default_value:f}")
 
@@ -340,7 +340,7 @@ class Exporter:
 
                 self._xml_write_string(material_element,
                                        'specularColor',
-                                       f"{material.roughness:f} {1:.6f} {material.metallic:f}")
+                                       f"{1.0 - material.roughness:f} {1:.6f} {material.metallic:f}")
 
             self.ids['material'] += 1
 
