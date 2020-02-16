@@ -248,21 +248,17 @@ class Exporter:
             name = prop.name_i3d
             val = prop.value_i3d
 
-            print(f"Name: {name}, Value: {val}, Type: {type(val)}, IsInstance: {isinstance(val, bool)}")
+            # print(f"Name: {name}, Value: {val}, Type: {type(val)}, IsInstance: {isinstance(val, bool)}")
 
             if name != 'disabled' and val != i3d_properties.defaults[name]:
-                print("Exporting property")
+                # print("Exporting property")
                 if isinstance(val, float):
-                    print("float")
                     self._xml_write_float(element, prop.name_i3d, val)
                 elif isinstance(val, bool):  # Order matters, since bool is an int subclass!
-                    print("bool")
                     self._xml_write_bool(element, prop.name_i3d, val)
                 elif isinstance(val, int):
-                    print("int")
                     self._xml_write_int(element, prop.name_i3d, val)
                 elif isinstance(val, str):
-                    print("string")
                     self._xml_write_string(element, prop.name_i3d, val)
 
     def _xml_add_material(self, material):
@@ -361,9 +357,12 @@ class Exporter:
         filepath_i3d = self._filepath[0:self._filepath.rfind('\\') + 1]
         file_structure = bpy.context.scene.i3dio.file_structure
 
-        relative_filter = 'data\shared'
+        # Check if the file is relative to the fs data folder and thus should be references as such
+        relative_filter = 'Farming Simulator 19'
         try:
-            filepath_resolved = filepath_absolute.replace(filepath_absolute[0:filepath_absolute.index(relative_filter)], '$')
+            filepath_resolved = '$' + filepath_absolute[
+                                      filepath_absolute.index(relative_filter) + len(relative_filter) + 1:
+                                      len(filepath_absolute)]
         except ValueError:
             pass
 
