@@ -219,9 +219,9 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     class receive_shadows(bpy.types.PropertyGroup):
         name_i3d: StringProperty(default='receiveShadows', options={'SKIP_SAVE'})
         value_i3d: BoolProperty(
-            name="Cast Shadowmap",
-            description="Cast Shadowmap",
-            default=defaults['castsShadows']
+            name="Receive Shadowmap",
+            description="Receive Shadowmap",
+            default=defaults['receiveShadows']
         )
 
     @register
