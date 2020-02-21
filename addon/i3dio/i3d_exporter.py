@@ -102,8 +102,11 @@ class Exporter:
 
         self.logger.info(f"Export took {time.time() - time_start:.3f} seconds")
 
-        if bpy.context.scene.i3dio.log_to_file:
+        # EAFP
+        try:
             self._log_file_handler.close()
+        except AttributeError:
+            pass
 
     def _xml_build_scene_graph(self):
 
@@ -224,12 +227,15 @@ class Exporter:
 
         def parse_node(node: SceneGraph.Node, node_element: ET.Element):
 
+            self.logger.info(f"Parsing node with id {node.id} and name {node.blender_object.name!r}")
             self._xml_scene_object_general_data(node, node_element)
 
             if isinstance(node.blender_object, bpy.types.Collection):
+                self.logger.info(f"{node.blender_object.name!r} is a collection, getting parsed as a transformgroup")
                 self._xml_scene_object_transform_group(node, node_element)
             else:
                 node_type = node.blender_object.type
+                self.logger.info(f"{node.blender_object.name!r} is parsed as a {node_type!r}")
                 if node_type == 'MESH':
                     self._xml_scene_object_shape(node, node_element)
                 elif node_type == 'EMPTY':
@@ -238,16 +244,22 @@ class Exporter:
                     self._xml_scene_object_light(node, node_element)
                 elif node_type == 'CAMERA':
                     self._xml_scene_object_camera(node, node_element)
-                if hasattr(node.blender_object.data, 'i3d_attributes'):
+
+                try:
                     self._xml_object_properties(node.blender_object.data.i3d_attributes, node_element)
+                except AttributeError:
+                    self.logger.debug(f"{node.blender_object.name!r} has no i3d_attributes")
 
             for child in node.children.values():
-
+                self.logger.info(
+                    f"Parsing child node {child.blender_object.name!r} of node {node.blender_object.name!r}")
                 child_element = ET.SubElement(node_element,
                                               Exporter.blender_to_i3d(child.blender_object))
                 parse_node(child, child_element)
 
         for root_child in self._scene_graph.nodes[0].children.values():
+            self.logger.info(
+                f"Parsing child node {root_child.blender_object.name!r} of root node")
             root_child_element = ET.SubElement(self._tree.find('Scene'),
                                                Exporter.blender_to_i3d(root_child.blender_object))
             parse_node(root_child, root_child_element)
@@ -256,6 +268,9 @@ class Exporter:
         self._xml_write_string(node_element, 'name', node.blender_object.name)
         self._xml_write_int(node_element, 'nodeId', node.id)
         if isinstance(node.blender_object, bpy.types.Collection):
+            self.logger.info(
+                f"{node.blender_object.name!r} is a collection and it will be exported as a transformgroup with no "
+                f"translation and rotation")
             # Collections dont have any physical properties, but the transformgroups in i3d has so it is set to 0
             # in relation to it's parent so it stays purely organisational
             self._xml_write_string(node_element, 'translation', "0 0 0")
@@ -266,30 +281,41 @@ class Exporter:
             # in GE
             # If you want an explanation for A * B * A^-1 then go look up Transformation Matrices cause I can't
             # remember the specifics
+            self.logger.info(f"{node.blender_object.name!r} is a {node.blender_object.type!r}")
+            self.logger.debug(f"{node.blender_object.name!r} transforming to new transform-basis")
 
             if node.blender_object == 'LIGHT' or node.blender_object.type == 'CAMERA':
                 matrix = self._global_matrix @ node.blender_object.matrix_local
+                self.logger.debug(
+                    f"{node.blender_object.name!r} will not have inversed transform applied to accommodate flipped "
+                    f"z-axis in GE ")
             else:
                 matrix = self._global_matrix @ node.blender_object.matrix_local @ self._global_matrix.inverted()
 
             if node.blender_object.parent is not None:
                 if node.blender_object.parent.type == 'CAMERA' or node.blender_object.parent.type == 'LIGHT':
                     matrix = self._global_matrix.inverted() @ matrix
+                    self.logger.debug(
+                        f"{node.blender_object.name!r} will be transformed once more with inverse to accommodate "
+                        f"flipped z-axis in GE of parent Light/Camera")
 
-            self._xml_write_string(node_element,
-                                   'translation',
-                                   "{0:.6f} {1:.6f} {2:.6f}".format(
+            # Translation with applied unit scaling
+            translation = "{0:.6f} {1:.6f} {2:.6f}".format(
                                        *[x * bpy.context.scene.unit_settings.scale_length
-                                         for x in matrix.to_translation()]))
+                                         for x in matrix.to_translation()])
 
-            self._xml_write_string(node_element,
-                                   'rotation',
-                                   "{0:.3f} {1:.3f} {2:.3f}".format(*[math.degrees(axis)
-                                                                      for axis in matrix.to_euler('XYZ')]))
+            self._xml_write_string(node_element, 'translation', translation)
+            self.logger.debug(f"{node.blender_object.name!r} translation: [{translation}]")
 
-            self._xml_write_string(node_element,
-                                   'scale',
-                                   "{0:.6f} {1:.6f} {2:.6f}".format(*matrix.to_scale()))
+            # Rotation, no unit scaling since it will always be degrees.
+            rotation = "{0:.3f} {1:.3f} {2:.3f}".format(*[math.degrees(axis) for axis in matrix.to_euler('XYZ')])
+            self._xml_write_string(node_element, 'rotation', rotation)
+            self.logger.debug(f"{node.blender_object.name!r} rotation(degrees): [{rotation}]")
+
+            # Scale
+            scale = "{0:.6f} {1:.6f} {2:.6f}".format(*matrix.to_scale())
+            self._xml_write_string(node_element, 'scale', scale)
+            self.logger.debug(f"{node.blender_object.name!r} scale: [{scale}]")
 
             # Write the object transform properties from the blender UI into the object
             self._xml_object_properties(node.blender_object.i3d_attributes, node_element)
@@ -298,22 +324,26 @@ class Exporter:
         for key in propertygroup.__annotations__.keys():
             prop = getattr(propertygroup, key)
 
-            # Check if property is default somehow
             name = prop.name_i3d
             val = prop.value_i3d
 
-            # print(f"Name: {name}, Value: {val}, Type: {type(val)}, IsInstance: {isinstance(val, bool)}")
+            if name != 'disabled':
 
-            if name != 'disabled' and val != i3d_properties.defaults[name]:
-                # print("Exporting property")
                 if isinstance(val, float):
-                    self._xml_write_float(element, prop.name_i3d, val)
-                elif isinstance(val, bool):  # Order matters, since bool is an int subclass!
-                    self._xml_write_bool(element, prop.name_i3d, val)
-                elif isinstance(val, int):
-                    self._xml_write_int(element, prop.name_i3d, val)
-                elif isinstance(val, str):
-                    self._xml_write_string(element, prop.name_i3d, val)
+                    if math.isclose(val, i3d_properties.defaults[name], abs_tol=0.0000001):
+                        continue
+
+                if val != i3d_properties.defaults[name]:
+                    self.logger.debug(f"'{element.get('name')}' has modified property '{name}', with value '{val}'. "
+                                      f"Default is '{i3d_properties.defaults[name]}'")
+                    if isinstance(val, float):
+                        self._xml_write_float(element, prop.name_i3d, val)
+                    elif isinstance(val, bool):  # Order matters, since bool is an int subclass!
+                        self._xml_write_bool(element, prop.name_i3d, val)
+                    elif isinstance(val, int):
+                        self._xml_write_int(element, prop.name_i3d, val)
+                    elif isinstance(val, str):
+                        self._xml_write_string(element, prop.name_i3d, val)
 
     def _xml_add_material(self, material):
         materials_root = self._tree.find('Materials')
