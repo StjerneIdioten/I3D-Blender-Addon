@@ -350,15 +350,16 @@ class Exporter:
         materials_root = self._tree.find('Materials')
         material_element = materials_root.find(f".Material[@name={material.name!r}]")
         if material_element is None:
-            self.logger.debug(f"Adding material {material.name!r}")
+            self.logger.info(f"Adding new material {material.name!r}")
             material_element = ET.SubElement(materials_root, 'Material')
             self._xml_write_string(material_element, 'name', material.name)
             self._xml_write_int(material_element, 'materialId', self.ids['material'])
 
             if material.use_nodes:
+                self.logger.debug(f"{material.name!r} uses nodes")
                 material_node = material.node_tree.nodes.get('Principled BSDF')
                 if material_node is not None:
-                    # Diffuse
+                    # Diffuse ##########################################################################################
                     material_node_color_socket = material_node.inputs['Base Color']
                     diffuse = material_node_color_socket.default_value
                     if material_node_color_socket.is_linked:
@@ -377,6 +378,23 @@ class Exporter:
                             #print(f"Unsupported input {material_node_color_connected_node.bl_idname!r} "
                             #      f"on 'Color' socket in 'Principled BSDF' of material {material.name!r}")
 
+                    # Normal ###########################################################################################
+                    normal_node_socket = material_node.inputs['Normal']
+                    if normal_node_socket.is_linked:
+                        try:
+                            normal_image_path = normal_node_socket.links[0].from_node.inputs['Color'].links[0]\
+                                .from_node.image.filepath
+                        except (AttributeError, IndexError) as error:
+                            self.logger.warning(f"{material.name!r} has an improperly setup Normalmap")
+                        else:
+                            self.logger.debug(f"{material.name!r} has Normalmap "
+                                              f"'{Exporter.as_fs_relative_path(normal_image_path)}'")
+                            file_id = self._xml_add_file(normal_image_path)
+                            normal_element = ET.SubElement(material_element, 'Normalmap')
+                            self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
+                    else:
+                        self.logger.debug(f"{material.name!r} has no Normalmap")
+
                     self._xml_write_string(material_element,
                                            'diffuseColor',
                                            "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(
@@ -389,25 +407,7 @@ class Exporter:
                                            f"{material_node.inputs['Specular'].default_value:.6f} "
                                            f"{material_node.inputs['Metallic'].default_value:f}")
 
-                    # Normal
-                    normal_node_socket = material_node.inputs['Normal']
-                    if normal_node_socket.is_linked:
-                        normal_map_node = normal_node_socket.links[0].from_node
-                        if normal_map_node.bl_idname == 'ShaderNodeNormalMap':
-                            normal_map_color_socket = normal_map_node.inputs['Color']
-                            if normal_map_color_socket.is_linked:
-                                texture_node = normal_map_color_socket.links[0].from_node
-                                if texture_node.bl_idname == 'ShaderNodeTexImage':
-                                    if texture_node.image is not None:
-                                        file_id = self._xml_add_file(texture_node.image.filepath)
-                                        normal_element = ET.SubElement(material_element, 'Normalmap')
-                                        self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
-                                else:
-                                    pass
-                                    # print(f"Unknown color input of type: {normal_map_node.bl_idname!r} for normal map")
-                        else:
-                            pass
-                            # print(f"Unknown normal input of type: {normal_map_node.bl_idname!r} for bdsf")
+                # Gloss ################################################################################################
 
                 # It would be nice to check for a label instead, since this shows up as the name of the node inside of
                 # the shader view. But it is harder to index and not unique. So sticking to the name instead.
@@ -418,15 +418,16 @@ class Exporter:
                     except (AttributeError, IndexError) as error:
                         self.logger.warning(f"{material.name!r} has an improperly setup Glossmap")
                     else:
-                        self.logger.debug(f"{material.name!r} has glossmap "
+                        self.logger.debug(f"{material.name!r} has Glossmap "
                                           f"'{Exporter.as_fs_relative_path(gloss_image_path)}'")
                         file_id = self._xml_add_file(gloss_image_path)
                         normal_element = ET.SubElement(material_element, 'Glossmap')
                         self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
                 else:
-                    self.logger.info(f"{material.name!r} has no Glossmap")
+                    self.logger.debug(f"{material.name!r} has no Glossmap")
 
             else:
+                self.logger.debug(f"{material.name!r} does not use nodes")
                 self._xml_write_string(material_element,
                                        'diffuseColor',
                                        "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*material.diffuse_color))
