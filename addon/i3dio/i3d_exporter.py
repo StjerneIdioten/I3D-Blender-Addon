@@ -47,7 +47,6 @@ class Exporter:
         formatter = logging.Formatter('%(name)s:%(funcName)s:%(levelname)s: %(message)s')
 
         if bpy.context.scene.i3dio.log_to_file:
-            # filename = filepath[0:filepath.rindex('\\') + 1] + 'export_log.txt'
             filename = filepath[0:len(filepath) - 4] + '_export_log.txt'
             self._log_file_handler = logging.FileHandler(filename, mode='w')
             self._log_file_handler.setLevel(logging.DEBUG)
@@ -347,9 +346,11 @@ class Exporter:
                         self._xml_write_string(element, prop.name_i3d, val)
 
     def _xml_add_material(self, material):
+
         materials_root = self._tree.find('Materials')
         material_element = materials_root.find(f".Material[@name={material.name!r}]")
         if material_element is None:
+            self.logger.debug(f"Adding material {material.name!r}")
             material_element = ET.SubElement(materials_root, 'Material')
             self._xml_write_string(material_element, 'name', material.name)
             self._xml_write_int(material_element, 'materialId', self.ids['material'])
@@ -408,19 +409,22 @@ class Exporter:
                             pass
                             # print(f"Unknown normal input of type: {normal_map_node.bl_idname!r} for bdsf")
 
-                separate_rgb_node = material.node_tree.nodes.get('Separate RGB')
-                if separate_rgb_node is not None:
-                    image_socket = separate_rgb_node.inputs['Image']
-                    if image_socket.is_linked:
-                        gloss_image_node = image_socket.links[0].from_node
-                        if gloss_image_node.bl_idname == 'ShaderNodeTexImage':
-                            if gloss_image_node.image is not None:
-                                file_id = self._xml_add_file(gloss_image_node.image.filepath)
-                                normal_element = ET.SubElement(material_element, 'Glossmap')
-                                self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
-                        else:
-                            pass
-                            # print(f"Unknown image input of type: {gloss_image_node.bl_idname!r} for Separate RGB")
+                # It would be nice to check for a label instead, since this shows up as the name of the node inside of
+                # the shader view. But it is harder to index and not unique. So sticking to the name instead.
+                gloss_node = material.node_tree.nodes.get('Glossmap')
+                if gloss_node is not None:
+                    try:
+                        gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
+                    except (AttributeError, IndexError) as error:
+                        self.logger.warning(f"{material.name} has an improperly setup Glossmap")
+                    else:
+                        self.logger.debug(f"{material.name} has glossmap "
+                                          f"'{Exporter.as_fs_relative_path(gloss_image_path)}'")
+                        file_id = self._xml_add_file(gloss_image_path)
+                        normal_element = ET.SubElement(material_element, 'Glossmap')
+                        self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
+                else:
+                    self.logger.info(f"{material.name} has no Glossmap")
 
             else:
                 self._xml_write_string(material_element,
@@ -442,18 +446,11 @@ class Exporter:
         # print("Path sep: " + bpy.path.native_pathsep(filepath))
         files_root = self._tree.find('Files')
         filename = filepath_absolute[filepath_absolute.rfind('\\') + 1:len(filepath_absolute)]
-        filepath_resolved = filepath_absolute
         filepath_i3d = self._filepath[0:self._filepath.rfind('\\') + 1]
         file_structure = bpy.context.scene.i3dio.file_structure
 
         # Check if the file is relative to the fs data folder and thus should be references as such
-        relative_filter = 'Farming Simulator 19'
-        try:
-            filepath_resolved = '$' + filepath_absolute[
-                                      filepath_absolute.index(relative_filter) + len(relative_filter) + 1:
-                                      len(filepath_absolute)]
-        except ValueError:
-            pass
+        filepath_resolved = Exporter.as_fs_relative_path(filepath_absolute)
 
         # Resolve the filename and write the file
         if filepath_resolved[0] != '$' and bpy.context.scene.i3dio.copy_files:
@@ -776,6 +773,16 @@ class Exporter:
             'COLLECTION': 'TransformGroup'
         }
         return switcher[blender_object.type]
+
+    @staticmethod
+    def as_fs_relative_path(filepath: str):
+        """If the filepath is relative to the fs dir, then return it with $ refering to the fs data dir
+        else return the path"""
+        relative_filter = 'Farming Simulator 19'
+        try:
+            return '$' + filepath[filepath.index(relative_filter) + len(relative_filter) + 1: len(filepath)]
+        except ValueError:
+            return filepath
 
 
 class SceneGraph(object):
