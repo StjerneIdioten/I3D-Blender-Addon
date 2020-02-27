@@ -360,23 +360,31 @@ class Exporter:
                 material_node = material.node_tree.nodes.get('Principled BSDF')
                 if material_node is not None:
                     # Diffuse ##########################################################################################
-                    material_node_color_socket = material_node.inputs['Base Color']
-                    diffuse = material_node_color_socket.default_value
-                    if material_node_color_socket.is_linked:
-                        material_node_color_connected_node = material_node_color_socket.links[0].from_node
-                        if material_node_color_connected_node.bl_idname == 'ShaderNodeRGB':
-                            diffuse = material_node_color_connected_node.outputs[0].default_value
+                    color_socket = material_node.inputs['Base Color']
+                    diffuse = color_socket.default_value
+                    if color_socket.is_linked:
+                        try:
+                            color_connected_node = color_socket.links[0].from_node
+                            if color_connected_node.bl_idname == 'ShaderNodeRGB':
+                                diffuse = color_connected_node.outputs[0].default_value
+                                diffuse_image_path = None
+                            else:
+                                diffuse_image_path = color_connected_node.image.filepath
 
-                        elif material_node_color_connected_node.bl_idname == 'ShaderNodeTexImage':
-                            if material_node_color_connected_node.image is not None:
-                                file_id = self._xml_add_file(material_node_color_connected_node.image.filepath)
+                        except (AttributeError, IndexError) as error:
+                            self.logger.exception(f"{material.name!r} has an improperly setup Texture")
+                        else:
+                            if diffuse_image_path is not None:
+                                self.logger.debug(f"{material.name!r} has Texture "
+                                                  f"'{Exporter.as_fs_relative_path(diffuse_image_path)}'")
+                                file_id = self._xml_add_file(diffuse_image_path)
                                 texture_element = ET.SubElement(material_element, 'Texture')
                                 self._xml_write_string(texture_element, 'fileId', f'{file_id:d}')
 
-                        else:
-                            pass
-                            #print(f"Unsupported input {material_node_color_connected_node.bl_idname!r} "
-                            #      f"on 'Color' socket in 'Principled BSDF' of material {material.name!r}")
+                    self._xml_write_string(material_element,
+                                           'diffuseColor',
+                                           "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(
+                                               *diffuse))
 
                     # Normal ###########################################################################################
                     normal_node_socket = material_node.inputs['Normal']
@@ -385,7 +393,7 @@ class Exporter:
                             normal_image_path = normal_node_socket.links[0].from_node.inputs['Color'].links[0]\
                                 .from_node.image.filepath
                         except (AttributeError, IndexError) as error:
-                            self.logger.warning(f"{material.name!r} has an improperly setup Normalmap")
+                            self.logger.exception(f"{material.name!r} has an improperly setup Normalmap")
                         else:
                             self.logger.debug(f"{material.name!r} has Normalmap "
                                               f"'{Exporter.as_fs_relative_path(normal_image_path)}'")
@@ -395,17 +403,14 @@ class Exporter:
                     else:
                         self.logger.debug(f"{material.name!r} has no Normalmap")
 
-                    self._xml_write_string(material_element,
-                                           'diffuseColor',
-                                           "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(
-                                               *diffuse))
-
-                    # Specular
+                    # Specular #########################################################################################
                     self._xml_write_string(material_element,
                                            'specularColor',
                                            f"{1.0 - material_node.inputs['Roughness'].default_value:f} "
                                            f"{material_node.inputs['Specular'].default_value:.6f} "
                                            f"{material_node.inputs['Metallic'].default_value:f}")
+                else:
+                    self.logger.warning(f"{material.name!r} uses nodes but Principled BSDF node is not found!")
 
                 # Gloss ################################################################################################
 
@@ -416,7 +421,7 @@ class Exporter:
                     try:
                         gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
                     except (AttributeError, IndexError) as error:
-                        self.logger.warning(f"{material.name!r} has an improperly setup Glossmap")
+                        self.logger.exception(f"{material.name!r} has an improperly setup Glossmap")
                     else:
                         self.logger.debug(f"{material.name!r} has Glossmap "
                                           f"'{Exporter.as_fs_relative_path(gloss_image_path)}'")
