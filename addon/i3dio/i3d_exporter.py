@@ -47,7 +47,8 @@ class Exporter:
         formatter = logging.Formatter('%(name)s:%(funcName)s:%(levelname)s: %(message)s')
 
         if bpy.context.scene.i3dio.log_to_file:
-            filename = filepath[0:filepath.rindex('\\') + 1] + 'export_log.txt'
+            # filename = filepath[0:filepath.rindex('\\') + 1] + 'export_log.txt'
+            filename = filepath[0:len(filepath) - 4] + '_export_log.txt'
             self._log_file_handler = logging.FileHandler(filename, mode='w')
             self._log_file_handler.setLevel(logging.DEBUG)
 
