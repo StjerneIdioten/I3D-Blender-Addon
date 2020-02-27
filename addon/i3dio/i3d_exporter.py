@@ -54,7 +54,6 @@ class Exporter:
             self._log_file_handler.setFormatter(formatter)
 
             self.logger.addHandler(self._log_file_handler)
-            self.logger.info('File logger initialized')
 
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
@@ -63,8 +62,9 @@ class Exporter:
         else:
             console_handler.setLevel(logging.WARNING)
         self.logger.addHandler(console_handler)
-        self.logger.info('Console logger initialized')
 
+        self.logger.info(f"Blender version is: {bpy.app.version_string}")
+        self.logger.info(f"I3D Exporter version is: {sys.modules['i3dio'].bl_info.get('version')}")
         self.logger.info(f"Exporting to {filepath}")
         time_start = time.time()
 
@@ -416,15 +416,15 @@ class Exporter:
                     try:
                         gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
                     except (AttributeError, IndexError) as error:
-                        self.logger.warning(f"{material.name} has an improperly setup Glossmap")
+                        self.logger.warning(f"{material.name!r} has an improperly setup Glossmap")
                     else:
-                        self.logger.debug(f"{material.name} has glossmap "
+                        self.logger.debug(f"{material.name!r} has glossmap "
                                           f"'{Exporter.as_fs_relative_path(gloss_image_path)}'")
                         file_id = self._xml_add_file(gloss_image_path)
                         normal_element = ET.SubElement(material_element, 'Glossmap')
                         self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
                 else:
-                    self.logger.info(f"{material.name} has no Glossmap")
+                    self.logger.info(f"{material.name!r} has no Glossmap")
 
             else:
                 self._xml_write_string(material_element,
