@@ -772,9 +772,10 @@ class Exporter:
         try:
             ET.ElementTree(self._tree).write(self._filepath, xml_declaration=True, encoding='iso-8859-1', method='xml')
             # print(f"Exported to {self._filepath}")
-        except Exception as exception:  # A bit slouchy exception handling. Should be more specific and not catch all
-            pass
-            # print(exception)
+        except Exception as error:  # A bit slouchy exception handling. Should be more specific and not catch all
+            self.logger.exception(error)
+        else:
+            self.logger.info(f"Wrote i3d to file '{self._filepath}'")
 
     @staticmethod
     def _xml_write_int(element: ET.Element, attribute: str, value: int) -> None:
