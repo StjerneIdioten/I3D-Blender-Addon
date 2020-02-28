@@ -698,18 +698,21 @@ class Exporter:
         self._xml_write_string(node_element, 'materialIds', self.shape_material_indexes[shape_id])
 
     def _xml_scene_object_transform_group(self, node: SceneGraph.Node, node_element: ET.Element):
-        # TODO: Add parameters to UI and extract here
         pass
 
     def _xml_scene_object_camera(self, node: SceneGraph.Node, node_element: ET.Element):
         camera = node.blender_object.data
-
         self._xml_write_float(node_element, 'fov', camera.lens)
         self._xml_write_float(node_element, 'nearClip', camera.clip_start)
         self._xml_write_float(node_element, 'farClip', camera.clip_end)
+        self.logger.info(f"{node.blender_object.name!r} is a camera with fov {camera.lens}, "
+                         f"near clipping {camera.clip_start} and far clipping {camera.clip_end}")
         if camera.type == 'ORTHO':
             self._xml_write_bool(node_element, 'orthographic', True)
             self._xml_write_float(node_element, 'orthographicHeight', camera.ortho_scale)
+            self.logger.info(f"{node.blender_object.name!r} is orthographic with height {camera.ortho_scale}")
+        else:
+            self.logger.info(f"{node.blender_object.name!r} is not orthographic")
 
     def _xml_scene_object_light(self, node: SceneGraph.Node, node_element: ET.Element):
         light = node.blender_object.data
