@@ -717,6 +717,7 @@ class Exporter:
     def _xml_scene_object_light(self, node: SceneGraph.Node, node_element: ET.Element):
         light = node.blender_object.data
         light_type = light.type
+        self.logger.info(f"{node.blender_object.name!r} is a light of type {light_type!r}")
         falloff_type = None
         if light_type == 'POINT':
             light_type = 'point'
@@ -726,25 +727,44 @@ class Exporter:
         elif light_type == 'SPOT':
             light_type = 'spot'
             falloff_type = light.falloff_type
-            self._xml_write_float(node_element, 'coneAngle', math.degrees(light.spot_size))
+            cone_angle = math.degrees(light.spot_size)
+            self._xml_write_float(node_element, 'coneAngle', cone_angle)
+            self.logger.info(f"{node.blender_object.name!r} has a cone angle of {cone_angle}")
             # Blender spot 0.0 -> 1.0, GE spot 0.0 -> 5.0
-            self._xml_write_float(node_element, 'dropOff', 5.0 * light.spot_blend)
+            drop_off = 5.0 * light.spot_blend
+            self._xml_write_float(node_element, 'dropOff', drop_off)
+            self.logger.info(f"{node.blender_object.name!r} has a drop off of {drop_off}")
         elif light_type == 'AREA':
             light_type = 'point'
-            # print('Area lights not supported in giants engine, defaulting to point')
+            self.logger.warning(f"{node.blender_object.name!r} is an AREA light, "
+                                f"which is not supported and defaults to point light")
 
         self._xml_write_string(node_element, 'type', light_type)
-        self._xml_write_string(node_element, 'color', "{0:f} {1:f} {2:f}".format(*light.color))
+
+        color = "{0:f} {1:f} {2:f}".format(*light.color)
+        self._xml_write_string(node_element, 'color', color)
+        self.logger.info(f"{node.blender_object.name!r} has color {color}")
+
         self._xml_write_float(node_element, 'range', light.distance)
+        self.logger.info(f"{node.blender_object.name!r} has range {light.distance}")
+
         self._xml_write_bool(node_element, 'castShadowMap', light.use_shadow)
+        self.logger.info(f"{node.blender_object.name!r} "
+                         f"{'casts shadows' if light.use_shadow else 'does not cast shadows'}")
 
         if falloff_type is not None:
             if falloff_type == 'CONSTANT':
                 falloff_type = 0
+                self.logger.info(f"{node.blender_object.name!r} "
+                                 f"has decay rate of type {'CONSTANT'} which is 0 in i3d")
             elif falloff_type == 'INVERSE_LINEAR':
                 falloff_type = 1
+                self.logger.info(f"{node.blender_object.name!r} "
+                                 f"has decay rate of type {'INVERSE_LINEAR'} which is 1 in i3d")
             elif falloff_type == 'INVERSE_SQUARE':
                 falloff_type = 2
+                self.logger.info(f"{node.blender_object.name!r} "
+                                 f"has decay rate of type {'INVERSE_SQUARE'} which is 2 in i3d")
             self._xml_write_int(node_element, 'decayRate', falloff_type)
 
     def _xml_export_to_file(self) -> None:
