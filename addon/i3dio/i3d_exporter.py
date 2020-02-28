@@ -44,7 +44,7 @@ class Exporter:
         self.logger.setLevel(logging.DEBUG)
         self.logger.handlers = []  # Clear handlers between runs since the logging module keeps track outside addon
 
-        formatter = logging.Formatter('%(name)s:%(funcName)s:%(levelname)s: %(message)s')
+        formatter = logging.Formatter('%(funcName)s:%(levelname)s: %(message)s')
 
         if bpy.context.scene.i3dio.log_to_file:
             filename = filepath[0:len(filepath) - 4] + '_export_log.txt'
@@ -301,8 +301,8 @@ class Exporter:
 
             # Translation with applied unit scaling
             translation = "{0:.6f} {1:.6f} {2:.6f}".format(
-                                       *[x * bpy.context.scene.unit_settings.scale_length
-                                         for x in matrix.to_translation()])
+                *[x * bpy.context.scene.unit_settings.scale_length
+                  for x in matrix.to_translation()])
 
             self._xml_write_string(node_element, 'translation', translation)
             self.logger.debug(f"{node.blender_object.name!r} translation: [{translation}]")
@@ -390,7 +390,7 @@ class Exporter:
                     normal_node_socket = material_node.inputs['Normal']
                     if normal_node_socket.is_linked:
                         try:
-                            normal_image_path = normal_node_socket.links[0].from_node.inputs['Color'].links[0]\
+                            normal_image_path = normal_node_socket.links[0].from_node.inputs['Color'].links[0] \
                                 .from_node.image.filepath
                         except (AttributeError, IndexError) as error:
                             self.logger.exception(f"{material.name!r} has an improperly setup Normalmap")
@@ -481,10 +481,12 @@ class Exporter:
                     blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
                     if filepath.count("..\\") <= blender_relative_distance_limit:
                         # relative steps to avoid copying entire folder structures ny mistake. Defaults to a absolute path.
-                        output_dir = filepath[2:filepath.rfind('\\') + 1]  # Remove blender relative notation and filename
+                        output_dir = filepath[
+                                     2:filepath.rfind('\\') + 1]  # Remove blender relative notation and filename
                     else:
-                        self.logger.debug(f"'{filename}' exists more than {blender_relative_distance_limit} folders away "
-                                          f"from .blend file. Defaulting to absolute path and no copying.")
+                        self.logger.debug(
+                            f"'{filename}' exists more than {blender_relative_distance_limit} folders away "
+                            f"from .blend file. Defaulting to absolute path and no copying.")
                         output_dir = filepath_absolute[0:filepath_absolute.rfind('\\') + 1]
 
                 filepath_resolved = output_dir + filename
@@ -535,6 +537,7 @@ class Exporter:
         # Check if the mesh has already been defined in the i3d file
         indexed_triangle_element = shape_root.find(f".IndexedTriangleSet[@name={node.blender_object.data.name!r}]")
         if indexed_triangle_element is None:
+            self.logger.info(f"{node.blender_object.name!r} is a new mesh")
             shape_id = self.ids['shape']
             self.ids['shape'] += 1
 
@@ -547,20 +550,24 @@ class Exporter:
                 # Generate an object evaluated from the dependency graph
                 # The copy is important since the depsgraph will store changes to the evaluated object
                 obj = node.blender_object.evaluated_get(self._depsgraph).copy()
+                self.logger.info(f"{node.blender_object.name!r} is exported with modifiers applied")
             else:
                 obj = node.blender_object.copy()
+                self.logger.info(f"{node.blender_object.name!r} is exported without modifiers applied")
 
             # Generates a new mesh to not interfere with the existing one.
             mesh = obj.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
 
             conversion_matrix = self._global_matrix
             if bpy.context.scene.i3dio.apply_unit_scale:
+                self.logger.info(f"{node.blender_object.name!r} has unit scaling applied")
                 conversion_matrix = mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) \
                                     @ conversion_matrix
 
             mesh.transform(conversion_matrix)
             if conversion_matrix.is_negative:
                 mesh.flip_normals()
+                self.logger.debug(f"{node.blender_object.name!r} conversion matrix is negative, flipping normals")
 
             # Calculates triangles from mesh polygons
             mesh.calc_loop_triangles()
@@ -571,15 +578,18 @@ class Exporter:
             triangles_element = ET.SubElement(indexed_triangle_element, 'Triangles')
             subsets_element = ET.SubElement(indexed_triangle_element, 'Subsets')
 
+            self.logger.debug(f"{node.blender_object.name!r} consists of {len(mesh.loop_triangles)} triangles")
             self._xml_write_int(triangles_element, 'count', len(mesh.loop_triangles))
 
             # Create and assign default material if it does not exist already. This material will persist in the blender
             # file so you can change the default look if you want to through the blender interface
             if len(mesh.materials) == 0:
+                self.logger.info(f"{node.blender_object.name!r} has no material assigned")
                 if bpy.data.materials.get('i3d_default_material') is None:
                     bpy.data.materials.new('i3d_default_material')
-
+                    self.logger.info(f"Default material does not. Creating i3d_default_material")
                 mesh.materials.append(bpy.data.materials.get('i3d_default_material'))
+                self.logger.info(f"{node.blender_object.name!r} assigning default material i3d_default_material")
 
             # Group triangles by subset, since they need to be exported in correct order per material subset to the i3d
             triangle_subsets = {}
@@ -589,6 +599,7 @@ class Exporter:
                     triangle_subsets[triangle_material.name] = []
                     # Add material to material section in i3d file and append to the materialIds that the shape
                     # object should have
+                    self.logger.info(f"{node.blender_object.name!r} has material {triangle_material.name!r}")
                     material_id = self._xml_add_material(triangle_material)
                     if shape_id in self.shape_material_indexes.keys():
                         self.shape_material_indexes[shape_id] += f",{material_id:d}"
@@ -599,13 +610,12 @@ class Exporter:
                 triangle_subsets[triangle_material.name].append(triangle)
 
             self._xml_write_int(subsets_element, 'count', len(triangle_subsets))
+            self.logger.info(f"{node.blender_object.name!r} has {len(triangle_subsets)} subsets")
 
             added_vertices = {}  # Key is a unique hashable vertex identifier and the value is a vertex index
             vertex_counter = 0  # Count the total number of unique vertices (total across all subsets)
             indices_total = 0  # Total amount of indices, since i3d format needs this number (for some reason)
 
-            # Vertices are written to the i3d vertex list in an order based on the subsets and the triangles then index
-            # into this list to define themselves
             for mat, subset in triangle_subsets.items():
                 number_of_indices = 0
                 number_of_vertices = 0
@@ -666,8 +676,11 @@ class Exporter:
 
                 self._xml_write_int(subset_element, 'numIndices', number_of_indices)
                 self._xml_write_int(subset_element, 'numVertices', number_of_vertices)
+                self.logger.debug(f"{node.blender_object.name!r} has subset '{mat}' with {len(subset)} triangles, "
+                                  f"{number_of_vertices} vertices and {number_of_indices} indices")
                 indices_total += number_of_indices
 
+            self.logger.debug(f"{node.blender_object.name!r} has a total of {vertex_counter} vertices")
             self._xml_write_int(vertices_element, 'count', vertex_counter)
             self._xml_write_bool(vertices_element, 'normal', True)
             self._xml_write_bool(vertices_element, 'tangent', True)
@@ -678,7 +691,9 @@ class Exporter:
         else:
             # Mesh already exists, so find its shape it.
             shape_id = int(indexed_triangle_element.get('shapeId'))
+            self.logger.info(f"{node.blender_object.name!r} already exists in i3d file")
 
+        self.logger.debug(f"{node.blender_object.name!r} has shape ID {shape_id}")
         self._xml_write_int(node_element, 'shapeId', shape_id)
         self._xml_write_string(node_element, 'materialIds', self.shape_material_indexes[shape_id])
 
