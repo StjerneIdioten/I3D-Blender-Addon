@@ -350,7 +350,7 @@ class Exporter:
         materials_root = self._tree.find('Materials')
         material_element = materials_root.find(f".Material[@name={material.name!r}]")
         if material_element is None:
-            self.logger.info(f"Adding new material {material.name!r}")
+            self.logger.info(f"{material.name!r} is a new material")
             material_element = ET.SubElement(materials_root, 'Material')
             self._xml_write_string(material_element, 'name', material.name)
             self._xml_write_int(material_element, 'materialId', self.ids['material'])
@@ -442,54 +442,77 @@ class Exporter:
                                        f"{1.0 - material.roughness:f} {1:.6f} {material.metallic:f}")
 
             self.ids['material'] += 1
+        else:
+            self.logger.info(f"{material.name!r} is already in i3d file")
 
-        return int(material_element.get('materialId'))
+        material_id = int(material_element.get('materialId'))
+        self.logger.debug(f"{material.name!r} has material ID {material_id}")
+        return material_id
 
     def _xml_add_file(self, filepath, file_folder='textures') -> int:
         # print("Relative path: " + filepath)
         filepath_absolute = bpy.path.abspath(filepath)
         # print("Absolute path: " + filepath_absolute)
-        # print("Path sep: " + bpy.path.native_pathsep(filepath))
         files_root = self._tree.find('Files')
         filename = filepath_absolute[filepath_absolute.rfind('\\') + 1:len(filepath_absolute)]
         filepath_i3d = self._filepath[0:self._filepath.rfind('\\') + 1]
         file_structure = bpy.context.scene.i3dio.file_structure
 
+        self.logger.debug(f"'{filename}' has blender relative path '{filepath}'")
+        self.logger.debug(f"'{filename}' has absolute path '{filepath_absolute}'")
+
         # Check if the file is relative to the fs data folder and thus should be references as such
         filepath_resolved = Exporter.as_fs_relative_path(filepath_absolute)
 
+        output_dir = ""
         # Resolve the filename and write the file
-        if filepath_resolved[0] != '$' and bpy.context.scene.i3dio.copy_files:
-            output_dir = ""
-            if file_structure == 'FLAT':
-                pass  # Default settings, kept for clarity when viewing code
-            elif file_structure == 'MODHUB':
-                output_dir = file_folder + '\\'
-            elif file_structure == 'BLENDER':
-                if filepath.count("..\\") <= 3:  # Limits the distance a file can be from the blend file to three
-                    # relative steps to avoid copying entire folder structures ny mistake. Defaults to a absolute path.
-                    output_dir = filepath[2:filepath.rfind('\\') + 1]  # Remove blender relative notation and filename
-                else:
-                    output_dir = filepath_absolute[0:filepath_absolute.rfind('\\') + 1]
+        if filepath_resolved[0] != '$':
+            if bpy.context.scene.i3dio.copy_files:
+                self.logger.info(f"'{filename}' is non-relative to FS and will be copied")
+                if file_structure == 'FLAT':
+                    self.logger.debug(f"'{filename}' will be copied using the 'FLAT' hierarchy structure")
+                elif file_structure == 'MODHUB':
+                    self.logger.debug(f"'{filename}' will be copied using the 'MODHUB' hierarchy structure")
+                    output_dir = file_folder + '\\'
+                elif file_structure == 'BLENDER':
+                    self.logger.debug(f"'{filename}' will be copied using the 'BLENDER' hierarchy structure")
+                    # TODO: Rewrite this to make it more than three levels above the blend file but allow deeper nesting,
+                    #  since current code just counts number of slashes
+                    blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
+                    if filepath.count("..\\") <= blender_relative_distance_limit:
+                        # relative steps to avoid copying entire folder structures ny mistake. Defaults to a absolute path.
+                        output_dir = filepath[2:filepath.rfind('\\') + 1]  # Remove blender relative notation and filename
+                    else:
+                        self.logger.debug(f"'{filename}' exists more than {blender_relative_distance_limit} folders away "
+                                          f"from .blend file. Defaulting to absolute path and no copying.")
+                        output_dir = filepath_absolute[0:filepath_absolute.rfind('\\') + 1]
 
-            filepath_resolved = output_dir + filename
-            # print("Filepath org:" + filepath)
-            # print("Filename: " + filename)
-            # print("Filepath i3d: " + filepath_i3d)
-            # print("Out Dir: " + output_dir)
+                filepath_resolved = output_dir + filename
 
-            if filepath_resolved != filepath_absolute and filepath_resolved not in self._file_indexes:
-                if bpy.context.scene.i3dio.overwrite_files or not os.path.exists(filepath_i3d + output_dir + filename):
-                    # print("Path: " + filepath_i3d + output_dir)
-                    os.makedirs(filepath_i3d + output_dir, exist_ok=True)
-                    try:
-                        shutil.copy(filepath_absolute, filepath_i3d + output_dir)
-                    except shutil.SameFileError:
-                        pass  # Ignore writing file if it already exist
+                # Check to see if the generated output filepath is the same as the original filepath and the file isn't
+                # already added to the xml
+                if filepath_resolved != filepath_absolute:
+                    if filepath_resolved not in self._file_indexes:
+                        if bpy.context.scene.i3dio.overwrite_files or \
+                                not os.path.exists(filepath_i3d + output_dir + filename):
+                            # print("Path: " + filepath_i3d + output_dir)
+                            os.makedirs(filepath_i3d + output_dir, exist_ok=True)
+                            try:
+                                shutil.copy(filepath_absolute, filepath_i3d + output_dir)
+                            except shutil.SameFileError:
+                                pass  # Ignore if source and destination is the same file
+                            else:
+                                self.logger.info(f"'{filename}' copied to '{filepath_i3d + output_dir + filename}'")
+                    else:
+                        self.logger.info(f"'{filename}' is already indexed in i3d file")
 
-        # Predicate search does NOT play nicely with the filepath names, so we loop the old fashioned way
+        else:
+            self.logger.debug(f"'{filename}' was resolved to FS relative path '{filepath_resolved}'")
+
+        # Predicate search feature of ElemTree does NOT play nicely with the filepath names, so we loop the old
+        # fashioned way
         if filepath_resolved in self._file_indexes:
-            return self._file_indexes[filepath_resolved]
+            file_id = self._file_indexes[filepath_resolved]
         else:
             file_element = ET.SubElement(files_root, 'File')
             file_id = self.ids['file']
@@ -498,7 +521,9 @@ class Exporter:
 
             self._xml_write_int(file_element, 'fileId', file_id)
             self._xml_write_string(file_element, 'filename', filepath_resolved)
-            return file_id
+
+        self.logger.debug(f"'{filename}' has file ID {file_id}")
+        return file_id
 
     def _xml_scene_object_shape(self, node: SceneGraph.Node, node_element: ET.Element):
 
