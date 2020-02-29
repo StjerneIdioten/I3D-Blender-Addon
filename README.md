@@ -2,6 +2,11 @@
 [![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/ellerbrock/open-source-badges/)
 [![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.svg?v=103)](https://opensource.org/licenses/GPL-3.0/)
 
+As I am currently an university student, any amount will be greatly appreciated *(and will most likely be used for beer fueled coding binges, which translates into more features for the exporter)*
+
+[![](https://www.paypalobjects.com/en_US/DK/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=3BLFKTJDUC4Y6&currency_code=EUR&source=url)
+
+
 ## Table of Contents
 
 * [Description](#description)
@@ -15,7 +20,7 @@
 
 ## Description
 
-A community made project for updating the Giants Engine I3D exporter addon for blender 2.8
+A project for updating the Giants Engine I3D exporter addon for blender 2.8
 
 ## Introduction
 
@@ -42,11 +47,11 @@ Current Priorities listed in order
 
 ## Access
 
-Developement Access is not Guaranteed, you must have "some" experience at using  the following -
-
-1. Git version control
-2. Knowledge of Python 3
-3. Knowledge of Blender 2.8
+This has mostly been a solo project so far, but any help is appreciated.
+In case of wanting to join, the following knowledge is required:
+* Git version control
+* Knowledge of Python 3
+* Knowledge of Blender 2.8
 
 ## Sources
 
