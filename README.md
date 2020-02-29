@@ -1,7 +1,11 @@
 # Blender 2.8. Addon for i3D-Giants Game Engine
 [![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/ellerbrock/open-source-badges/)
 [![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.svg?v=103)](https://opensource.org/licenses/GPL-3.0/)
-[![codecov](https://codecov.io/gh/Tallion-07/Blender-2.8-Plug-in-Giants-Engine/branch/master/graph/badge.svg)](https://codecov.io/gh/Tallion-07/Blender-2.8-Plug-in-Giants-Engine)
+
+As I am currently an university student, any amount will be greatly appreciated *(and will most likely be used for beer fueled coding binges, which translates into more features for the exporter)*
+
+[![](https://www.paypalobjects.com/en_US/DK/i/btn/btn_donateCC_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=3BLFKTJDUC4Y6&currency_code=EUR&source=url)
+
 
 ## Table of Contents
 
@@ -16,76 +20,38 @@
 
 ## Description
 
-I3d-Giants File Addon for Blender 2.8 and also for future developement and compatability
-with future releases of either Farm Simulator or Blender
+A project for updating the Giants Engine I3D exporter addon for blender 2.8
 
 ## Introduction
 
-* The Main Objective is updating the Original Plugin written by GIANTS Software GmbH, to comply with Blender 2.8.
-* This Updated addon is not intended to be backwards compatible with any previous versions of
+There is an existing exporter for blender supplied by Giants, but this isn't officially supported for newer blender versions and the code is outdated. The support from Giants themselves has also been lackluster and this project aims to supply a new addon with support and features driven by community feedback.
 
-  * Blender 2.8+
-  * Python 3.7+
 
 ## Objectives
 
 Current Priorities listed in order
 
-1. To update code to be compliant for python 3.6+.
-2. Improve where required to standards as outlined by Blender.org for any addons.
-3. Any added functionality (if requested or possible) by the contrubuting community.
+1. Create a new addon, upholding standards put forth by both blender and python pep-8, that has a minimum of the same features as the currently available addon
+2. Keep addon up to date with new version of Farming Simulator and Blender.
+3. Add community requested features.
 
-* to keep Addon current
-* keep developing for future Blender Changes
 
 ## Technologies
-
-* Programming text editor
-
-Visual code studio
-        addons
-
-        for vscode
-        1. vscode-icons (nice eye candy)
-
-        for github
-        1. YAML (only required if you are contributing to the read.me or Wiki files)
-
-        for Blender
-        1. Blender Developement
-
-        for Python programming
-        1. Code runner
-
-        for Git and GIThub
-        1. Git extension pack
-        2. gitlens
-
-* Python 3.6
+* Python 3.7
 * PEP8-80 compliant (althought this may not always be possible
-* Blender 2.8
+* Blender 2.82
 
 ## Status
 
-* Currently Active
-* Identifying issues  Check project Board and Issues List
+* Working towards first feature-complete stable release
 
 ## Access
 
-As it is under the GNU General Public License as published by the Free Software Foundation, and Giants have yet to commit to
-"Officially" update the add-on.
-
-I have posted it here for anyone that either wants to assist, and also for any community collaberation.
-
-Deveolpement Access is not Guaranteed, you must have "some" experiance at using  the following -
-
-1. Github proceedures
-2. Knowledge of Python 3.6+
-3. Knowledge of Blender 2.8
-4. Keeping up to date as resonable to be aware of changes of the above for both current and future developement.
-
-I am also an Interstate Truck driver and on the road frequently (usually five or six days a week).
-If you decide to apply, you are free too, but do not expect to get access immediately (as in right now).
+This has mostly been a solo project so far, but any help is appreciated.
+In case of wanting to join, the following knowledge is required:
+* Git version control
+* Knowledge of Python 3
+* Knowledge of Blender 2.8
 
 ## Sources
 
@@ -103,7 +69,7 @@ If you decide to apply, you are free too, but do not expect to get access immedi
 
 More Source information available at [Blender.org](https://docs.blender.org/api/current/index.html)
 
-## Licence
+## License
 
 This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.
 
