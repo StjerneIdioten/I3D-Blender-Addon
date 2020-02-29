@@ -41,11 +41,12 @@ bl_info = {
     "author": "GIANTS Software, Jason Oppermann - Rebuild by StjerneIdioten",
     "description": "GIANTS i3D Game Engine Import-Export.",
     "version": (1, 0, 0),
-    "blender": (2, 81, 0),
+    "blender": (2, 82, 0),
     "location": "File > Import-Export",
     "warning": "First Unofficial Alpha Version",
     "support": "COMMUNITY",
-    "category": "Import-Export"
+    "category": "Import-Export",
+    "tracker_url": "https://github.com/StjerneIdioten/I3D-Blender-Addon"
 }
 
 
