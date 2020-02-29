@@ -371,7 +371,7 @@ class Exporter:
                             else:
                                 diffuse_image_path = color_connected_node.image.filepath
 
-                        except (AttributeError, IndexError) as error:
+                        except (AttributeError, IndexError, KeyError) as error:
                             self.logger.exception(f"{material.name!r} has an improperly setup Texture")
                         else:
                             if diffuse_image_path is not None:
@@ -392,7 +392,7 @@ class Exporter:
                         try:
                             normal_image_path = normal_node_socket.links[0].from_node.inputs['Color'].links[0] \
                                 .from_node.image.filepath
-                        except (AttributeError, IndexError) as error:
+                        except (AttributeError, IndexError, KeyError) as error:
                             self.logger.exception(f"{material.name!r} has an improperly setup Normalmap")
                         else:
                             self.logger.debug(f"{material.name!r} has Normalmap "
@@ -420,7 +420,7 @@ class Exporter:
                 if gloss_node is not None:
                     try:
                         gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
-                    except (AttributeError, IndexError) as error:
+                    except (AttributeError, IndexError, KeyError) as error:
                         self.logger.exception(f"{material.name!r} has an improperly setup Glossmap")
                     else:
                         self.logger.debug(f"{material.name!r} has Glossmap "
