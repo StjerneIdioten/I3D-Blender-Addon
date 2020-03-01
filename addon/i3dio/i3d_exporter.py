@@ -313,7 +313,13 @@ class Exporter:
             self.logger.debug(f"{node.blender_object.name!r} rotation(degrees): [{rotation}]")
 
             # Scale
-            scale = "{0:.6f} {1:.6f} {2:.6f}".format(*matrix.to_scale())
+            if matrix.is_negative:
+                self.logger.error(f"{node.blender_object.name!r} has one or more negative scaling components, "
+                                      f"which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
+                scale = "{0:.6f} {1:.6f} {2:.6f}".format(1, 1, 1)
+            else:
+                scale = "{0:.6f} {1:.6f} {2:.6f}".format(*matrix.to_scale())
+
             self._xml_write_string(node_element, 'scale', scale)
             self.logger.debug(f"{node.blender_object.name!r} scale: [{scale}]")
 
