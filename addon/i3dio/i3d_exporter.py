@@ -638,6 +638,7 @@ class Exporter:
                     for loop_index in triangle.loops:
                         vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
                         normal = mesh.loops[loop_index].normal
+                        color = mesh.vertex_colors.active.data[loop_index].color if (mesh.vertex_colors and mesh.vertex_colors.active) else None
                         vertex_data = {'p': f"{vertex.co.xyz[0]:.6f} "
                                             f"{vertex.co.xyz[1]:.6f} "
                                             f"{vertex.co.xyz[2]:.6f}",
@@ -646,8 +647,11 @@ class Exporter:
                                             f"{normal.xyz[1]:.6f} "
                                             f"{normal.xyz[2]:.6f}",
 
-                                       'uvs': {}
+                                       'uvs': {},
                                        }
+                        if color:
+                            vertex_data['c'] = f"{color[0]:.6f} {color[1]:.6f} {color[2]:.6f} {color[3]:.6f}"
+                            self._xml_write_bool(vertices_element, 'color', True)
 
                         # TODO: Check uv limit in GE
                         # Old addon only supported 4
@@ -668,6 +672,8 @@ class Exporter:
                             vertex_element = ET.SubElement(vertices_element, 'v')
                             self._xml_write_string(vertex_element, 'n', vertex_data['n'])
                             self._xml_write_string(vertex_element, 'p', vertex_data['p'])
+                            if color:
+                                self._xml_write_string(vertex_element, 'c', vertex_data['c'])
 
                             for uv_key, uv_data in vertex_data['uvs'].items():
                                 self._xml_write_string(vertex_element, uv_key, uv_data)
