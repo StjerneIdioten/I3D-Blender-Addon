@@ -699,6 +699,7 @@ class Exporter:
             self._xml_write_bool(vertices_element, 'tangent', True)
 
             obj.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
+            bpy.data.objects.remove(obj, do_unlink=True)  # Clean out the object copy
 
             # TODO: Write mesh related attributes
         else:
