@@ -37,16 +37,18 @@ import bpy
 print(__file__)
 
 bl_info = {
-    "name": "GIANTS I3D Exporter Tools",
-    "author": "GIANTS Software, Jason Oppermann - Rebuild by StjerneIdioten",
-    "description": "GIANTS i3D Game Engine Import-Export.",
+    "name": "Unofficial GIANTS I3D Exporter Tools",
+    "author": "StjerneIdioten, original by GIANTS Software, Jason Oppermann",
+    "description": "Exports blender projects into GIANTS I3D format for use in Giants Engine based games such as "
+                   "Farming Simulator",
     "version": (1, 0, 0),
     "blender": (2, 82, 0),
     "location": "File > Import-Export",
     "warning": "First Unofficial Alpha Version",
     "support": "COMMUNITY",
     "category": "Import-Export",
-    "tracker_url": "https://github.com/StjerneIdioten/I3D-Blender-Addon"
+    "tracker_url": "https://github.com/StjerneIdioten/I3D-Blender-Addon/issues",
+    "wiki_url": "https://github.com/StjerneIdioten/I3D-Blender-Addon/wiki"
 }
 
 
