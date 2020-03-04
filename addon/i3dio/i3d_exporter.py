@@ -597,6 +597,11 @@ class Exporter:
                 mesh.materials.append(bpy.data.materials.get('i3d_default_material'))
                 self.logger.info(f"{node.blender_object.name!r} assigning default material i3d_default_material")
 
+            # Vertices has been colour painted in this mesh
+            if len(mesh.vertex_colors):
+                self._xml_write_bool(vertices_element, 'color', True)
+                self.logger.info(f"{node.blender_object.name!r} has colour painted vertices")
+
             # Group triangles by subset, since they need to be exported in correct order per material subset to the i3d
             triangle_subsets = {}
             for triangle in mesh.loop_triangles:
@@ -649,10 +654,11 @@ class Exporter:
                                        'uvs': {},
                                        }
 
+                        # If there is vertex paint, then get the colour from the active layer since only one layer is
+                        # supported in GE
                         if len(mesh.vertex_colors):
-                            self._xml_write_bool(vertices_element, 'color', True)
-                            color = mesh.vertex_colors.active.data[vertex.index].color
-                            vertex_data['c'] = f"{color[0]:.6f} {color[1]:.6f} {color[2]:.6f} {1.0:.6f}"
+                            vertex_data['c'] = "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(
+                                *mesh.vertex_colors.active.data[loop_index].color)
 
                         # TODO: Check uv limit in GE
                         # Old addon only supported 4
@@ -673,11 +679,12 @@ class Exporter:
                             vertex_element = ET.SubElement(vertices_element, 'v')
                             self._xml_write_string(vertex_element, 'n', vertex_data['n'])
                             self._xml_write_string(vertex_element, 'p', vertex_data['p'])
-                            if color:
-                                self._xml_write_string(vertex_element, 'c', vertex_data['c'])
 
                             for uv_key, uv_data in vertex_data['uvs'].items():
                                 self._xml_write_string(vertex_element, uv_key, uv_data)
+
+                            if 'c' in vertex_data:
+                                self._xml_write_string(vertex_element, 'c', vertex_data['c'])
 
                             vertex_counter += 1
                             number_of_vertices += 1
