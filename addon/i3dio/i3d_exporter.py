@@ -349,7 +349,20 @@ class Exporter:
                     elif isinstance(val, int):
                         self._xml_write_int(element, prop.name_i3d, val)
                     elif isinstance(val, str):
-                        self._xml_write_string(element, prop.name_i3d, val)
+                        if name == 'collisionMask':  # Handling special case, might have to rethink the entire system
+                            try:
+                                val_decimal = int(val, 16)
+                            except ValueError as error:
+                                self.logger.error(f"Supplied value '{val}' for '{name}' is not a hex value")
+                            else:
+                                if 0 <= val_decimal <= 4294967295:  # Check that it is actually a 32-bit unsigned int
+                                    self._xml_write_int(element, prop.name_i3d, val_decimal)
+                                else:
+                                    self.logger.warning(f"Supplied value '{val}' for '{name}' is out of bounds."
+                                                        f" It should be within 0-ffffffff (32-bit unsigned)")
+                                    continue
+                        else:
+                            self._xml_write_string(element, prop.name_i3d, val)
 
     def _xml_add_material(self, material):
 

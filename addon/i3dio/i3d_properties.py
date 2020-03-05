@@ -42,10 +42,14 @@ defaults = {
     'depthMapBias': 0.0012,
     'depthMapSlopeScaleBias': 2.0,
     'collision': True,
+    'collisionMask': 'ff',
     'disabled': True,            # Used for certain properties like Enum, to tell the exporter not to export
     'dynamic': False,
     'static': False,
     'kinematic': False,
+    'compound': False,
+    'compoundChild': False,
+    'trigger': False,
     }
 
 
@@ -147,6 +151,7 @@ class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
             description="Visibility flag inside of Giants Engine, decoupled from blender visibility",
             default=defaults['visibility']
         )
+        location_i3d: StringProperty(default='IndexedTriangleSet', options={'SKIP_SAVE'})
 
     @register
     class clip_distance(bpy.types.PropertyGroup):
@@ -198,12 +203,47 @@ class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
 
     @register
     class collision(bpy.types.PropertyGroup):
-
         name_i3d: StringProperty(default='collision', options={'SKIP_SAVE'})
         value_i3d: BoolProperty(
             name="Collision",
             description="Does the object take part in collisions",
             default=defaults['collision']
+        )
+
+    @register
+    class collision_mask(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='collisionMask', options={'SKIP_SAVE'})
+        value_i3d: StringProperty(
+            name="Collision Mask",
+            description="The objects collision mask as a hexadecimal value",
+            default=defaults['collisionMask']
+        )
+
+    @register
+    class compound(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='compound', options={'SKIP_SAVE'})
+        value_i3d: BoolProperty(
+            name="Compound",
+            description="Compound",
+            default=defaults['compound']
+        )
+
+    @register
+    class compound_child(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='compoundChild', options={'SKIP_SAVE'})
+        value_i3d: BoolProperty(
+            name="Compound Child",
+            description="Compound Child",
+            default=defaults['compoundChild']
+        )
+
+    @register
+    class trigger(bpy.types.PropertyGroup):
+        name_i3d: StringProperty(default='trigger', options={'SKIP_SAVE'})
+        value_i3d: BoolProperty(
+            name="Trigger",
+            description="Trigger",
+            default=defaults['trigger']
         )
 
     visibility: PointerProperty(type=visibility)
@@ -213,6 +253,10 @@ class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
 
     rigid_body_type: PointerProperty(type=rigid_body_type)
     collision: PointerProperty(type=collision)
+    collision_mask: PointerProperty(type=collision_mask)
+    compound: PointerProperty(type=compound)
+    compound_child: PointerProperty(type=compound_child)
+    trigger: PointerProperty(type=trigger)
 
 
 @register

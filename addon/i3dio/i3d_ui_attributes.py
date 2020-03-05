@@ -79,8 +79,31 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
         row.prop(obj.i3d_attributes.rigid_body_type, 'name_i3d')
 
         if obj.i3d_attributes.rigid_body_type.name_i3d != 'disabled':
+            row_compound = layout.row()
+            row_compound.prop(obj.i3d_attributes.compound, 'value_i3d')
+
+            row_compound_child = layout.row()
+            row_compound_child.prop(obj.i3d_attributes.compound_child, 'value_i3d')
+
+            if obj.i3d_attributes.rigid_body_type.name_i3d == 'static':
+                row_compound.enabled = False
+                row_compound_child.enabled = False
+                obj.i3d_attributes.compound.property_unset('value_i3d')
+                obj.i3d_attributes.compound_child.property_unset('value_i3d')
+            else:
+                if obj.i3d_attributes.compound.value_i3d:
+                    row_compound_child.enabled = False
+                elif obj.i3d_attributes.compound_child.value_i3d:
+                    row_compound.enabled = False
+
             row = layout.row()
             row.prop(obj.i3d_attributes.collision, 'value_i3d')
+
+            row = layout.row()
+            row.prop(obj.i3d_attributes.collision_mask, 'value_i3d')
+
+            row = layout.row()
+            row.prop(obj.i3d_attributes.trigger, 'value_i3d')
 
 
 @register
