@@ -78,6 +78,8 @@ class I3D_IO_PT_merge_group_attributes(Panel):
 
         row = layout.row()
         row.prop(obj.i3d_merge_group, 'is_root')
+        if obj.i3d_merge_group.group_id is '':  # Defaults to a default initialized placeholder
+            row.enabled = False
 
         row = layout.row()
         row.prop(obj.i3d_merge_group, 'group_id')

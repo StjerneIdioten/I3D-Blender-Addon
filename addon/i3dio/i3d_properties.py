@@ -304,34 +304,62 @@ class I3DMergeGroup(bpy.types.PropertyGroup):
 class I3DMergeGroups(bpy.types.PropertyGroup):
     groups: CollectionProperty(type=I3DMergeGroup)
 
-    def add(self, group_name, obj):
+    def update(self, group_name, obj, prev_group_name):
 
-        if group_name not in self.groups:
-            print(f"Creating merge group '{group_name}'")
-            group = self.groups.add()
-            group.name = group_name
-            group.root = None
-        else:
-            print(f"Merge group '{group_name}' already exists")
-            group = self.groups[group_name]
+        # Remove object from children list of previous group
+        if prev_group_name is not '':
+            if len(self.groups[prev_group_name].children) == 1:
+                print(f"Last child gone, deleting group '{prev_group_name}'")
+                self.groups.remove(self.groups.find(prev_group_name))
+                print(f"Number of groups left: '{len(self.groups)}'")
+            else:
+                children = self.groups[prev_group_name].children
+                child_idx = None
+                for idx, child in enumerate(children):
+                    if child.object == obj:
+                        child_idx = idx
 
-        print(f"Adding {obj.name!r} to '{group_name}'")
-        group_member = group.children.add()
-        group_member.object = obj
+                children.remove(child_idx)
+                print(f"Removed child, children left: '{len(self.groups[prev_group_name].children)}'")
 
-    def remove(self, group_name, obj):
-        print(f"Removing {obj.name!r} from '{group_name}'")
+        # Add object to merge group if it isn't defaulted
+        if group_name != '':
+            if group_name not in self.groups:
+                print(f"Creating merge group '{group_name}'")
+                group = self.groups.add()
+                group.name = group_name
+                group.root = None
+            else:
+                print(f"Merge group '{group_name}' already exists")
+                group = self.groups[group_name]
+
+            print(f"Adding {obj.name!r} to '{group_name}'")
+            group_member = group.children.add()
+            group_member.object = obj
 
 
 @register
 class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
 
     def update_group(self, context):
-        print(f"Updated merge group to '{self.group_id}' for {context.object.name!r}")
-        context.scene.i3d_merge_groups.add(self.group_id, context.object)
+        print(f"Updated merge group to '{self.group_id}' for {context.object.name!r} from group '{self.prev_group_id}'")
+        bpy.context.scene.i3d_merge_groups.update(self.group_id, context.object, self.prev_group_id)
+        self.prev_group_id = self.group_id
+        self.is_root = False
 
     def update_root(self, context):
-        print(f"Updated is_root to '{self.is_root}' for {context.object.name!r}")
+        if self.group_id != '':
+            group = bpy.context.scene.i3d_merge_groups.groups[self.group_id]
+            if self.is_root:
+                if group.root is not None:
+                    group.root.i3d_merge_group.is_root = False
+                group.root = context.object
+                print(f"Root is now: {group.root.name!r}")
+            else:
+                if group.root == context.object:
+                    print(f"Removing {context.object!r} as root for group {group.name}")
+                    group.root = None
+                print(f"Removed root from {context.object.name!r}")
 
     is_root: BoolProperty(
         name="Root of merge group",
@@ -341,10 +369,11 @@ class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
     )
 
     group_id: StringProperty(name='Merge Group',
-                                       description='The merge group this object belongs to',
-                                       default='',
-                                       update=update_group)
-    group_reference: PointerProperty(type=I3DMergeGroup)
+                             description='The merge group this object belongs to',
+                             default='',
+                             update=update_group)
+
+    prev_group_id: StringProperty(default='')
 
 
 def register():
