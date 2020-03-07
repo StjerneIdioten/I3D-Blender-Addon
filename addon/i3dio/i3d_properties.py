@@ -23,7 +23,8 @@ from bpy.props import (
     EnumProperty,
     PointerProperty,
     FloatProperty,
-    IntProperty
+    IntProperty,
+    CollectionProperty,
 )
 
 classes = []
@@ -288,11 +289,71 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
     depth_map_slope_scale_bias: PointerProperty(type=depth_map_slope_scale_bias)
 
 
+@register
+class I3DMergeGroupMember(bpy.types.PropertyGroup):
+    object: PointerProperty(type=bpy.types.Object)
+
+
+@register
+class I3DMergeGroup(bpy.types.PropertyGroup):
+    root: PointerProperty(type=bpy.types.Object)
+    children: CollectionProperty(type=I3DMergeGroupMember)
+
+
+@register
+class I3DMergeGroups(bpy.types.PropertyGroup):
+    groups: CollectionProperty(type=I3DMergeGroup)
+
+    def add(self, group_name, obj):
+
+        if group_name not in self.groups:
+            print(f"Creating merge group '{group_name}'")
+            group = self.groups.add()
+            group.name = group_name
+            group.root = None
+        else:
+            print(f"Merge group '{group_name}' already exists")
+            group = self.groups[group_name]
+
+        print(f"Adding {obj.name!r} to '{group_name}'")
+        group_member = group.children.add()
+        group_member.object = obj
+
+    def remove(self, group_name, obj):
+        print(f"Removing {obj.name!r} from '{group_name}'")
+
+
+@register
+class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
+
+    def update_group(self, context):
+        print(f"Updated merge group to '{self.group_id}' for {context.object.name!r}")
+        context.scene.i3d_merge_groups.add(self.group_id, context.object)
+
+    def update_root(self, context):
+        print(f"Updated is_root to '{self.is_root}' for {context.object.name!r}")
+
+    is_root: BoolProperty(
+        name="Root of merge group",
+        description="Check if this object is gonna be the root object holding the mesh",
+        default=False,
+        update=update_root
+    )
+
+    group_id: StringProperty(name='Merge Group',
+                                       description='The merge group this object belongs to',
+                                       default='',
+                                       update=update_group)
+    group_reference: PointerProperty(type=I3DMergeGroup)
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
+    bpy.types.Scene.i3d_merge_groups = PointerProperty(type=I3DMergeGroups)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeTransformAttributes)
+    bpy.types.Object.i3d_merge_group = PointerProperty(type=I3DMergeGroupObjectData)
     bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
     bpy.types.Light.i3d_attributes = PointerProperty(type=I3DNodeLightAttributes)
 

@@ -59,6 +59,32 @@ class I3D_IO_PT_transform_attributes(Panel):
 
 
 @register
+class I3D_IO_PT_merge_group_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = 'Merge Group'
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_transform_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
+
+        row = layout.row()
+        row.prop(obj.i3d_merge_group, 'is_root')
+
+        row = layout.row()
+        row.prop(obj.i3d_merge_group, 'group_id')
+
+
+
+@register
 class I3D_IO_PT_rigid_body_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
