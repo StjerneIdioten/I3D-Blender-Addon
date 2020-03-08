@@ -241,7 +241,15 @@ class Exporter:
                 node_type = node.blender_object.type
                 self.logger.info(f"{node.blender_object.name!r} is parsed as a {node_type!r}")
                 if node_type == 'MESH':
-                    self._xml_scene_object_shape(node.blender_object, node_element)
+                    merge_group_id = node.blender_object.i3d_merge_group.group_id
+                    if merge_group_id != '':
+                        merge_group = bpy.context.scene.i3d_merge_groups.groups[merge_group_id]
+                        if merge_group.root is None:
+                            self._xml_scene_object_shape(node.blender_object, node_element)
+                        else:
+                            self._xml_merge_group(node.blender_object, node_element)
+                    else:
+                        self._xml_scene_object_shape(node.blender_object, node_element)
                 elif node_type == 'EMPTY':
                     self._xml_scene_object_transform_group(node, node_element)
                 elif node_type == 'LIGHT':
@@ -559,17 +567,6 @@ class Exporter:
 
         return pre_existed, indexed_triangle_element
 
-    def _xml_merge_groups(self):
-        self.logger.info("Resolving Mergegroups")
-        for merge_group in bpy.context.scene.i3d_merge_groups.groups:
-            self.logger.debug(f"Processing Mergegroup {merge_group.name!r}")
-            if merge_group.root is not None:
-                _, indexed_triangle_element = self._xml_add_indexed_triangle_set(f"{self.merge_group_prefix}"
-                                                                                 f"{merge_group.name}")
-
-            else:
-                self.logger.warning(f"Mergegroup '{merge_group.name}' has no root node! Group will be ignored.")
-
     def _object_to_evaluated_mesh(self, obj: bpy.types.Object) -> [bpy.types.Object, bpy.types.Mesh]:
         """Generates object based on whether or not modifiers are applied. Generates mesh from this object and
         converts it to correct coordinate-frame """
@@ -750,6 +747,27 @@ class Exporter:
             self._xml_write_int(subset_element, 'numIndices', subset[2])
             self._xml_write_int(subset_element, 'numVertices', subset[3])
 
+    def _xml_merge_groups(self):
+        self.logger.info("Resolving Mergegroups")
+        for merge_group in bpy.context.scene.i3d_merge_groups.groups:
+            self.logger.debug(f"Processing Mergegroup {merge_group.name!r}")
+            if merge_group.root is not None:
+                _, indexed_triangle_element = self._xml_add_indexed_triangle_set(f"{self.merge_group_prefix}"
+                                                                                 f"{merge_group.name}")
+                shape_id = int(indexed_triangle_element.get('shapeId'))
+                # Generate the evaluated root object mesh, which is gonna be the basis for the merge group mesh
+                mesh, obj_eval = self._object_to_evaluated_mesh(merge_group.root)
+                # Generate the triangle set of the root mesh
+                indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
+                # Write the root mesh as a normal object, since this is gonna be the first data.
+                self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element)
+
+            else:
+                self.logger.warning(f"Mergegroup '{merge_group.name}' has no root node! Group will be ignored.")
+
+    def _xml_merge_group(self, obj: bpy.types.Object, node_element: ET.Element):
+        self.logger.info(f"{obj.name!r} is exported as a mergegroup")
+
     def _xml_scene_object_shape(self, obj: bpy.types.Object, node_element: ET.Element):
         # Check if the mesh has already been defined in the i3d file
         pre_exists, indexed_triangle_element = self._xml_add_indexed_triangle_set(obj.data.name)
@@ -757,14 +775,14 @@ class Exporter:
         if not pre_exists:
             # Fetch an evaluated mesh and the object is was generated from (Needed to clear mesh from memory)
             mesh, obj_eval = self._object_to_evaluated_mesh(obj)
-
+            # Generate the indexed triangle set data needed to describe a mesh in i3d format
             indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
-
+            # Write this data to the triangle set, overwriting any existing data
             self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element, append=False)
-
-            obj_eval.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
-            bpy.data.objects.remove(obj_eval, do_unlink=True)  # Clean out the object copy
-
+            # Clean out the generated mesh so it does not stay in blender memory
+            obj_eval.to_mesh_clear()
+            # Clean out the object copy
+            bpy.data.objects.remove(obj_eval, do_unlink=True)
         else:
             self.logger.info(f"{obj.name!r} already exists in i3d file")
 
