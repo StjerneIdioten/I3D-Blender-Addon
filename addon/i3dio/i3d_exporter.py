@@ -604,6 +604,7 @@ class Exporter:
 
     def _mesh_to_indexed_triangle_set(self, mesh: bpy.types.Mesh, mesh_id: int) -> IndexedTriangleSet:
         indexed_triangle_set = IndexedTriangleSet()
+        indexed_triangle_set.name = mesh.name
         # Make sure that the mesh has some form of material added. Since GE requires at least a default material
         if len(mesh.materials) == 0:
             self.logger.info(f"{mesh.name!r} has no material assigned")
@@ -633,6 +634,9 @@ class Exporter:
         added_vertices = {}  # Key is a unique hashable vertex identifier and the value is a vertex index
         vertex_counter = 0  # Count the total number of unique vertices (total across all subsets)
         indices_total = 0  # Total amount of indices, since i3d format needs this number (for some reason)
+
+        if len(mesh.vertex_colors):
+            self.logger.info(f"{mesh.name!r} has colour painted vertices")
 
         for mat, subset in triangle_subsets.items():
             number_of_indices = 0
@@ -694,10 +698,57 @@ class Exporter:
                               f"{number_of_vertices} vertices and {number_of_indices} indices")
             indices_total += number_of_indices
 
+        self.logger.debug(f"{mesh.name!r} has a total of {len(indexed_triangle_set.vertices)} vertices")
+        self.logger.debug(f"{mesh.name!r} consists of {len(indexed_triangle_set.triangles)} triangles")
+        self.logger.info(f"{mesh.name!r} has {len(indexed_triangle_set.subsets)} subsets")
+
         return indexed_triangle_set
 
-    def _xml_indexed_triangle_set(self, indexed_triangle_set: IndexedTriangleSet, triangle_element):
-        pass
+    def _xml_indexed_triangle_set(self, indexed_triangle_set: IndexedTriangleSet, indexed_triangle_element: ET.Element,
+                                  append: bool = False):
+
+        # Vertices #################################################################################################
+        vertices_element = indexed_triangle_element.find(f".Vertices")
+
+        for vertex_data in indexed_triangle_set.vertices:
+            vertex_element = ET.SubElement(vertices_element, 'v')
+            self._xml_write_string(vertex_element, 'n', vertex_data['n'])
+            self._xml_write_string(vertex_element, 'p', vertex_data['p'])
+            if 'c' in vertex_data:
+                self._xml_write_string(vertex_element, 'c', vertex_data['c'])
+            for uv_key, uv_data in vertex_data['uvs'].items():
+                self._xml_write_string(vertex_element, uv_key, uv_data)
+
+        # Check the first vertex to see if it has a color component (Since they all have it then)
+        if 'c' in indexed_triangle_set.vertices[0]:
+            self._xml_write_bool(vertices_element, 'color', True)
+
+        # TODO: Check uv limit in GE, Old addon only supported 4
+        for count, uv in enumerate(indexed_triangle_set.vertices[0]['uvs']):
+            if count < 4:
+                self._xml_write_bool(vertices_element, f'uv{count}', True)
+
+        self._xml_write_int(vertices_element, 'count', len(indexed_triangle_set.vertices))
+        self._xml_write_bool(vertices_element, 'normal', True)
+        self._xml_write_bool(vertices_element, 'tangent', True)
+
+        # Triangles ################################################################################################
+        triangles_element = indexed_triangle_element.find(f".Triangles")
+        self._xml_write_int(triangles_element, 'count', len(indexed_triangle_set.triangles))
+        for triangle in indexed_triangle_set.triangles:
+            triangle_element = ET.SubElement(triangles_element, 't')
+            self._xml_write_string(triangle_element, 'vi', triangle)
+
+        # Subsets ##################################################################################################
+        subsets_element = indexed_triangle_element.find(f".Subsets")
+        self._xml_write_int(subsets_element, 'count', len(indexed_triangle_set.subsets))
+
+        for subset in indexed_triangle_set.subsets:
+            subset_element = ET.SubElement(subsets_element, 'Subset')
+            self._xml_write_int(subset_element, 'firstIndex', subset[0])
+            self._xml_write_int(subset_element, 'firstVertex', subset[1])
+            self._xml_write_int(subset_element, 'numIndices', subset[2])
+            self._xml_write_int(subset_element, 'numVertices', subset[3])
 
     def _xml_scene_object_shape(self, obj: bpy.types.Object, node_element: ET.Element):
         # Check if the mesh has already been defined in the i3d file
@@ -709,52 +760,7 @@ class Exporter:
 
             indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
 
-            # Vertices #################################################################################################
-            vertices_element = indexed_triangle_element.find(f".Vertices")
-
-            for vertex_data in indexed_triangle_set.vertices:
-                vertex_element = ET.SubElement(vertices_element, 'v')
-                self._xml_write_string(vertex_element, 'n', vertex_data['n'])
-                self._xml_write_string(vertex_element, 'p', vertex_data['p'])
-                if 'c' in vertex_data:
-                    self._xml_write_string(vertex_element, 'c', vertex_data['c'])
-                for uv_key, uv_data in vertex_data['uvs'].items():
-                    self._xml_write_string(vertex_element, uv_key, uv_data)
-
-            # Vertices has been colour painted in this mesh
-            if len(mesh.vertex_colors):
-                self._xml_write_bool(vertices_element, 'color', True)
-                self.logger.info(f"{obj.name!r} has colour painted vertices")
-
-            # TODO: Check uv limit in GE, Old addon only supported 4
-            for count, uv in enumerate(mesh.uv_layers):
-                if count < 4:
-                    self._xml_write_bool(vertices_element, f'uv{count}', True)
-
-            self.logger.debug(f"{obj.name!r} has a total of {len(indexed_triangle_set.vertices)} vertices")
-            self._xml_write_int(vertices_element, 'count', len(indexed_triangle_set.vertices))
-            self._xml_write_bool(vertices_element, 'normal', True)
-            self._xml_write_bool(vertices_element, 'tangent', True)
-
-            # Triangles ################################################################################################
-            triangles_element = indexed_triangle_element.find(f".Triangles")
-            self.logger.debug(f"{obj.name!r} consists of {len(mesh.loop_triangles)} triangles")
-            self._xml_write_int(triangles_element, 'count', len(mesh.loop_triangles))
-            for triangle in indexed_triangle_set.triangles:
-                triangle_element = ET.SubElement(triangles_element, 't')
-                self._xml_write_string(triangle_element, 'vi', triangle)
-
-            # Subsets ##################################################################################################
-            subsets_element = indexed_triangle_element.find(f".Subsets")
-            self._xml_write_int(subsets_element, 'count', len(indexed_triangle_set.subsets))
-            self.logger.info(f"{obj.name!r} has {len(indexed_triangle_set.subsets)} subsets")
-
-            for subset in indexed_triangle_set.subsets:
-                subset_element = ET.SubElement(subsets_element, 'Subset')
-                self._xml_write_int(subset_element, 'firstIndex', subset[0])
-                self._xml_write_int(subset_element, 'firstVertex', subset[1])
-                self._xml_write_int(subset_element, 'numIndices', subset[2])
-                self._xml_write_int(subset_element, 'numVertices', subset[3])
+            self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element, append=False)
 
             obj_eval.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
             bpy.data.objects.remove(obj_eval, do_unlink=True)  # Clean out the object copy
@@ -931,6 +937,7 @@ class Exporter:
 
 class IndexedTriangleSet(object):
     def __init__(self):
+        self.name = ''
         self.vertices = []
         self.triangles = []
         self.subsets = []
