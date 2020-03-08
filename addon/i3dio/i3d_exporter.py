@@ -241,7 +241,7 @@ class Exporter:
                 node_type = node.blender_object.type
                 self.logger.info(f"{node.blender_object.name!r} is parsed as a {node_type!r}")
                 if node_type == 'MESH':
-                    self._xml_scene_object_shape(node, node_element)
+                    self._xml_scene_object_shape(node.blender_object, node_element)
                 elif node_type == 'EMPTY':
                     self._xml_scene_object_transform_group(node, node_element)
                 elif node_type == 'LIGHT':
@@ -602,7 +602,7 @@ class Exporter:
 
         return mesh, obj_resolved
 
-    def _mesh_to_indexed_triangle_set(self, mesh: bpy.types.Mesh, mesh_id) -> IndexedTriangleSet:
+    def _mesh_to_indexed_triangle_set(self, mesh: bpy.types.Mesh, mesh_id: int) -> IndexedTriangleSet:
         indexed_triangle_set = IndexedTriangleSet()
         # Make sure that the mesh has some form of material added. Since GE requires at least a default material
         if len(mesh.materials) == 0:
@@ -696,13 +696,16 @@ class Exporter:
 
         return indexed_triangle_set
 
-    def _xml_scene_object_shape(self, node: SceneGraph.Node, node_element: ET.Element):
+    def _xml_indexed_triangle_set(self, indexed_triangle_set: IndexedTriangleSet, triangle_element):
+        pass
+
+    def _xml_scene_object_shape(self, obj: bpy.types.Object, node_element: ET.Element):
         # Check if the mesh has already been defined in the i3d file
-        pre_exists, indexed_triangle_element = self._xml_add_indexed_triangle_set(node.blender_object.data.name)
+        pre_exists, indexed_triangle_element = self._xml_add_indexed_triangle_set(obj.data.name)
         shape_id = int(indexed_triangle_element.get('shapeId'))
         if not pre_exists:
             # Fetch an evaluated mesh and the object is was generated from (Needed to clear mesh from memory)
-            mesh, obj = self._object_to_evaluated_mesh(node.blender_object)
+            mesh, obj_eval = self._object_to_evaluated_mesh(obj)
 
             indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
 
@@ -721,21 +724,21 @@ class Exporter:
             # Vertices has been colour painted in this mesh
             if len(mesh.vertex_colors):
                 self._xml_write_bool(vertices_element, 'color', True)
-                self.logger.info(f"{node.blender_object.name!r} has colour painted vertices")
+                self.logger.info(f"{obj.name!r} has colour painted vertices")
 
             # TODO: Check uv limit in GE, Old addon only supported 4
             for count, uv in enumerate(mesh.uv_layers):
                 if count < 4:
                     self._xml_write_bool(vertices_element, f'uv{count}', True)
 
-            self.logger.debug(f"{node.blender_object.name!r} has a total of {len(indexed_triangle_set.vertices)} vertices")
+            self.logger.debug(f"{obj.name!r} has a total of {len(indexed_triangle_set.vertices)} vertices")
             self._xml_write_int(vertices_element, 'count', len(indexed_triangle_set.vertices))
             self._xml_write_bool(vertices_element, 'normal', True)
             self._xml_write_bool(vertices_element, 'tangent', True)
 
             # Triangles ################################################################################################
             triangles_element = indexed_triangle_element.find(f".Triangles")
-            self.logger.debug(f"{node.blender_object.name!r} consists of {len(mesh.loop_triangles)} triangles")
+            self.logger.debug(f"{obj.name!r} consists of {len(mesh.loop_triangles)} triangles")
             self._xml_write_int(triangles_element, 'count', len(mesh.loop_triangles))
             for triangle in indexed_triangle_set.triangles:
                 triangle_element = ET.SubElement(triangles_element, 't')
@@ -744,7 +747,7 @@ class Exporter:
             # Subsets ##################################################################################################
             subsets_element = indexed_triangle_element.find(f".Subsets")
             self._xml_write_int(subsets_element, 'count', len(indexed_triangle_set.subsets))
-            self.logger.info(f"{node.blender_object.name!r} has {len(indexed_triangle_set.subsets)} subsets")
+            self.logger.info(f"{obj.name!r} has {len(indexed_triangle_set.subsets)} subsets")
 
             for subset in indexed_triangle_set.subsets:
                 subset_element = ET.SubElement(subsets_element, 'Subset')
@@ -753,13 +756,13 @@ class Exporter:
                 self._xml_write_int(subset_element, 'numIndices', subset[2])
                 self._xml_write_int(subset_element, 'numVertices', subset[3])
 
-            obj.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
-            bpy.data.objects.remove(obj, do_unlink=True)  # Clean out the object copy
+            obj_eval.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
+            bpy.data.objects.remove(obj_eval, do_unlink=True)  # Clean out the object copy
 
         else:
-            self.logger.info(f"{node.blender_object.name!r} already exists in i3d file")
+            self.logger.info(f"{obj.name!r} already exists in i3d file")
 
-        self.logger.debug(f"{node.blender_object.name!r} has shape ID {shape_id}")
+        self.logger.debug(f"{obj.name!r} has shape ID {shape_id}")
         self._xml_write_int(node_element, 'shapeId', shape_id)
         self._xml_write_string(node_element, 'materialIds', self.shape_material_indexes[shape_id])
 
