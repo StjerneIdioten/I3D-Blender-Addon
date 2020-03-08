@@ -87,7 +87,11 @@ class Exporter:
 
             # Merge Group
             self.merge_group_prefix = 'MergedMesh_'
+            self.merge_groups_ordering = {}
+            for merge_group in bpy.context.scene.i3d_merge_groups.groups:
+                self.merge_groups_ordering[merge_group.name] = []
 
+            self.merge_groups_root_elements = {}
             # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
             # should only be 'heavy' to call the first time a mesh is exported.
             # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
@@ -97,6 +101,7 @@ class Exporter:
             self._xml_build_scene_graph()
             self._xml_merge_groups()  # Handle merge groups before handling normal meshes
             self._xml_parse_scene_graph()
+            self._xml_resolve_skin_ids()
 
             self._xml_export_to_file()
 
@@ -644,7 +649,7 @@ class Exporter:
             for triangle in subset:
 
                 # Go through every loop that the triangle consists of and extract vertex information
-                triangle_vertex_index = ""  # The vertices from the vertex list that specify this triangle
+                triangle_vertex_index = []  # The vertices from the vertex list that specify this triangle
                 for loop_index in triangle.loops:
                     vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
                     normal = mesh.loops[loop_index].normal
@@ -683,10 +688,10 @@ class Exporter:
                         vertex_counter += 1
                         number_of_vertices += 1
 
-                    triangle_vertex_index += f"{added_vertices[vertex_item]} "
+                    triangle_vertex_index.append(added_vertices[vertex_item])
 
                 number_of_indices += 3  # 3 loops = 3 indices per triangle
-                indexed_triangle_set.triangles.append(triangle_vertex_index.strip(' '))
+                indexed_triangle_set.triangles.append(triangle_vertex_index)
 
             indexed_triangle_set.subsets[-1].append(number_of_indices)
             indexed_triangle_set.subsets[-1].append(number_of_vertices)
@@ -702,7 +707,7 @@ class Exporter:
         return indexed_triangle_set
 
     def _xml_indexed_triangle_set(self, indexed_triangle_set: IndexedTriangleSet, indexed_triangle_element: ET.Element,
-                                  append: bool = False):
+                                  bind_id=None, append=False):
 
         # Vertices #################################################################################################
         vertices_element = indexed_triangle_element.find(f".Vertices")
@@ -715,6 +720,8 @@ class Exporter:
                 self._xml_write_string(vertex_element, 'c', vertex_data['c'])
             for uv_key, uv_data in vertex_data['uvs'].items():
                 self._xml_write_string(vertex_element, uv_key, uv_data)
+            if bind_id is not None:
+                self._xml_write_int(vertex_element, 'bi', bind_id)
 
         # Check the first vertex to see if it has a color component (Since they all have it then)
         if 'c' in indexed_triangle_set.vertices[0]:
@@ -725,27 +732,62 @@ class Exporter:
             if count < 4:
                 self._xml_write_bool(vertices_element, f'uv{count}', True)
 
-        self._xml_write_int(vertices_element, 'count', len(indexed_triangle_set.vertices))
+        self._xml_write_int(vertices_element,
+                            'count',
+                            len(indexed_triangle_set.vertices) + int(vertices_element.get('count', 0)))
         self._xml_write_bool(vertices_element, 'normal', True)
         self._xml_write_bool(vertices_element, 'tangent', True)
 
         # Triangles ################################################################################################
         triangles_element = indexed_triangle_element.find(f".Triangles")
-        self._xml_write_int(triangles_element, 'count', len(indexed_triangle_set.triangles))
+
+        prev_triangle_count = int(triangles_element.get('count', 0))
+
         for triangle in indexed_triangle_set.triangles:
             triangle_element = ET.SubElement(triangles_element, 't')
-            self._xml_write_string(triangle_element, 'vi', triangle)
+            triangle_vertex_index = ""
+            for elem in triangle:
+                triangle_vertex_index += f"{elem + prev_triangle_count} "
+            
+            self._xml_write_string(triangle_element, 'vi', triangle_vertex_index.strip())
+
+        self._xml_write_int(triangles_element,
+                            'count',
+                            len(indexed_triangle_set.triangles) + prev_triangle_count)
 
         # Subsets ##################################################################################################
         subsets_element = indexed_triangle_element.find(f".Subsets")
         self._xml_write_int(subsets_element, 'count', len(indexed_triangle_set.subsets))
 
-        for subset in indexed_triangle_set.subsets:
-            subset_element = ET.SubElement(subsets_element, 'Subset')
-            self._xml_write_int(subset_element, 'firstIndex', subset[0])
-            self._xml_write_int(subset_element, 'firstVertex', subset[1])
-            self._xml_write_int(subset_element, 'numIndices', subset[2])
-            self._xml_write_int(subset_element, 'numVertices', subset[3])
+        if append:
+            subset_element = subsets_element.find(f".Subset")
+            if len(indexed_triangle_set.subsets) > 1:
+                self.logger.error(f"Multiple subsets(materials) are not supported for mergegroups! "
+                                  f"This will give weird behaviour")
+            else:
+                subset = indexed_triangle_set.subsets[0]
+                self._xml_write_int(subset_element, 'firstIndex', subset[0])
+                self._xml_write_int(subset_element, 'firstVertex', subset[1])
+                self._xml_write_int(subset_element, 'numIndices', subset[2] + int(subset_element.get('numIndices', 0)))
+                self._xml_write_int(subset_element, 'numVertices', subset[3] + int(subset_element.get('numVertices', 0)))
+        else:
+            for idx, subset in enumerate(indexed_triangle_set.subsets):
+                subset_element = ET.SubElement(subsets_element, 'Subset')
+                self._xml_write_int(subset_element, 'firstIndex', subset[0])
+                self._xml_write_int(subset_element, 'firstVertex', subset[1])
+                self._xml_write_int(subset_element, 'numIndices', subset[2])
+                self._xml_write_int(subset_element, 'numVertices', subset[3])
+
+    def _xml_resolve_skin_ids(self):
+        scene_root = self._tree.find('Scene')
+        for merge_group in bpy.context.scene.i3d_merge_groups.groups:
+            self.logger.debug(f"Name of root '{merge_group.root.name}'")
+            root_element = self.merge_groups_root_elements[merge_group.name]
+            skin_bind = ""
+            for obj_name in self.merge_groups_ordering[merge_group.name]:
+                skin_bind += f"{self._scene_graph.nodes_reverse[obj_name]:d} "
+
+            self._xml_write_string(root_element, 'skinBindNodeIds', skin_bind.strip())
 
     def _xml_merge_groups(self):
         self.logger.info("Resolving Mergegroups")
@@ -760,13 +802,30 @@ class Exporter:
                 # Generate the triangle set of the root mesh
                 indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
                 # Write the root mesh as a normal object, since this is gonna be the first data.
-                self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element)
-
+                self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element, bind_id=0, append=False)
+                self.merge_groups_ordering[merge_group.name].append(merge_group.root.name)
+                # Clean out mesh
+                obj_eval.to_mesh_clear()
+                # Clean out the object copy
+                bpy.data.objects.remove(obj_eval, do_unlink=True)
+                # Generate IndexedTriangleSet for every child and append to the root one
+                for bind_id, merge_group_member in enumerate(merge_group.children):
+                    if merge_group_member.object != merge_group.root:
+                        mesh, obj_eval = self._object_to_evaluated_mesh(merge_group_member.object)
+                        indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
+                        self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element, bind_id=bind_id, append=True)
+                        self.merge_groups_ordering[merge_group.name].append(merge_group_member.object.name)
+                        obj_eval.to_mesh_clear()
+                        bpy.data.objects.remove(obj_eval, do_unlink=True)
             else:
                 self.logger.warning(f"Mergegroup '{merge_group.name}' has no root node! Group will be ignored.")
 
     def _xml_merge_group(self, obj: bpy.types.Object, node_element: ET.Element):
         self.logger.info(f"{obj.name!r} is exported as a mergegroup")
+        merge_group_id = obj.i3d_merge_group.group_id
+        merge_group = bpy.context.scene.i3d_merge_groups.groups[merge_group_id]
+        if merge_group.root == obj:
+            self.merge_groups_root_elements[merge_group.name] = node_element
 
     def _xml_scene_object_shape(self, obj: bpy.types.Object, node_element: ET.Element):
         # Check if the mesh has already been defined in the i3d file
@@ -989,6 +1048,7 @@ class SceneGraph(object):
             'node': 0
         }
         self.nodes = {}
+        self.nodes_reverse = {}
         self.shapes = {}
         self.materials = {}
         self.files = {}
@@ -1020,6 +1080,8 @@ class SceneGraph(object):
                  parent: SceneGraph.Node = None) -> SceneGraph.Node:
         new_node = SceneGraph.Node(self.ids['node'], blender_object, parent)
         self.nodes[new_node.id] = new_node
+        if blender_object is not None:
+            self.nodes_reverse[blender_object.name] = new_node.id
         self.ids['node'] += 1
         return new_node
 
