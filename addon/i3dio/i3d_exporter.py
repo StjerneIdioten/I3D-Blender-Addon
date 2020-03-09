@@ -573,7 +573,8 @@ class Exporter:
 
         return pre_existed, indexed_triangle_element
 
-    def _object_to_evaluated_mesh(self, obj: bpy.types.Object) -> [bpy.types.Object, bpy.types.Mesh]:
+    def _object_to_evaluated_mesh(self, obj: bpy.types.Object,
+                                  from_frame=None) -> [bpy.types.Object, bpy.types.Mesh]:
         """Generates object based on whether or not modifiers are applied. Generates mesh from this object and
         converts it to correct coordinate-frame """
         if bpy.context.scene.i3dio.apply_modifiers:
@@ -585,7 +586,11 @@ class Exporter:
             obj_resolved = obj.copy()
             self.logger.info(f"{obj.name!r} is exported without modifiers applied")
 
+        # Get the mesh from the resolved object, which contains all of the modifiers applied (but not object transform)
         mesh = obj_resolved.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
+
+        if from_frame is not None:
+            mesh.transform(from_frame.inverted() @ obj_resolved.matrix_world)
 
         conversion_matrix = self._global_matrix
         if bpy.context.scene.i3dio.apply_unit_scale:
@@ -819,7 +824,7 @@ class Exporter:
                 bind_id = 1
                 for merge_group_member in merge_group.children:
                     if merge_group_member.object != merge_group.root:
-                        mesh, obj_eval = self._object_to_evaluated_mesh(merge_group_member.object)
+                        mesh, obj_eval = self._object_to_evaluated_mesh(merge_group_member.object, from_frame=merge_group.root.matrix_world)
                         indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
                         self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element, bind_id=bind_id, append=True)
                         self.merge_groups_ordering[merge_group.name].append(merge_group_member.object.name)
