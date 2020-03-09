@@ -88,8 +88,12 @@ class Exporter:
             # Merge Group
             self.merge_group_prefix = 'MergedMesh_'
             self.merge_groups_ordering = {}
+            self.logger.info(f"Mergegroups: {len(bpy.context.scene.i3d_merge_groups.groups)}")
             for merge_group in bpy.context.scene.i3d_merge_groups.groups:
+                self.logger.info(f"Mergegroup '{merge_group.name}' has {len(merge_group.children)} children")
                 self.merge_groups_ordering[merge_group.name] = []
+                for child in merge_group.children:
+                    self.logger.debug(f"\t{child.object.name!r}")
 
             self.merge_groups_root_elements = {}
             self.merge_group_shape_ids = {}
@@ -823,7 +827,9 @@ class Exporter:
                 # Generate IndexedTriangleSet for every child and append to the root one
                 bind_id = 1
                 for merge_group_member in merge_group.children:
+                    self.logger.debug(f"Processing Mergegroupmember {merge_group_member.object.name!r}")
                     if merge_group_member.object != merge_group.root:
+                        self.logger.debug(f"{merge_group_member.object.name!r} isn't the root")
                         mesh, obj_eval = self._object_to_evaluated_mesh(merge_group_member.object, from_frame=merge_group.root.matrix_world)
                         indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
                         self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element, bind_id=bind_id, append=True)
@@ -831,6 +837,8 @@ class Exporter:
                         obj_eval.to_mesh_clear()
                         bpy.data.objects.remove(obj_eval, do_unlink=True)
                         bind_id += 1
+                    else:
+                        self.logger.debug(f"{merge_group_member.object.name!r} is the root")
             else:
                 self.logger.warning(f"Mergegroup '{merge_group.name}' has no root node! Group will be ignored.")
 
