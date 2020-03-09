@@ -92,6 +92,7 @@ class Exporter:
                 self.merge_groups_ordering[merge_group.name] = []
 
             self.merge_groups_root_elements = {}
+            self.merge_group_shape_ids = {}
             # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
             # should only be 'heavy' to call the first time a mesh is exported.
             # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
@@ -626,7 +627,8 @@ class Exporter:
                 # TODO: Look at this material stuff
                 material_id = self._xml_add_material(triangle_material)
                 if mesh_id in self.shape_material_indexes.keys():
-                    self.shape_material_indexes[mesh_id] += f",{material_id:d}"
+                    if mesh_id not in self.merge_group_shape_ids.values():
+                        self.shape_material_indexes[mesh_id] += f",{material_id:d}"
                 else:
                     self.shape_material_indexes[mesh_id] = f"{material_id:d}"
 
@@ -712,6 +714,9 @@ class Exporter:
         # Vertices #################################################################################################
         vertices_element = indexed_triangle_element.find(f".Vertices")
 
+        if bind_id is not None:
+            self._xml_write_bool(vertices_element, 'singleblendweights', True)
+
         for vertex_data in indexed_triangle_set.vertices:
             vertex_element = ET.SubElement(vertices_element, 'v')
             self._xml_write_string(vertex_element, 'n', vertex_data['n'])
@@ -732,6 +737,8 @@ class Exporter:
             if count < 4:
                 self._xml_write_bool(vertices_element, f'uv{count}', True)
 
+        prev_vertex_count = int(vertices_element.get('count', 0))
+
         self._xml_write_int(vertices_element,
                             'count',
                             len(indexed_triangle_set.vertices) + int(vertices_element.get('count', 0)))
@@ -741,19 +748,17 @@ class Exporter:
         # Triangles ################################################################################################
         triangles_element = indexed_triangle_element.find(f".Triangles")
 
-        prev_triangle_count = int(triangles_element.get('count', 0))
-
         for triangle in indexed_triangle_set.triangles:
             triangle_element = ET.SubElement(triangles_element, 't')
             triangle_vertex_index = ""
             for elem in triangle:
-                triangle_vertex_index += f"{elem + prev_triangle_count} "
-            
+                triangle_vertex_index += f"{elem + prev_vertex_count} "
+
             self._xml_write_string(triangle_element, 'vi', triangle_vertex_index.strip())
 
         self._xml_write_int(triangles_element,
                             'count',
-                            len(indexed_triangle_set.triangles) + prev_triangle_count)
+                            len(indexed_triangle_set.triangles) + int(triangles_element.get('count', 0)))
 
         # Subsets ##################################################################################################
         subsets_element = indexed_triangle_element.find(f".Subsets")
@@ -797,6 +802,8 @@ class Exporter:
                 _, indexed_triangle_element = self._xml_add_indexed_triangle_set(f"{self.merge_group_prefix}"
                                                                                  f"{merge_group.name}")
                 shape_id = int(indexed_triangle_element.get('shapeId'))
+                # Keep a reference to the IndexedTriangleElement ID. Which is needed for the root node in the scenegraph
+                self.merge_group_shape_ids[merge_group.name] = shape_id
                 # Generate the evaluated root object mesh, which is gonna be the basis for the merge group mesh
                 mesh, obj_eval = self._object_to_evaluated_mesh(merge_group.root)
                 # Generate the triangle set of the root mesh
@@ -809,7 +816,8 @@ class Exporter:
                 # Clean out the object copy
                 bpy.data.objects.remove(obj_eval, do_unlink=True)
                 # Generate IndexedTriangleSet for every child and append to the root one
-                for bind_id, merge_group_member in enumerate(merge_group.children):
+                bind_id = 1
+                for merge_group_member in merge_group.children:
                     if merge_group_member.object != merge_group.root:
                         mesh, obj_eval = self._object_to_evaluated_mesh(merge_group_member.object)
                         indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
@@ -817,6 +825,7 @@ class Exporter:
                         self.merge_groups_ordering[merge_group.name].append(merge_group_member.object.name)
                         obj_eval.to_mesh_clear()
                         bpy.data.objects.remove(obj_eval, do_unlink=True)
+                        bind_id += 1
             else:
                 self.logger.warning(f"Mergegroup '{merge_group.name}' has no root node! Group will be ignored.")
 
@@ -826,6 +835,9 @@ class Exporter:
         merge_group = bpy.context.scene.i3d_merge_groups.groups[merge_group_id]
         if merge_group.root == obj:
             self.merge_groups_root_elements[merge_group.name] = node_element
+            self._xml_write_int(node_element, 'shapeId', self.merge_group_shape_ids[merge_group.name])
+            self._xml_write_string(node_element, 'materialIds',
+                                   self.shape_material_indexes[self.merge_group_shape_ids[merge_group.name]])
 
     def _xml_scene_object_shape(self, obj: bpy.types.Object, node_element: ET.Element):
         # Check if the mesh has already been defined in the i3d file
