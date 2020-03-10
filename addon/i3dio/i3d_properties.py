@@ -16,6 +16,7 @@
  ##### END GPL LICENSE BLOCK #####
 """
 
+import logging
 import bpy
 from bpy.props import (
     StringProperty,
@@ -48,6 +49,16 @@ defaults = {
     'static': False,
     'kinematic': False,
     }
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.handlers = []  # Clear handlers between runs since the logging module keeps track outside addon
+formatter = logging.Formatter('%(module)s:%(funcName)s:%(levelname)s: %(message)s')
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.DEBUG)
+logger.addHandler(console_handler)
+logger.info(f"Initialized logger for {__name__} module")
 
 
 def register(cls):
@@ -260,6 +271,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     non_renderable: PointerProperty(type=non_renderable)
     distance_blending: PointerProperty(type=distance_blending)
 
+
 @register
 class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
@@ -299,67 +311,90 @@ class I3DMergeGroup(bpy.types.PropertyGroup):
     root: PointerProperty(type=bpy.types.Object)
     children: CollectionProperty(type=I3DMergeGroupMember)
 
+    def add_to_children(self, obj):
+        self.children.add().object = obj
+
+    def remove_from_children(self, obj):
+        for idx, child in enumerate(self.children):
+            if child.object == obj:
+                self.children.remove(idx)
+
 
 @register
 class I3DMergeGroups(bpy.types.PropertyGroup):
     groups: CollectionProperty(type=I3DMergeGroup)
 
-    def update(self, group_name, obj, prev_group_name):
+    def add_to_mergegroup(self, group_name, obj):
+        logger.debug(f"Adding object {obj.name!r} to mergegroup '{group_name}'")
+        if group_name not in self.groups:
+            logger.debug(f"'{group_name}' is a new mergegroup")
+            self.groups.add().name = group_name
+        self.groups[group_name].add_to_children(obj)
 
-        # Remove object from children list of previous group
-        if prev_group_name is not '':
-            if len(self.groups[prev_group_name].children) == 1:
-                print(f"Last child gone, deleting group '{prev_group_name}'")
-                self.groups.remove(self.groups.find(prev_group_name))
-                print(f"Number of groups left: '{len(self.groups)}'")
-            else:
-                children = self.groups[prev_group_name].children
-                child_idx = None
-                for idx, child in enumerate(children):
-                    if child.object == obj:
-                        child_idx = idx
+    def remove_from_mergegroup(self, group_name, obj):
+        logger.debug(f"Removing object {obj.name!r} from mergegroup '{group_name}'")
+        group = self.groups[group_name]
+        group.remove_from_children(obj)
+        if len(group.children) == 0:
+            logger.debug(f"{obj.name!r} was the last child in mergegroup '{group_name}', deleting mergegroup")
+            self.groups.remove(self.groups.find(group_name))
 
-                children.remove(child_idx)
-                print(f"Removed child, children left: '{len(self.groups[prev_group_name].children)}'")
+    def set_root_on_mergegroup(self, group_name, obj):
+        logger.debug(f"Setting object {obj.name!r} as root for mergegroup '{group_name}'")
 
-        # Add object to merge group if it isn't defaulted
-        if group_name != '':
-            if group_name not in self.groups:
-                print(f"Creating merge group '{group_name}'")
-                group = self.groups.add()
-                group.name = group_name
-                group.root = None
-            else:
-                print(f"Merge group '{group_name}' already exists")
-                group = self.groups[group_name]
+        root_obj = self.groups[group_name].root
+        if root_obj is not None:
+            self.groups[group_name].root.i3d_merge_group.is_root = False
 
-            print(f"Adding {obj.name!r} to '{group_name}'")
-            group_member = group.children.add()
-            group_member.object = obj
+        self.groups[group_name].root = obj
+
+    def reset_root_on_mergegroup(self, group_name):
+        logger.debug(f"Resetting root on mergegroup '{group_name}'")
+        self.groups[group_name].root = None
 
 
 @register
 class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
 
     def update_group(self, context):
-        print(f"Updated merge group to '{self.group_id}' for {context.object.name!r} from group '{self.prev_group_id}'")
-        bpy.context.scene.i3d_merge_groups.update(self.group_id, context.object, self.prev_group_id)
-        self.prev_group_id = self.group_id
-        self.is_root = False
+        if self.group_id == self.prev_group_id:
+            logger.debug(f"{context.object.name!r} mergegroup updated, but value was not changed")
+        else:
+            if self.prev_group_id == '':
+                logger.debug(f"{context.object.name!r} added to mergegroup '{self.group_id}'")
+                bpy.context.scene.i3d_merge_groups.add_to_mergegroup(self.group_id, context.object)
+            else:
+                if self.is_root:
+                    bpy.context.scene.i3d_merge_groups.reset_root_on_mergegroup(self.prev_group_id)
+
+                if self.group_id == '':
+                    logger.debug(f"{context.object.name!r} removed from mergegroup '{self.prev_group_id}'")
+                    bpy.context.scene.i3d_merge_groups.remove_from_mergegroup(self.prev_group_id, context.object)
+                elif self.group_id != '':
+                    logger.debug(f"{context.object.name!r} mergegroup changed to '{self.group_id}' from '{self.prev_group_id}'")
+                    bpy.context.scene.i3d_merge_groups.remove_from_mergegroup(self.prev_group_id, context.object)
+                    bpy.context.scene.i3d_merge_groups.add_to_mergegroup(self.group_id, context.object)
+
+                if self.is_root:
+                    self.is_root = False
+
+    def get_group_id(self):
+        # Use the dict access to avoid recursion (Since this way does not call the getter)
+        return self.get('group_id', '')
+
+    def set_group_id(self, value):
+        # Use the dict access to avoid recursion (Since this way does not call the setters/getters)
+        self['prev_group_id'] = self.get('group_id', '')
+        self['group_id'] = value
+        logger.debug(f"'group_id' set with value '{value}'. 'prev_group_id' set with value '{self['prev_group_id']}'")
 
     def update_root(self, context):
-        if self.group_id != '':
-            group = bpy.context.scene.i3d_merge_groups.groups[self.group_id]
-            if self.is_root:
-                if group.root is not None:
-                    group.root.i3d_merge_group.is_root = False
-                group.root = context.object
-                print(f"Root is now: {group.root.name!r}")
-            else:
-                if group.root == context.object:
-                    print(f"Removing {context.object!r} as root for group {group.name}")
-                    group.root = None
-                print(f"Removed root from {context.object.name!r}")
+        logger.debug(f"{context.object.name!r} update root field to '{self.is_root}'")
+        if self.is_root:
+            bpy.context.scene.i3d_merge_groups.set_root_on_mergegroup(self.group_id, context.object)
+        else:
+            if bpy.context.scene.i3d_merge_groups.groups[self.group_id].root == context.object:
+                bpy.context.scene.i3d_merge_groups.reset_root_on_mergegroup(self.group_id)
 
     is_root: BoolProperty(
         name="Root of merge group",
@@ -371,7 +406,9 @@ class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
     group_id: StringProperty(name='Merge Group',
                              description='The merge group this object belongs to',
                              default='',
-                             update=update_group)
+                             update=update_group,
+                             get=get_group_id,
+                             set=set_group_id)
 
     prev_group_id: StringProperty(default='')
 

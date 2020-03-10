@@ -90,6 +90,10 @@ class Exporter:
             self.merge_groups_ordering = {}
             self.logger.info(f"Mergegroups: {len(bpy.context.scene.i3d_merge_groups.groups)}")
             for merge_group in bpy.context.scene.i3d_merge_groups.groups:
+                if merge_group.root is not None:
+                    self.logger.info(f"Mergegroup '{merge_group.name}' has root node {merge_group.root.name!r}")
+                else:
+                    self.logger.info(f"Mergegroup '{merge_group.name}' has no root")
                 self.logger.info(f"Mergegroup '{merge_group.name}' has {len(merge_group.children)} children")
                 self.merge_groups_ordering[merge_group.name] = []
                 for child in merge_group.children:
@@ -795,13 +799,14 @@ class Exporter:
     def _xml_resolve_skin_ids(self):
         scene_root = self._tree.find('Scene')
         for merge_group in bpy.context.scene.i3d_merge_groups.groups:
-            self.logger.debug(f"Name of root '{merge_group.root.name}'")
-            root_element = self.merge_groups_root_elements[merge_group.name]
-            skin_bind = ""
-            for obj_name in self.merge_groups_ordering[merge_group.name]:
-                skin_bind += f"{self._scene_graph.nodes_reverse[obj_name]:d} "
+            if merge_group.root is not None:
+                self.logger.debug(f"Name of root '{merge_group.root.name}'")
+                root_element = self.merge_groups_root_elements[merge_group.name]
+                skin_bind = ""
+                for obj_name in self.merge_groups_ordering[merge_group.name]:
+                    skin_bind += f"{self._scene_graph.nodes_reverse[obj_name]:d} "
 
-            self._xml_write_string(root_element, 'skinBindNodeIds', skin_bind.strip())
+                self._xml_write_string(root_element, 'skinBindNodeIds', skin_bind.strip())
 
     def _xml_merge_groups(self):
         self.logger.info("Resolving Mergegroups")
