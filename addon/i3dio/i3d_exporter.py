@@ -87,20 +87,8 @@ class Exporter:
 
             # Merge Group
             self.merge_group_prefix = 'MergedMesh_'
-            self.merge_groups_ordering = {}
-            self.logger.info(f"Mergegroups: {len(bpy.context.scene.i3d_merge_groups.groups)}")
-            for merge_group in bpy.context.scene.i3d_merge_groups.groups:
-                if merge_group.root is not None:
-                    self.logger.info(f"Mergegroup '{merge_group.name}' has root node {merge_group.root.name!r}")
-                else:
-                    self.logger.info(f"Mergegroup '{merge_group.name}' has no root")
-                self.logger.info(f"Mergegroup '{merge_group.name}' has {len(merge_group.children)} children")
-                self.merge_groups_ordering[merge_group.name] = []
-                for child in merge_group.children:
-                    self.logger.debug(f"\t{child.object.name!r}")
+            self.merge_groups = {}
 
-            self.merge_groups_root_elements = {}
-            self.merge_group_shape_ids = {}
             # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
             # should only be 'heavy' to call the first time a mesh is exported.
             # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
@@ -108,9 +96,18 @@ class Exporter:
 
             self._xml_build_skeleton_structure()
             self._xml_build_scene_graph()
-            self._xml_merge_groups()  # Handle merge groups before handling normal meshes
             self._xml_parse_scene_graph()
+            # Resolve skin id's for mergegroups, since this information requires all of the nodes to have been parsed
             self._xml_resolve_skin_ids()
+            self.logger.info(f"Mergegroups: {len(self.merge_groups)}")
+            for name, merge_group in self.merge_groups.items():
+                if merge_group.root_object is not None:
+                    self.logger.info(f"Mergegroup '{name}' has root node {merge_group.root_object.name!r}")
+                else:
+                    self.logger.info(f"Mergegroup '{name}' has no root")
+                self.logger.info(f"Mergegroup '{name}' has {len(merge_group.members)} members (Root not counted)")
+                for member in merge_group.members:
+                    self.logger.debug(f"\t{member.name!r}")
 
             self._xml_export_to_file()
 
@@ -255,14 +252,9 @@ class Exporter:
                 node_type = node.blender_object.type
                 self.logger.info(f"{node.blender_object.name!r} is parsed as a {node_type!r}")
                 if node_type == 'MESH':
-                    merge_group_id = node.blender_object.i3d_merge_group.group_id
-                    if merge_group_id != '':
-                        merge_group = bpy.context.scene.i3d_merge_groups.groups[merge_group_id]
-                        if merge_group.root is None:
-                            self._xml_scene_object_shape(node.blender_object, node_element)
-                        else:
-                            self._xml_merge_group(node.blender_object, node_element)
-                    else:
+                    if node.blender_object.i3d_merge_group.group_id != '':  # If this mesh is part of a mergegroup
+                        self._xml_merge_group(node.blender_object, node_element)
+                    else:  # This is a regular object with no mergegroup
                         self._xml_scene_object_shape(node.blender_object, node_element)
                 elif node_type == 'EMPTY':
                     self._xml_scene_object_transform_group(node, node_element)
@@ -640,8 +632,7 @@ class Exporter:
                 # TODO: Look at this material stuff
                 material_id = self._xml_add_material(triangle_material)
                 if mesh_id in self.shape_material_indexes.keys():
-                    if mesh_id not in self.merge_group_shape_ids.values():
-                        self.shape_material_indexes[mesh_id] += f",{material_id:d}"
+                    self.shape_material_indexes[mesh_id] += f",{material_id:d}"
                 else:
                     self.shape_material_indexes[mesh_id] = f"{material_id:d}"
 
@@ -775,13 +766,14 @@ class Exporter:
 
         # Subsets ##################################################################################################
         subsets_element = indexed_triangle_element.find(f".Subsets")
-        self._xml_write_int(subsets_element, 'count', len(indexed_triangle_set.subsets))
+        subset_count = len(indexed_triangle_set.subsets)
 
         if append:
             subset_element = subsets_element.find(f".Subset")
-            if len(indexed_triangle_set.subsets) > 1:
+            if subset_count > 1:
                 self.logger.error(f"Multiple subsets(materials) are not supported for mergegroups! "
-                                  f"This will give weird behaviour")
+                                  f"This will most likely crash GE or give weird behaviour!")
+                subset_count = 1
             else:
                 subset = indexed_triangle_set.subsets[0]
                 self._xml_write_int(subset_element, 'firstIndex', subset[0])
@@ -796,66 +788,62 @@ class Exporter:
                 self._xml_write_int(subset_element, 'numIndices', subset[2])
                 self._xml_write_int(subset_element, 'numVertices', subset[3])
 
+        self._xml_write_int(subsets_element, 'count', subset_count)
+
     def _xml_resolve_skin_ids(self):
-        scene_root = self._tree.find('Scene')
-        for merge_group in bpy.context.scene.i3d_merge_groups.groups:
-            if merge_group.root is not None:
-                self.logger.debug(f"Name of root '{merge_group.root.name}'")
-                root_element = self.merge_groups_root_elements[merge_group.name]
+        for merge_group in self.merge_groups.values():
+            if merge_group.root_object is not None:
                 skin_bind = ""
-                for obj_name in self.merge_groups_ordering[merge_group.name]:
-                    skin_bind += f"{self._scene_graph.nodes_reverse[obj_name]:d} "
-
-                self._xml_write_string(root_element, 'skinBindNodeIds', skin_bind.strip())
-
-    def _xml_merge_groups(self):
-        self.logger.info("Resolving Mergegroups")
-        for merge_group in bpy.context.scene.i3d_merge_groups.groups:
-            self.logger.debug(f"Processing Mergegroup {merge_group.name!r}")
-            if merge_group.root is not None:
-                _, indexed_triangle_element = self._xml_add_indexed_triangle_set(f"{self.merge_group_prefix}"
-                                                                                 f"{merge_group.name}")
-                shape_id = int(indexed_triangle_element.get('shapeId'))
-                # Keep a reference to the IndexedTriangleElement ID. Which is needed for the root node in the scenegraph
-                self.merge_group_shape_ids[merge_group.name] = shape_id
-                # Generate the evaluated root object mesh, which is gonna be the basis for the merge group mesh
-                mesh, obj_eval = self._object_to_evaluated_mesh(merge_group.root)
-                # Generate the triangle set of the root mesh
-                indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
-                # Write the root mesh as a normal object, since this is gonna be the first data.
-                self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element, bind_id=0, append=False)
-                self.merge_groups_ordering[merge_group.name].append(merge_group.root.name)
-                # Clean out mesh
-                obj_eval.to_mesh_clear()
-                # Clean out the object copy
-                bpy.data.objects.remove(obj_eval, do_unlink=True)
-                # Generate IndexedTriangleSet for every child and append to the root one
-                bind_id = 1
-                for merge_group_member in merge_group.children:
-                    self.logger.debug(f"Processing Mergegroupmember {merge_group_member.object.name!r}")
-                    if merge_group_member.object != merge_group.root:
-                        self.logger.debug(f"{merge_group_member.object.name!r} isn't the root")
-                        mesh, obj_eval = self._object_to_evaluated_mesh(merge_group_member.object, from_frame=merge_group.root.matrix_world)
-                        indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
-                        self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element, bind_id=bind_id, append=True)
-                        self.merge_groups_ordering[merge_group.name].append(merge_group_member.object.name)
-                        obj_eval.to_mesh_clear()
-                        bpy.data.objects.remove(obj_eval, do_unlink=True)
-                        bind_id += 1
-                    else:
-                        self.logger.debug(f"{merge_group_member.object.name!r} is the root")
-            else:
-                self.logger.warning(f"Mergegroup '{merge_group.name}' has no root node! Group will be ignored.")
+                for node_id in merge_group.skin_bind_id:
+                    skin_bind += f"{node_id:d} "
+                self._xml_write_string(merge_group.root_object_element, 'skinBindNodeIds', skin_bind.strip())
 
     def _xml_merge_group(self, obj: bpy.types.Object, node_element: ET.Element):
-        self.logger.info(f"{obj.name!r} is exported as a mergegroup")
-        merge_group_id = obj.i3d_merge_group.group_id
-        merge_group = bpy.context.scene.i3d_merge_groups.groups[merge_group_id]
-        if merge_group.root == obj:
-            self.merge_groups_root_elements[merge_group.name] = node_element
-            self._xml_write_int(node_element, 'shapeId', self.merge_group_shape_ids[merge_group.name])
-            self._xml_write_string(node_element, 'materialIds',
-                                   self.shape_material_indexes[self.merge_group_shape_ids[merge_group.name]])
+        self.logger.info(f"{obj.name!r} is exported as part of a mergegroup")
+        merge_group = self.merge_groups.setdefault(obj.i3d_merge_group.group_id,
+                                                   MergeGroup(obj.i3d_merge_group.group_id))
+        if obj.i3d_merge_group.is_root:
+            if merge_group.root_object is not None:
+                self.logger.warning(f"{obj.name!r} is set as a root node, but a "
+                                    f"root node has already been registered for "
+                                    f"merge group '{merge_group.group_id}'. Object mesh wont be exported!")
+            else:
+                self.logger.info(f"{obj.name!r} is the root of mergegroup '{merge_group.group_id}'")
+                merge_group.root_object = obj
+                merge_group.root_object_element = node_element
+                merge_group.skin_bind_id.insert(0, int(node_element.get('nodeId')))
+                _, merge_group.indexed_triangle_element = \
+                    self._xml_add_indexed_triangle_set(f"{self.merge_group_prefix}{merge_group.group_id}")
+                mesh, obj_eval = self._object_to_evaluated_mesh(obj)
+                indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
+                self._xml_indexed_triangle_set(indexed_triangle_set, merge_group.indexed_triangle_element,
+                                               bind_id=0, append=False)
+                obj_eval.to_mesh_clear()
+                bpy.data.objects.remove(obj_eval, do_unlink=True)
+                self._xml_write_int(node_element, 'shapeId', merge_group.shape_id)
+                self._xml_write_string(node_element, 'materialIds',
+                                       self.shape_material_indexes[merge_group.shape_id])
+                for bind_id, member in enumerate(merge_group.members, start=1):
+                    mesh, obj_eval = self._object_to_evaluated_mesh(member, from_frame=merge_group.root_object.matrix_world)
+                    indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
+                    self._xml_indexed_triangle_set(indexed_triangle_set, merge_group.indexed_triangle_element,
+                                                   bind_id=bind_id, append=True)
+                    obj_eval.to_mesh_clear()
+                    bpy.data.objects.remove(obj_eval, do_unlink=True)
+        else:
+            if merge_group.root_object is None:
+                self.logger.debug(f"{obj.name!r} handled before root node of mergegroup '{merge_group.group_id}' "
+                                  f"has been found, mesh export is deferred till root is found")
+                merge_group.add_member(obj, int(node_element.get('nodeId')))
+            else:
+                self.logger.debug(f"{obj.name!r} is added to mergegroup's IndexedTriangleSet element")
+                bind_id = merge_group.add_member(obj, int(node_element.get('nodeId')))
+                mesh, obj_eval = self._object_to_evaluated_mesh(obj, from_frame=merge_group.root_object.matrix_world)
+                indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
+                self._xml_indexed_triangle_set(indexed_triangle_set, merge_group.indexed_triangle_element,
+                                               bind_id=bind_id, append=True)
+                obj_eval.to_mesh_clear()
+                bpy.data.objects.remove(obj_eval, do_unlink=True)
 
     def _xml_scene_object_shape(self, obj: bpy.types.Object, node_element: ET.Element):
         # Check if the mesh has already been defined in the i3d file
@@ -1040,6 +1028,25 @@ class Exporter:
             return '$' + filepath[filepath.index(relative_filter) + len(relative_filter) + 1: len(filepath)]
         except ValueError:
             return filepath
+
+
+class MergeGroup(object):
+    def __init__(self, merge_group_id):
+        self.group_id = merge_group_id
+        self.root_object = None
+        self.root_object_element = None
+        self.indexed_triangle_element = None
+        self.members = []
+        self.skin_bind_id = []
+
+    @property
+    def shape_id(self):
+        return int(self.indexed_triangle_element.get('shapeId'))
+
+    def add_member(self, obj, node_id):
+        self.members.append(obj)
+        self.skin_bind_id.append(node_id)
+        return len(self.members)
 
 
 class IndexedTriangleSet(object):
