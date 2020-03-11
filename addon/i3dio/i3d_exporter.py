@@ -68,6 +68,13 @@ class Exporter:
         self.logger.info(f"Exporting to {filepath}")
         time_start = time.time()
 
+        if 'MERGE_GROUPS' in bpy.context.scene.i3dio.features_to_export:
+            self.logger.info(f"Mergegroup export is enabled")
+            self.export_merge_groups = True
+        else:
+            self.logger.info(f"Mergegroup export is disabled")
+            self.export_merge_groups = False
+
         # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
         try:
             self._scene_graph = SceneGraph()
@@ -98,16 +105,18 @@ class Exporter:
             self._xml_build_scene_graph()
             self._xml_parse_scene_graph()
             # Resolve skin id's for mergegroups, since this information requires all of the nodes to have been parsed
-            self._xml_resolve_skin_ids()
-            self.logger.info(f"Mergegroups: {len(self.merge_groups)}")
-            for name, merge_group in self.merge_groups.items():
-                if merge_group.root_object is not None:
-                    self.logger.info(f"Mergegroup '{name}' has root node {merge_group.root_object.name!r}")
-                else:
-                    self.logger.info(f"Mergegroup '{name}' has no root")
-                self.logger.info(f"Mergegroup '{name}' has {len(merge_group.members)} members (Root not counted)")
-                for member in merge_group.members:
-                    self.logger.debug(f"\t{member.name!r}")
+
+            if self.export_merge_groups:
+                self._xml_resolve_skin_ids()
+                self.logger.info(f"Number of mergegroups: {len(self.merge_groups)}")
+                for name, merge_group in self.merge_groups.items():
+                    if merge_group.root_object is not None:
+                        self.logger.info(f"Mergegroup '{name}' has root node {merge_group.root_object.name!r}")
+                    else:
+                        self.logger.info(f"Mergegroup '{name}' has no root")
+                    self.logger.info(f"Mergegroup '{name}' has {len(merge_group.members)} members (Root not counted)")
+                    for member in merge_group.members:
+                        self.logger.debug(f"\t{member.name!r}")
 
             self._xml_export_to_file()
 
@@ -251,35 +260,36 @@ class Exporter:
             else:
                 node_type = node.blender_object.type
                 self.logger.info(f"{node.blender_object.name!r} is parsed as a {node_type!r}")
-                if node_type == 'MESH':
-                    if node.blender_object.i3d_merge_group.group_id != '':  # If this mesh is part of a mergegroup
-                        self._xml_merge_group(node.blender_object, node_element)
-                    else:  # This is a regular object with no mergegroup
+                # merge group id can only ever be set on an object with a mesh, so no need to check for mesh type
+                if self.export_merge_groups and node.blender_object.i3d_merge_group.group_id != '':
+                    self._xml_merge_group(node.blender_object, node_element)
+                else:
+                    if node_type == 'MESH':
                         self._xml_scene_object_shape(node.blender_object, node_element)
-                elif node_type == 'EMPTY':
-                    self._xml_scene_object_transform_group(node, node_element)
-                elif node_type == 'LIGHT':
-                    self._xml_scene_object_light(node, node_element)
-                elif node_type == 'CAMERA':
-                    self._xml_scene_object_camera(node, node_element)
+                    elif node_type == 'EMPTY':
+                        self._xml_scene_object_transform_group(node, node_element)
+                    elif node_type == 'LIGHT':
+                        self._xml_scene_object_light(node, node_element)
+                    elif node_type == 'CAMERA':
+                        self._xml_scene_object_camera(node, node_element)
 
-                try:
-                    self._xml_object_properties(node.blender_object.data.i3d_attributes, node_element)
-                except AttributeError:
-                    self.logger.debug(f"{node.blender_object.name!r} has no i3d_attributes")
+                    try:
+                        self._xml_object_properties(node.blender_object.data.i3d_attributes, node_element)
+                    except AttributeError:
+                        self.logger.debug(f"{node.blender_object.name!r} has no i3d_attributes")
 
             for child in node.children.values():
                 self.logger.info(
                     f"Parsing child node {child.blender_object.name!r} of node {node.blender_object.name!r}")
                 child_element = ET.SubElement(node_element,
-                                              Exporter.blender_to_i3d(child.blender_object))
+                                              self.blender_to_i3d(child.blender_object))
                 parse_node(child, child_element)
 
         for root_child in self._scene_graph.nodes[0].children.values():
             self.logger.info(
                 f"Parsing child node {root_child.blender_object.name!r} of root node")
             root_child_element = ET.SubElement(self._tree.find('Scene'),
-                                               Exporter.blender_to_i3d(root_child.blender_object))
+                                               self.blender_to_i3d(root_child.blender_object))
             parse_node(root_child, root_child_element)
 
     def _xml_scene_object_general_data(self, node: SceneGraph.Node, node_element: ET.Element):
@@ -830,6 +840,11 @@ class Exporter:
                                                    bind_id=bind_id, append=True)
                     obj_eval.to_mesh_clear()
                     bpy.data.objects.remove(obj_eval, do_unlink=True)
+
+                try:
+                    self._xml_object_properties(obj.data.i3d_attributes, node_element)
+                except AttributeError:
+                    self.logger.debug(f"{obj.blender_object.name!r} has no i3d_attributes")
         else:
             if merge_group.root_object is None:
                 self.logger.debug(f"{obj.name!r} handled before root node of mergegroup '{merge_group.group_id}' "
@@ -997,14 +1012,13 @@ class Exporter:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = indents
 
-    @staticmethod
-    def blender_to_i3d(blender_object: Union[bpy.types.Object, bpy.types.Collection]):
+    def blender_to_i3d(self, blender_object: Union[bpy.types.Object, bpy.types.Collection]):
         # Collections don't have an object type since they aren't objects. If they are used for organisational purposes
         # they are converted into transformgroups in the scenegraph
         if isinstance(blender_object, bpy.types.Collection):
             return 'TransformGroup'
         # For setting the child meshes of a mergegroups to transformgroups
-        elif blender_object.type == 'MESH':
+        elif blender_object.type == 'MESH' and self.export_merge_groups:
             if blender_object.i3d_merge_group.group_id != '':
                 if not blender_object.i3d_merge_group.is_root:
                     return 'TransformGroup'

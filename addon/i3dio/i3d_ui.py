@@ -116,6 +116,12 @@ class I3D_IO_PT_export_options(Panel):
         column = box.column()
         column.props_enum(bpy.context.scene.i3dio, 'object_types_to_export')
 
+        box = layout.box()
+        row = box.row()
+        row.label(text='Features to enable')
+        column = box.column()
+        column.props_enum(bpy.context.scene.i3dio, 'features_to_export')
+
         layout.prop(operator, "axis_forward")
         layout.prop(operator, "axis_up")
 

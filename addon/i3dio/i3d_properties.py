@@ -110,6 +110,16 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH'},
     )
 
+    features_to_export: EnumProperty(
+        name="Features",
+        description="Select which features should be enabled for the export",
+        items=(
+            ('MERGE_GROUPS', "Merge Groups", "Export merge groups"),
+        ),
+        options={'ENUM_FLAG'},
+        default={'MERGE_GROUPS'},
+    )
+
     copy_files: BoolProperty(
         name="Copy Files",
         description="Copies the files to have them together with the i3d file. Structure is determined by 'File "
