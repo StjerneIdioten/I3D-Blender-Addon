@@ -4,6 +4,8 @@
       <w>addon</w>
       <w>depsgraph</w>
       <w>idname</w>
+      <w>mergegroup</w>
+      <w>mergegroups</w>
       <w>scenegraph</w>
       <w>sfile</w>
       <w>transformgroups</w>

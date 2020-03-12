@@ -68,6 +68,13 @@ class Exporter:
         self.logger.info(f"Exporting to {filepath}")
         time_start = time.time()
 
+        if 'MERGE_GROUPS' in bpy.context.scene.i3dio.features_to_export:
+            self.logger.info(f"Mergegroup export is enabled")
+            self.export_merge_groups = True
+        else:
+            self.logger.info(f"Mergegroup export is disabled")
+            self.export_merge_groups = False
+
         # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
         try:
             self._scene_graph = SceneGraph()
@@ -85,6 +92,10 @@ class Exporter:
                 to_up=axis_up,
             ).to_4x4()
 
+            # Merge Group
+            self.merge_group_prefix = 'MergedMesh_'
+            self.merge_groups = {}
+
             # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
             # should only be 'heavy' to call the first time a mesh is exported.
             # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
@@ -93,6 +104,19 @@ class Exporter:
             self._xml_build_skeleton_structure()
             self._xml_build_scene_graph()
             self._xml_parse_scene_graph()
+            # Resolve skin id's for mergegroups, since this information requires all of the nodes to have been parsed
+
+            if self.export_merge_groups:
+                self._xml_resolve_skin_ids()
+                self.logger.info(f"Number of mergegroups: {len(self.merge_groups)}")
+                for name, merge_group in self.merge_groups.items():
+                    if merge_group.root_object is not None:
+                        self.logger.info(f"Mergegroup '{name}' has root node {merge_group.root_object.name!r}")
+                    else:
+                        self.logger.info(f"Mergegroup '{name}' has no root")
+                    self.logger.info(f"Mergegroup '{name}' has {len(merge_group.members)} members (Root not counted)")
+                    for member in merge_group.members:
+                        self.logger.debug(f"\t{member.name!r}")
 
             self._xml_export_to_file()
 
@@ -236,32 +260,36 @@ class Exporter:
             else:
                 node_type = node.blender_object.type
                 self.logger.info(f"{node.blender_object.name!r} is parsed as a {node_type!r}")
-                if node_type == 'MESH':
-                    self._xml_scene_object_shape(node, node_element)
-                elif node_type == 'EMPTY':
-                    self._xml_scene_object_transform_group(node, node_element)
-                elif node_type == 'LIGHT':
-                    self._xml_scene_object_light(node, node_element)
-                elif node_type == 'CAMERA':
-                    self._xml_scene_object_camera(node, node_element)
+                # merge group id can only ever be set on an object with a mesh, so no need to check for mesh type
+                if self.export_merge_groups and node.blender_object.i3d_merge_group.group_id != '':
+                    self._xml_merge_group(node.blender_object, node_element)
+                else:
+                    if node_type == 'MESH':
+                        self._xml_scene_object_shape(node.blender_object, node_element)
+                    elif node_type == 'EMPTY':
+                        self._xml_scene_object_transform_group(node, node_element)
+                    elif node_type == 'LIGHT':
+                        self._xml_scene_object_light(node, node_element)
+                    elif node_type == 'CAMERA':
+                        self._xml_scene_object_camera(node, node_element)
 
-                try:
-                    self._xml_object_properties(node.blender_object.data.i3d_attributes, node_element)
-                except AttributeError:
-                    self.logger.debug(f"{node.blender_object.name!r} has no i3d_attributes")
+                    try:
+                        self._xml_object_properties(node.blender_object.data.i3d_attributes, node_element)
+                    except AttributeError:
+                        self.logger.debug(f"{node.blender_object.name!r} has no i3d_attributes")
 
             for child in node.children.values():
                 self.logger.info(
                     f"Parsing child node {child.blender_object.name!r} of node {node.blender_object.name!r}")
                 child_element = ET.SubElement(node_element,
-                                              Exporter.blender_to_i3d(child.blender_object))
+                                              self.blender_to_i3d(child.blender_object))
                 parse_node(child, child_element)
 
         for root_child in self._scene_graph.nodes[0].children.values():
             self.logger.info(
                 f"Parsing child node {root_child.blender_object.name!r} of root node")
             root_child_element = ET.SubElement(self._tree.find('Scene'),
-                                               Exporter.blender_to_i3d(root_child.blender_object))
+                                               self.blender_to_i3d(root_child.blender_object))
             parse_node(root_child, root_child_element)
 
     def _xml_scene_object_general_data(self, node: SceneGraph.Node, node_element: ET.Element):
@@ -546,188 +574,324 @@ class Exporter:
         self.logger.debug(f"'{filename}' has file ID {file_id}")
         return file_id
 
-    def _xml_scene_object_shape(self, node: SceneGraph.Node, node_element: ET.Element):
-
-        ###############################################
-        # Mesh export section
-        ###############################################
+    def _xml_add_indexed_triangle_set(self, name: str) -> [bool, ET.Element]:
+        # Get reference to the shape element
         shape_root = self._tree.find('Shapes')
-
-        # Check if the mesh has already been defined in the i3d file
-        indexed_triangle_element = shape_root.find(f".IndexedTriangleSet[@name={node.blender_object.data.name!r}]")
+        # Check if the triangle element already exists
+        pre_existed = True
+        indexed_triangle_element = shape_root.find(f".IndexedTriangleSet[@name='{name}']")
         if indexed_triangle_element is None:
-            self.logger.info(f"{node.blender_object.name!r} is a new mesh")
+            self.logger.info(f"'{name}' is a new IndexedTriangleSet")
+            pre_existed = False
+            # Get and increment shape id
             shape_id = self.ids['shape']
             self.ids['shape'] += 1
-
+            # Create triangle element and necessary sub-elements
             indexed_triangle_element = ET.SubElement(shape_root, 'IndexedTriangleSet')
-
-            self._xml_write_string(indexed_triangle_element, 'name', node.blender_object.data.name)
+            self._xml_write_string(indexed_triangle_element, 'name', name)
             self._xml_write_int(indexed_triangle_element, 'shapeId', shape_id)
+            ET.SubElement(indexed_triangle_element, 'Vertices')
+            ET.SubElement(indexed_triangle_element, 'Triangles')
+            ET.SubElement(indexed_triangle_element, 'Subsets')
 
-            if bpy.context.scene.i3dio.apply_modifiers:
-                # Generate an object evaluated from the dependency graph
-                # The copy is important since the depsgraph will store changes to the evaluated object
-                obj = node.blender_object.evaluated_get(self._depsgraph).copy()
-                self.logger.info(f"{node.blender_object.name!r} is exported with modifiers applied")
-            else:
-                obj = node.blender_object.copy()
-                self.logger.info(f"{node.blender_object.name!r} is exported without modifiers applied")
+        return pre_existed, indexed_triangle_element
 
-            # Generates a new mesh to not interfere with the existing one.
-            mesh = obj.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
-
-            conversion_matrix = self._global_matrix
-            if bpy.context.scene.i3dio.apply_unit_scale:
-                self.logger.info(f"{node.blender_object.name!r} has unit scaling applied")
-                conversion_matrix = mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) \
-                                    @ conversion_matrix
-
-            mesh.transform(conversion_matrix)
-            if conversion_matrix.is_negative:
-                mesh.flip_normals()
-                self.logger.debug(f"{node.blender_object.name!r} conversion matrix is negative, flipping normals")
-
-            # Calculates triangles from mesh polygons
-            mesh.calc_loop_triangles()
-            # Recalculates normals after the scaling has messed with them
-            mesh.calc_normals_split()
-
-            vertices_element = ET.SubElement(indexed_triangle_element, 'Vertices')
-            triangles_element = ET.SubElement(indexed_triangle_element, 'Triangles')
-            subsets_element = ET.SubElement(indexed_triangle_element, 'Subsets')
-
-            self.logger.debug(f"{node.blender_object.name!r} consists of {len(mesh.loop_triangles)} triangles")
-            self._xml_write_int(triangles_element, 'count', len(mesh.loop_triangles))
-
-            # Create and assign default material if it does not exist already. This material will persist in the blender
-            # file so you can change the default look if you want to through the blender interface
-            if len(mesh.materials) == 0:
-                self.logger.info(f"{node.blender_object.name!r} has no material assigned")
-                if bpy.data.materials.get('i3d_default_material') is None:
-                    bpy.data.materials.new('i3d_default_material')
-                    self.logger.info(f"Default material does not. Creating i3d_default_material")
-                mesh.materials.append(bpy.data.materials.get('i3d_default_material'))
-                self.logger.info(f"{node.blender_object.name!r} assigning default material i3d_default_material")
-
-            # Vertices has been colour painted in this mesh
-            if len(mesh.vertex_colors):
-                self._xml_write_bool(vertices_element, 'color', True)
-                self.logger.info(f"{node.blender_object.name!r} has colour painted vertices")
-
-            # Group triangles by subset, since they need to be exported in correct order per material subset to the i3d
-            triangle_subsets = {}
-            for triangle in mesh.loop_triangles:
-                triangle_material = mesh.materials[triangle.material_index]
-                if triangle_material.name not in triangle_subsets:
-                    triangle_subsets[triangle_material.name] = []
-                    # Add material to material section in i3d file and append to the materialIds that the shape
-                    # object should have
-                    self.logger.info(f"{node.blender_object.name!r} has material {triangle_material.name!r}")
-                    material_id = self._xml_add_material(triangle_material)
-                    if shape_id in self.shape_material_indexes.keys():
-                        self.shape_material_indexes[shape_id] += f",{material_id:d}"
-                    else:
-                        self.shape_material_indexes[shape_id] = f"{material_id:d}"
-
-                # Add triangle to subset
-                triangle_subsets[triangle_material.name].append(triangle)
-
-            self._xml_write_int(subsets_element, 'count', len(triangle_subsets))
-            self.logger.info(f"{node.blender_object.name!r} has {len(triangle_subsets)} subsets")
-
-            added_vertices = {}  # Key is a unique hashable vertex identifier and the value is a vertex index
-            vertex_counter = 0  # Count the total number of unique vertices (total across all subsets)
-            indices_total = 0  # Total amount of indices, since i3d format needs this number (for some reason)
-
-            for mat, subset in triangle_subsets.items():
-                number_of_indices = 0
-                number_of_vertices = 0
-                subset_element = ET.SubElement(subsets_element, 'Subset')
-                self._xml_write_int(subset_element, 'firstIndex', indices_total)
-                self._xml_write_int(subset_element, 'firstVertex', vertex_counter)
-
-                # Go through every triangle on the subset and extract triangle information
-                i = 0
-                for triangle in subset:
-                    triangle_element = ET.SubElement(triangles_element, 't')
-                    # Go through every loop that the triangle consists of and extract vertex information
-                    triangle_vertex_index = ""  # The vertices from the vertex list that specify this triangle
-                    for loop_index in triangle.loops:
-                        vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
-                        normal = mesh.loops[loop_index].normal
-                        vertex_data = {'p': f"{vertex.co.xyz[0]:.6f} "
-                                            f"{vertex.co.xyz[1]:.6f} "
-                                            f"{vertex.co.xyz[2]:.6f}",
-
-                                       'n': f"{normal.xyz[0]:.6f} "
-                                            f"{normal.xyz[1]:.6f} "
-                                            f"{normal.xyz[2]:.6f}",
-
-                                       'uvs': {},
-                                       }
-
-                        # If there is vertex paint, then get the colour from the active layer since only one layer is
-                        # supported in GE
-                        if len(mesh.vertex_colors):
-                            vertex_data['c'] = "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(
-                                *mesh.vertex_colors.active.data[loop_index].color)
-
-                        # TODO: Check uv limit in GE
-                        # Old addon only supported 4
-                        for count, uv in enumerate(mesh.uv_layers):
-                            if count < 4:
-                                self._xml_write_bool(vertices_element, f'uv{count}', True)
-                                vertex_data['uvs'][f't{count:d}'] = f"{uv.data[loop_index].uv[0]:.6f} " \
-                                                                    f"{uv.data[loop_index].uv[1]:.6f}"
-                            else:
-                                pass
-                                # print(f"Currently only supports four uv layers per vertex")
-
-                        vertex_item = VertexItem(vertex_data, mat)
-
-                        if vertex_item not in added_vertices:
-                            added_vertices[vertex_item] = vertex_counter
-
-                            vertex_element = ET.SubElement(vertices_element, 'v')
-                            self._xml_write_string(vertex_element, 'n', vertex_data['n'])
-                            self._xml_write_string(vertex_element, 'p', vertex_data['p'])
-
-                            for uv_key, uv_data in vertex_data['uvs'].items():
-                                self._xml_write_string(vertex_element, uv_key, uv_data)
-
-                            if 'c' in vertex_data:
-                                self._xml_write_string(vertex_element, 'c', vertex_data['c'])
-
-                            vertex_counter += 1
-                            number_of_vertices += 1
-
-                        triangle_vertex_index += f"{added_vertices[vertex_item]} "
-
-                    number_of_indices += 3  # 3 loops = 3 indices per triangle
-                    self._xml_write_string(triangle_element, 'vi', triangle_vertex_index.strip(' '))
-
-                self._xml_write_int(subset_element, 'numIndices', number_of_indices)
-                self._xml_write_int(subset_element, 'numVertices', number_of_vertices)
-                self.logger.debug(f"{node.blender_object.name!r} has subset '{mat}' with {len(subset)} triangles, "
-                                  f"{number_of_vertices} vertices and {number_of_indices} indices")
-                indices_total += number_of_indices
-
-            self.logger.debug(f"{node.blender_object.name!r} has a total of {vertex_counter} vertices")
-            self._xml_write_int(vertices_element, 'count', vertex_counter)
-            self._xml_write_bool(vertices_element, 'normal', True)
-            self._xml_write_bool(vertices_element, 'tangent', True)
-
-            obj.to_mesh_clear()  # Clean out the generated mesh so it does not stay in blender memory
-            bpy.data.objects.remove(obj, do_unlink=True)  # Clean out the object copy
-
-            # TODO: Write mesh related attributes
+    def _object_to_evaluated_mesh(self, obj: bpy.types.Object,
+                                  from_frame=None) -> [bpy.types.Object, bpy.types.Mesh]:
+        """Generates object based on whether or not modifiers are applied. Generates mesh from this object and
+        converts it to correct coordinate-frame """
+        if bpy.context.scene.i3dio.apply_modifiers:
+            # Generate an object evaluated from the dependency graph
+            # The copy is important since the depsgraph will store changes to the evaluated object
+            obj_resolved = obj.evaluated_get(self._depsgraph).copy()
+            self.logger.info(f"{obj.name!r} is exported with modifiers applied")
         else:
-            # Mesh already exists, so find its shape it.
-            shape_id = int(indexed_triangle_element.get('shapeId'))
-            self.logger.info(f"{node.blender_object.name!r} already exists in i3d file")
+            obj_resolved = obj.copy()
+            self.logger.info(f"{obj.name!r} is exported without modifiers applied")
 
-        self.logger.debug(f"{node.blender_object.name!r} has shape ID {shape_id}")
+        # Get the mesh from the resolved object, which contains all of the modifiers applied (but not object transform)
+        mesh = obj_resolved.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
+
+        if from_frame is not None:
+            mesh.transform(from_frame.inverted() @ obj_resolved.matrix_world)
+
+        conversion_matrix = self._global_matrix
+        if bpy.context.scene.i3dio.apply_unit_scale:
+            self.logger.info(f"{obj.name!r} has unit scaling applied")
+            conversion_matrix = mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) \
+                @ conversion_matrix
+
+        mesh.transform(conversion_matrix)
+        if conversion_matrix.is_negative:
+            mesh.flip_normals()
+            self.logger.debug(f"{obj.name!r} conversion matrix is negative, flipping normals")
+
+        # Calculates triangles from mesh polygons
+        mesh.calc_loop_triangles()
+        # Recalculates normals after the scaling has messed with them
+        mesh.calc_normals_split()
+
+        return mesh, obj_resolved
+
+    def _mesh_to_indexed_triangle_set(self, mesh: bpy.types.Mesh, mesh_id: int) -> IndexedTriangleSet:
+        indexed_triangle_set = IndexedTriangleSet()
+        indexed_triangle_set.name = mesh.name
+        # Make sure that the mesh has some form of material added. Since GE requires at least a default material
+        if len(mesh.materials) == 0:
+            self.logger.info(f"{mesh.name!r} has no material assigned")
+            if bpy.data.materials.get('i3d_default_material') is None:
+                bpy.data.materials.new('i3d_default_material')
+                self.logger.info(f"Default material does not exist. Creating i3d_default_material")
+            mesh.materials.append(bpy.data.materials.get('i3d_default_material'))
+            self.logger.info(f"{mesh.name!r} assigned default material i3d_default_material")
+
+        # Group triangles by subset, since they need to be exported in correct order per material subset to the i3d
+        triangle_subsets = {}
+        for triangle in mesh.loop_triangles:
+            triangle_material = mesh.materials[triangle.material_index]
+            if triangle_material.name not in triangle_subsets:
+                triangle_subsets[triangle_material.name] = []
+                self.logger.info(f"{mesh.name!r} has material {triangle_material.name!r}")
+                # TODO: Look at this material stuff
+                material_id = self._xml_add_material(triangle_material)
+                if mesh_id in self.shape_material_indexes.keys():
+                    self.shape_material_indexes[mesh_id] += f",{material_id:d}"
+                else:
+                    self.shape_material_indexes[mesh_id] = f"{material_id:d}"
+
+            # Add triangle to subset
+            triangle_subsets[triangle_material.name].append(triangle)
+
+        added_vertices = {}  # Key is a unique hashable vertex identifier and the value is a vertex index
+        vertex_counter = 0  # Count the total number of unique vertices (total across all subsets)
+        indices_total = 0  # Total amount of indices, since i3d format needs this number (for some reason)
+
+        if len(mesh.vertex_colors):
+            self.logger.info(f"{mesh.name!r} has colour painted vertices")
+
+        for mat, subset in triangle_subsets.items():
+            number_of_indices = 0
+            number_of_vertices = 0
+            indexed_triangle_set.subsets.append([indices_total, vertex_counter])
+
+            # Go through every triangle on the subset and extract triangle information
+            for triangle in subset:
+
+                # Go through every loop that the triangle consists of and extract vertex information
+                triangle_vertex_index = []  # The vertices from the vertex list that specify this triangle
+                for loop_index in triangle.loops:
+                    vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
+                    normal = mesh.loops[loop_index].normal
+                    vertex_data = {'p': f"{vertex.co.xyz[0]:.6f} "
+                                        f"{vertex.co.xyz[1]:.6f} "
+                                        f"{vertex.co.xyz[2]:.6f}",
+
+                                   'n': f"{normal.xyz[0]:.6f} "
+                                        f"{normal.xyz[1]:.6f} "
+                                        f"{normal.xyz[2]:.6f}",
+
+                                   'uvs': {},
+                                   }
+
+                    # If there is vertex paint, then get the colour from the active layer since only one layer is
+                    # supported in GE
+                    if len(mesh.vertex_colors):
+                        vertex_data['c'] = "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(
+                            *mesh.vertex_colors.active.data[loop_index].color)
+
+                    # TODO: Check uv limit in GE
+                    # Old addon only supported 4
+                    for count, uv in enumerate(mesh.uv_layers):
+                        if count < 4:
+                            vertex_data['uvs'][f't{count:d}'] = f"{uv.data[loop_index].uv[0]:.6f} " \
+                                                                f"{uv.data[loop_index].uv[1]:.6f}"
+                        else:
+                            pass
+                            # print(f"Currently only supports four uv layers per vertex")
+
+                    vertex_item = VertexItem(vertex_data, mat)
+
+                    if vertex_item not in added_vertices:
+                        added_vertices[vertex_item] = vertex_counter
+                        indexed_triangle_set.vertices.append(vertex_data)
+                        vertex_counter += 1
+                        number_of_vertices += 1
+
+                    triangle_vertex_index.append(added_vertices[vertex_item])
+
+                number_of_indices += 3  # 3 loops = 3 indices per triangle
+                indexed_triangle_set.triangles.append(triangle_vertex_index)
+
+            indexed_triangle_set.subsets[-1].append(number_of_indices)
+            indexed_triangle_set.subsets[-1].append(number_of_vertices)
+
+            self.logger.debug(f"{mesh.name!r} has subset '{mat}' with {len(subset)} triangles, "
+                              f"{number_of_vertices} vertices and {number_of_indices} indices")
+            indices_total += number_of_indices
+
+        self.logger.debug(f"{mesh.name!r} has a total of {len(indexed_triangle_set.vertices)} vertices")
+        self.logger.debug(f"{mesh.name!r} consists of {len(indexed_triangle_set.triangles)} triangles")
+        self.logger.info(f"{mesh.name!r} has {len(indexed_triangle_set.subsets)} subsets")
+
+        return indexed_triangle_set
+
+    def _xml_indexed_triangle_set(self, indexed_triangle_set: IndexedTriangleSet, indexed_triangle_element: ET.Element,
+                                  bind_id=None, append=False):
+
+        # Vertices #################################################################################################
+        vertices_element = indexed_triangle_element.find(f".Vertices")
+
+        if bind_id is not None:
+            self._xml_write_bool(vertices_element, 'singleblendweights', True)
+
+        for vertex_data in indexed_triangle_set.vertices:
+            vertex_element = ET.SubElement(vertices_element, 'v')
+            self._xml_write_string(vertex_element, 'n', vertex_data['n'])
+            self._xml_write_string(vertex_element, 'p', vertex_data['p'])
+            if 'c' in vertex_data:
+                self._xml_write_string(vertex_element, 'c', vertex_data['c'])
+            for uv_key, uv_data in vertex_data['uvs'].items():
+                self._xml_write_string(vertex_element, uv_key, uv_data)
+            if bind_id is not None:
+                self._xml_write_int(vertex_element, 'bi', bind_id)
+
+        # Check the first vertex to see if it has a color component (Since they all have it then)
+        if 'c' in indexed_triangle_set.vertices[0]:
+            self._xml_write_bool(vertices_element, 'color', True)
+
+        # TODO: Check uv limit in GE, Old addon only supported 4
+        for count, uv in enumerate(indexed_triangle_set.vertices[0]['uvs']):
+            if count < 4:
+                self._xml_write_bool(vertices_element, f'uv{count}', True)
+
+        prev_vertex_count = int(vertices_element.get('count', 0))
+
+        self._xml_write_int(vertices_element,
+                            'count',
+                            len(indexed_triangle_set.vertices) + int(vertices_element.get('count', 0)))
+        self._xml_write_bool(vertices_element, 'normal', True)
+        self._xml_write_bool(vertices_element, 'tangent', True)
+
+        # Triangles ################################################################################################
+        triangles_element = indexed_triangle_element.find(f".Triangles")
+
+        for triangle in indexed_triangle_set.triangles:
+            triangle_element = ET.SubElement(triangles_element, 't')
+            triangle_vertex_index = ""
+            for elem in triangle:
+                triangle_vertex_index += f"{elem + prev_vertex_count} "
+
+            self._xml_write_string(triangle_element, 'vi', triangle_vertex_index.strip())
+
+        self._xml_write_int(triangles_element,
+                            'count',
+                            len(indexed_triangle_set.triangles) + int(triangles_element.get('count', 0)))
+
+        # Subsets ##################################################################################################
+        subsets_element = indexed_triangle_element.find(f".Subsets")
+        subset_count = len(indexed_triangle_set.subsets)
+
+        if append:
+            subset_element = subsets_element.find(f".Subset")
+            if subset_count > 1:
+                self.logger.error(f"Multiple subsets(materials) are not supported for mergegroups! "
+                                  f"This will most likely crash GE or give weird behaviour!")
+                subset_count = 1
+            else:
+                subset = indexed_triangle_set.subsets[0]
+                self._xml_write_int(subset_element, 'firstIndex', subset[0])
+                self._xml_write_int(subset_element, 'firstVertex', subset[1])
+                self._xml_write_int(subset_element, 'numIndices', subset[2] + int(subset_element.get('numIndices', 0)))
+                self._xml_write_int(subset_element, 'numVertices', subset[3] + int(subset_element.get('numVertices', 0)))
+        else:
+            for idx, subset in enumerate(indexed_triangle_set.subsets):
+                subset_element = ET.SubElement(subsets_element, 'Subset')
+                self._xml_write_int(subset_element, 'firstIndex', subset[0])
+                self._xml_write_int(subset_element, 'firstVertex', subset[1])
+                self._xml_write_int(subset_element, 'numIndices', subset[2])
+                self._xml_write_int(subset_element, 'numVertices', subset[3])
+
+        self._xml_write_int(subsets_element, 'count', subset_count)
+
+    def _xml_resolve_skin_ids(self):
+        for merge_group in self.merge_groups.values():
+            if merge_group.root_object is not None:
+                skin_bind = ""
+                for node_id in merge_group.skin_bind_id:
+                    skin_bind += f"{node_id:d} "
+                self._xml_write_string(merge_group.root_object_element, 'skinBindNodeIds', skin_bind.strip())
+
+    def _xml_merge_group(self, obj: bpy.types.Object, node_element: ET.Element):
+        self.logger.info(f"{obj.name!r} is exported as part of a mergegroup")
+        merge_group = self.merge_groups.setdefault(obj.i3d_merge_group.group_id,
+                                                   MergeGroup(obj.i3d_merge_group.group_id))
+        if obj.i3d_merge_group.is_root:
+            if merge_group.root_object is not None:
+                self.logger.warning(f"{obj.name!r} is set as a root node, but a "
+                                    f"root node has already been registered for "
+                                    f"merge group '{merge_group.group_id}'. Object mesh wont be exported!")
+            else:
+                self.logger.info(f"{obj.name!r} is the root of mergegroup '{merge_group.group_id}'")
+                merge_group.root_object = obj
+                merge_group.root_object_element = node_element
+                merge_group.skin_bind_id.insert(0, int(node_element.get('nodeId')))
+                _, merge_group.indexed_triangle_element = \
+                    self._xml_add_indexed_triangle_set(f"{self.merge_group_prefix}{merge_group.group_id}")
+                mesh, obj_eval = self._object_to_evaluated_mesh(obj)
+                indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
+                self._xml_indexed_triangle_set(indexed_triangle_set, merge_group.indexed_triangle_element,
+                                               bind_id=0, append=False)
+                obj_eval.to_mesh_clear()
+                bpy.data.objects.remove(obj_eval, do_unlink=True)
+                self._xml_write_int(node_element, 'shapeId', merge_group.shape_id)
+                self._xml_write_string(node_element, 'materialIds',
+                                       self.shape_material_indexes[merge_group.shape_id])
+                for bind_id, member in enumerate(merge_group.members, start=1):
+                    mesh, obj_eval = self._object_to_evaluated_mesh(member, from_frame=merge_group.root_object.matrix_world)
+                    indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
+                    self._xml_indexed_triangle_set(indexed_triangle_set, merge_group.indexed_triangle_element,
+                                                   bind_id=bind_id, append=True)
+                    obj_eval.to_mesh_clear()
+                    bpy.data.objects.remove(obj_eval, do_unlink=True)
+
+                try:
+                    self._xml_object_properties(obj.data.i3d_attributes, node_element)
+                except AttributeError:
+                    self.logger.debug(f"{obj.blender_object.name!r} has no i3d_attributes")
+        else:
+            if merge_group.root_object is None:
+                self.logger.debug(f"{obj.name!r} handled before root node of mergegroup '{merge_group.group_id}' "
+                                  f"has been found, mesh export is deferred till root is found")
+                merge_group.add_member(obj, int(node_element.get('nodeId')))
+            else:
+                self.logger.debug(f"{obj.name!r} is added to mergegroup's IndexedTriangleSet element")
+                bind_id = merge_group.add_member(obj, int(node_element.get('nodeId')))
+                mesh, obj_eval = self._object_to_evaluated_mesh(obj, from_frame=merge_group.root_object.matrix_world)
+                indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
+                self._xml_indexed_triangle_set(indexed_triangle_set, merge_group.indexed_triangle_element,
+                                               bind_id=bind_id, append=True)
+                obj_eval.to_mesh_clear()
+                bpy.data.objects.remove(obj_eval, do_unlink=True)
+
+    def _xml_scene_object_shape(self, obj: bpy.types.Object, node_element: ET.Element):
+        # Check if the mesh has already been defined in the i3d file
+        pre_exists, indexed_triangle_element = self._xml_add_indexed_triangle_set(obj.data.name)
+        shape_id = int(indexed_triangle_element.get('shapeId'))
+        if not pre_exists:
+            # Fetch an evaluated mesh and the object is was generated from (Needed to clear mesh from memory)
+            mesh, obj_eval = self._object_to_evaluated_mesh(obj)
+            # Generate the indexed triangle set data needed to describe a mesh in i3d format
+            indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, shape_id)
+            # Write this data to the triangle set, overwriting any existing data
+            self._xml_indexed_triangle_set(indexed_triangle_set, indexed_triangle_element, append=False)
+            # Clean out the generated mesh so it does not stay in blender memory
+            obj_eval.to_mesh_clear()
+            # Clean out the object copy
+            bpy.data.objects.remove(obj_eval, do_unlink=True)
+        else:
+            self.logger.info(f"{obj.name!r} already exists in i3d file")
+
+        self.logger.debug(f"{obj.name!r} has shape ID {shape_id}")
         self._xml_write_int(node_element, 'shapeId', shape_id)
         self._xml_write_string(node_element, 'materialIds', self.shape_material_indexes[shape_id])
 
@@ -861,12 +1025,16 @@ class Exporter:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = indents
 
-    @staticmethod
-    def blender_to_i3d(blender_object: Union[bpy.types.Object, bpy.types.Collection]):
+    def blender_to_i3d(self, blender_object: Union[bpy.types.Object, bpy.types.Collection]):
         # Collections don't have an object type since they aren't objects. If they are used for organisational purposes
         # they are converted into transformgroups in the scenegraph
         if isinstance(blender_object, bpy.types.Collection):
             return 'TransformGroup'
+        # For setting the child meshes of a mergegroups to transformgroups
+        elif blender_object.type == 'MESH' and self.export_merge_groups:
+            if blender_object.i3d_merge_group.group_id != '':
+                if not blender_object.i3d_merge_group.is_root:
+                    return 'TransformGroup'
 
         switcher = {
             'MESH': 'Shape',
@@ -887,6 +1055,33 @@ class Exporter:
             return '$' + filepath[filepath.index(relative_filter) + len(relative_filter) + 1: len(filepath)]
         except ValueError:
             return filepath
+
+
+class MergeGroup(object):
+    def __init__(self, merge_group_id):
+        self.group_id = merge_group_id
+        self.root_object = None
+        self.root_object_element = None
+        self.indexed_triangle_element = None
+        self.members = []
+        self.skin_bind_id = []
+
+    @property
+    def shape_id(self):
+        return int(self.indexed_triangle_element.get('shapeId'))
+
+    def add_member(self, obj, node_id):
+        self.members.append(obj)
+        self.skin_bind_id.append(node_id)
+        return len(self.members)
+
+
+class IndexedTriangleSet(object):
+    def __init__(self):
+        self.name = ''
+        self.vertices = []
+        self.triangles = []
+        self.subsets = []
 
 
 class SceneGraph(object):
@@ -917,6 +1112,7 @@ class SceneGraph(object):
             'node': 0
         }
         self.nodes = {}
+        self.nodes_reverse = {}
         self.shapes = {}
         self.materials = {}
         self.files = {}
@@ -948,6 +1144,8 @@ class SceneGraph(object):
                  parent: SceneGraph.Node = None) -> SceneGraph.Node:
         new_node = SceneGraph.Node(self.ids['node'], blender_object, parent)
         self.nodes[new_node.id] = new_node
+        if blender_object is not None:
+            self.nodes_reverse[blender_object.name] = new_node.id
         self.ids['node'] += 1
         return new_node
 

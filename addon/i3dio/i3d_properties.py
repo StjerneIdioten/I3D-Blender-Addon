@@ -16,6 +16,7 @@
  ##### END GPL LICENSE BLOCK #####
 """
 
+import logging
 import bpy
 from bpy.props import (
     StringProperty,
@@ -23,7 +24,8 @@ from bpy.props import (
     EnumProperty,
     PointerProperty,
     FloatProperty,
-    IntProperty
+    IntProperty,
+    CollectionProperty,
 )
 
 classes = []
@@ -51,6 +53,16 @@ defaults = {
     'compoundChild': False,
     'trigger': False,
     }
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.handlers = []  # Clear handlers between runs since the logging module keeps track outside addon
+formatter = logging.Formatter('%(module)s:%(funcName)s:%(levelname)s: %(message)s')
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+console_handler.setLevel(logging.DEBUG)
+logger.addHandler(console_handler)
+logger.info(f"Initialized logger for {__name__} module")
 
 
 def register(cls):
@@ -100,6 +112,16 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         ),
         options={'ENUM_FLAG'},
         default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH'},
+    )
+
+    features_to_export: EnumProperty(
+        name="Features",
+        description="Select which features should be enabled for the export",
+        items=(
+            ('MERGE_GROUPS', "Merge Groups", "Export merge groups"),
+        ),
+        options={'ENUM_FLAG'},
+        default={'MERGE_GROUPS'},
     )
 
     copy_files: BoolProperty(
@@ -303,6 +325,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     non_renderable: PointerProperty(type=non_renderable)
     distance_blending: PointerProperty(type=distance_blending)
 
+
 @register
 class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
@@ -331,12 +354,26 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
     depth_map_bias: PointerProperty(type=depth_map_bias)
     depth_map_slope_scale_bias: PointerProperty(type=depth_map_slope_scale_bias)
 
+@register
+class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
+    is_root: BoolProperty(
+            name="Root of merge group",
+            description="Check if this object is gonna be the root object holding the mesh",
+            default=False
+        )
+
+    group_id: StringProperty(name='Merge Group',
+                             description='The merge group this object belongs to',
+                             default=''
+                             )
+
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeTransformAttributes)
+    bpy.types.Object.i3d_merge_group = PointerProperty(type=I3DMergeGroupObjectData)
     bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
     bpy.types.Light.i3d_attributes = PointerProperty(type=I3DNodeLightAttributes)
 
