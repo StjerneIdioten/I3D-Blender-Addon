@@ -164,195 +164,147 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
 
 @register
 class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
+    i3d_map = {
+        'visibility': {'name': 'visibility', 'default': True},
+        'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
+        'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
+        'object_mask': {'name': 'objectMask', 'default': 0},
+        'rigid_body_type': {'default': 'disabled'},
+        'collision': {'name': 'collision', 'default': True},
+        'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
+        'compound': {'name': 'compound', 'default': False},
+        'compound_child': {'name': 'compoundChild', 'default': False},
+        'trigger': {'name': 'trigger', 'default': False},
+    }
 
-    @register
-    class visibility(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='visibility', options={'SKIP_SAVE'})
-        value_i3d: BoolProperty(
-            name="Visibility",
-            description="Visibility flag inside of Giants Engine, decoupled from blender visibility",
-            default=defaults['visibility']
-        )
-        location_i3d: StringProperty(default='IndexedTriangleSet', options={'SKIP_SAVE'})
+    visibility: BoolProperty(
+        name="Visibility",
+        description="Visibility flag inside of Giants Engine, decoupled from blender visibility",
+        default=i3d_map['visibility']['default']
+    )
 
-    @register
-    class clip_distance(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='clipDistance', options={'SKIP_SAVE'})
-        value_i3d: FloatProperty(
-            name="Clip Distance",
-            description="Anything above this distance to the camera, wont be rendered",
-            default=defaults['clipDistance'],
-            min=0.0
-        )
+    clip_distance: FloatProperty(
+        name="Clip Distance",
+        description="Anything above this distance to the camera, wont be rendered",
+        default=i3d_map['clip_distance']['default'],
+        min=0.0
+    )
 
-    @register
-    class min_clip_distance(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='minClipDistance', options={'SKIP_SAVE'})
-        value_i3d: FloatProperty(
-            name="Min Clip Distance",
-            description="Anything below this distance to the camera, wont be rendered",
-            default=defaults['minClipDistance'],
-            min=0.0
-        )
+    min_clip_distance: FloatProperty(
+        name="Min Clip Distance",
+        description="Anything below this distance to the camera, wont be rendered",
+        default=i3d_map['min_clip_distance']['default'],
+        min=0.0
+    )
 
-    @register
-    class object_mask(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='objectMask', options={'SKIP_SAVE'})
-        value_i3d: IntProperty(
-            name="Object Mask",
-            description="Used for determining if the object interacts with certain rendering effects",
-            default=defaults['objectMask'],
-            min=0,
-            max=2147483647
-        )
+    object_mask: IntProperty(
+        name="Object Mask",
+        description="Used for determining if the object interacts with certain rendering effects",
+        default=i3d_map['object_mask']['default'],
+        min=0,
+        max=2147483647
+    )
 
-    @register
-    class rigid_body_type(bpy.types.PropertyGroup):
+    rigid_body_type: EnumProperty(
+        name="Rigid Body Type",
+        description="Select rigid body type",
+        items=[
+            ('disabled', 'Disabled', "Disable rigidbody for this object"),
+            ('static', 'Static', "Inanimate object with infinite mass"),
+            ('dynamic', 'Dynamic', "Object moves with physics"),
+            ('kinematic', 'Kinematic', "Object moves without physics")
+        ],
+        default=i3d_map['rigid_body_type']['default']
+    )
 
-        name_i3d: EnumProperty(
-            name="Rigid Body Type",
-            description="Select rigid body type",
-            items=[
-                ('disabled', 'Disabled', "Disable rigidbody for this object"),
-                ('static', 'Static', "Inanimate object with infinite mass"),
-                ('dynamic', 'Dynamic', "Object moves with physics"),
-                ('kinematic', 'Kinematic', "Object moves without physics")
-            ],
-            default='disabled'
-        )
+    collision: BoolProperty(
+        name="Collision",
+        description="Does the object take part in collisions",
+        default=i3d_map['collision']['default']
+    )
 
-        value_i3d: BoolProperty(default=True, options={'SKIP_SAVE'})
+    collision_mask: StringProperty(
+        name="Collision Mask",
+        description="The objects collision mask as a hexadecimal value",
+        default=i3d_map['collision_mask']['default']
+    )
 
-    @register
-    class collision(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='collision', options={'SKIP_SAVE'})
-        value_i3d: BoolProperty(
-            name="Collision",
-            description="Does the object take part in collisions",
-            default=defaults['collision']
-        )
+    compound: BoolProperty(
+        name="Compound",
+        description="Compound",
+        default=i3d_map['compound']['default']
+    )
 
-    @register
-    class collision_mask(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='collisionMask', options={'SKIP_SAVE'})
-        value_i3d: StringProperty(
-            name="Collision Mask",
-            description="The objects collision mask as a hexadecimal value",
-            default=defaults['collisionMask']
-        )
+    compound_child: BoolProperty(
+        name="Compound Child",
+        description="Compound Child",
+        default=i3d_map['compound_child']['default']
+    )
 
-    @register
-    class compound(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='compound', options={'SKIP_SAVE'})
-        value_i3d: BoolProperty(
-            name="Compound",
-            description="Compound",
-            default=defaults['compound']
-        )
-
-    @register
-    class compound_child(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='compoundChild', options={'SKIP_SAVE'})
-        value_i3d: BoolProperty(
-            name="Compound Child",
-            description="Compound Child",
-            default=defaults['compoundChild']
-        )
-
-    @register
-    class trigger(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='trigger', options={'SKIP_SAVE'})
-        value_i3d: BoolProperty(
-            name="Trigger",
-            description="Trigger",
-            default=defaults['trigger']
-        )
-
-    visibility: PointerProperty(type=visibility)
-    clip_distance: PointerProperty(type=clip_distance)
-    min_clip_distance: PointerProperty(type=min_clip_distance)
-    object_mask: PointerProperty(type=object_mask)
-
-    rigid_body_type: PointerProperty(type=rigid_body_type)
-    collision: PointerProperty(type=collision)
-    collision_mask: PointerProperty(type=collision_mask)
-    compound: PointerProperty(type=compound)
-    compound_child: PointerProperty(type=compound_child)
-    trigger: PointerProperty(type=trigger)
+    trigger: BoolProperty(
+        name="Trigger",
+        description="Trigger",
+        default=i3d_map['trigger']['default']
+    )
 
 
 @register
 class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
+    i3d_map = {
+        'casts_shadows': {'name': 'castsShadows', 'default': False},
+        'receive_shadows': {'name': 'receiveShadows', 'default': False},
+        'non_renderable': {'name': 'nonRenderable', 'default': False},
+        'distance_blending': {'name': 'distanceBlending', 'default': True},
+    }
 
-    @register
-    class casts_shadows(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='castsShadows', options={'SKIP_SAVE'})
-        value_i3d: BoolProperty(
-            name="Cast Shadowmap",
-            description="Cast Shadowmap",
-            default=defaults['castsShadows']
-        )
+    casts_shadows: BoolProperty(
+        name="Cast Shadowmap",
+        description="Cast Shadowmap",
+        default=i3d_map['casts_shadows']['default']
+    )
 
-    @register
-    class receive_shadows(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='receiveShadows', options={'SKIP_SAVE'})
-        value_i3d: BoolProperty(
-            name="Receive Shadowmap",
-            description="Receive Shadowmap",
-            default=defaults['receiveShadows']
-        )
+    receive_shadows: BoolProperty(
+        name="Receive Shadowmap",
+        description="Receive Shadowmap",
+        default=i3d_map['receive_shadows']['default']
+    )
 
-    @register
-    class non_renderable(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='nonRenderable', options={'SKIP_SAVE'})
-        value_i3d: BoolProperty(
-            name="Non Renderable",
-            description="Don't render the mesh, used for collision boxes etc.",
-            default=defaults['nonRenderable']
-        )
+    non_renderable: BoolProperty(
+        name="Non Renderable",
+        description="Don't render the mesh, used for collision boxes etc.",
+        default=i3d_map['non_renderable']['default']
+    )
 
-    @register
-    class distance_blending(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='distanceBlending', options={'SKIP_SAVE'})
-        value_i3d: BoolProperty(
-            name="Distance Blending",
-            description="Distance Blending",
-            default=defaults['distanceBlending']
-        )
-
-    casts_shadows: PointerProperty(type=casts_shadows)
-    receive_shadows: PointerProperty(type=receive_shadows)
-    non_renderable: PointerProperty(type=non_renderable)
-    distance_blending: PointerProperty(type=distance_blending)
+    distance_blending: BoolProperty(
+        name="Distance Blending",
+        description="Distance Blending",
+        default=i3d_map['distance_blending']['default']
+    )
 
 
 @register
 class I3DNodeLightAttributes(bpy.types.PropertyGroup):
+    i3d_map = {
+        'depth_map_bias': {'name': 'depthMapBias', 'default': 0.0012},
+        'depth_map_slope_scale_bias': {'name': 'depthMapSlopeScaleBias', 'default': 2.0},
+    }
 
-    @register
-    class depth_map_bias(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='depthMapBias', options={'SKIP_SAVE'})
-        value_i3d: FloatProperty(
-            name="Shadow Map Bias",
-            description="Shadow Map Bias",
-            default=defaults['depthMapBias'],
-            min=0.0,
-            max=10.0
-        )
+    depth_map_bias: FloatProperty(
+        name="Shadow Map Bias",
+        description="Shadow Map Bias",
+        default=i3d_map['depth_map_bias']['default'],
+        min=0.0,
+        max=10.0
+    )
 
-    @register
-    class depth_map_slope_scale_bias(bpy.types.PropertyGroup):
-        name_i3d: StringProperty(default='depthMapSlopeScaleBias', options={'SKIP_SAVE'})
-        value_i3d: FloatProperty(
-            name="Shadow Map Slope Scale Bias",
-            description="Shadow Map Slope Scale Bias",
-            default=defaults['depthMapSlopeScaleBias'],
-            min=-10.0,
-            max=10.0
-        )
+    depth_map_slope_scale_bias: FloatProperty(
+        name="Shadow Map Slope Scale Bias",
+        description="Shadow Map Slope Scale Bias",
+        default=i3d_map['depth_map_slope_scale_bias']['default'],
+        min=-10.0,
+        max=10.0
+    )
 
-    depth_map_bias: PointerProperty(type=depth_map_bias)
-    depth_map_slope_scale_bias: PointerProperty(type=depth_map_slope_scale_bias)
 
 @register
 class I3DMergeGroupObjectData(bpy.types.PropertyGroup):

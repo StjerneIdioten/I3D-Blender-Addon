@@ -355,42 +355,52 @@ class Exporter:
             self._xml_object_properties(node.blender_object.i3d_attributes, node_element)
 
     def _xml_object_properties(self, propertygroup, element):
-        for key in propertygroup.__annotations__.keys():
-            prop = getattr(propertygroup, key)
-
-            name = prop.name_i3d
-            val = prop.value_i3d
-
-            if name != 'disabled':
-
-                if isinstance(val, float):
-                    if math.isclose(val, i3d_properties.defaults[name], abs_tol=0.0000001):
+        self.logger.info(f"Writing non-default properties from propertygroup: '{type(propertygroup).__name__}'")
+        # Since blender properties are basically abusing the annotation system, we can also abuse this to create
+        # a generic property export function by accessing the annotation dictionary
+        properties_written = 0
+        for prop_key in propertygroup.__annotations__.keys():
+            prop_name = prop_key
+            value = getattr(propertygroup, prop_key)
+            value_to_write = value
+            default = propertygroup.i3d_map[prop_key].get('default')
+            i3d_name = propertygroup.i3d_map[prop_key].get('name')
+            field_type = propertygroup.i3d_map[prop_key].get('type')
+            
+            # Special case of checking floats, since these can be not equal due to floating point errors
+            if isinstance(value, float):
+                if math.isclose(value, default, abs_tol=0.0000001):
+                    continue
+            # In the case that the value is default, then just ignore it
+            elif value == default:
+                continue
+            # In some cases of enums the i3d_name is actually the enum value itself. It is signaled by not having a name
+            elif i3d_name is None:
+                i3d_name = value
+                prop_name = f"{i3d_name}({prop_key})"
+                value_to_write = 1
+            # String field is used for unique types, that then get converted fx. HEX values. This is signaled by
+            # having an extra type field in the i3d_map dictionary entry for the propertygroup
+            elif field_type is not None:
+                if field_type == 'HEX':
+                    try:
+                        value_decimal = int(value, 16)
+                    except ValueError as error:
+                        self.logger.error(f"Supplied value '{value}' for '{prop_name}' is not a hex value!")
                         continue
-
-                if val != i3d_properties.defaults[name]:
-                    self.logger.debug(f"'{element.get('name')}' has modified property '{name}', with value '{val}'. "
-                                      f"Default is '{i3d_properties.defaults[name]}'")
-                    if isinstance(val, float):
-                        self._xml_write_float(element, prop.name_i3d, val)
-                    elif isinstance(val, bool):  # Order matters, since bool is an int subclass!
-                        self._xml_write_bool(element, prop.name_i3d, val)
-                    elif isinstance(val, int):
-                        self._xml_write_int(element, prop.name_i3d, val)
-                    elif isinstance(val, str):
-                        if name == 'collisionMask':  # Handling special case, might have to rethink the entire system
-                            try:
-                                val_decimal = int(val, 16)
-                            except ValueError as error:
-                                self.logger.error(f"Supplied value '{val}' for '{name}' is not a hex value")
-                            else:
-                                if 0 <= val_decimal <= 4294967295:  # Check that it is actually a 32-bit unsigned int
-                                    self._xml_write_int(element, prop.name_i3d, val_decimal)
-                                else:
-                                    self.logger.warning(f"Supplied value '{val}' for '{name}' is out of bounds."
-                                                        f" It should be within 0-ffffffff (32-bit unsigned)")
-                                    continue
+                    else:
+                        if 0 <= value_decimal <= 2**32-1:  # Check that it is actually a 32-bit unsigned int
+                            value_to_write = value_decimal
                         else:
-                            self._xml_write_string(element, prop.name_i3d, val)
+                            self.logger.warning(f"Supplied value '{value}' for '{prop_name}' is out of bounds."
+                                                f" It should be within range [0, ffffffff] (32-bit unsigned)")
+                            continue
+
+            self.logger.debug(f"\tProperty '{prop_name}' with value '{value}'. Default is '{default}'")
+            Exporter._xml_write_attribute(element, i3d_name, value_to_write)
+            properties_written += 1
+
+        self.logger.info(f"Wrote '{properties_written}' properties")
 
     def _xml_add_material(self, material):
 
@@ -994,6 +1004,17 @@ class Exporter:
     def _xml_write_string(element: ET.Element, attribute: str, value: str) -> None:
         """Write the attribute into the element with formatting for strings"""
         element.set(attribute, value)
+
+    @staticmethod
+    def _xml_write_attribute(element: ET.Element, attribute: str, value) -> None:
+        if isinstance(value, float):
+            Exporter._xml_write_float(element, attribute, value)
+        elif isinstance(value, bool):  # Order matters, since bool is an int subclass!
+            Exporter._xml_write_bool(element, attribute, value)
+        elif isinstance(value, int):
+            Exporter._xml_write_int(element, attribute, value)
+        elif isinstance(value, str):
+            Exporter._xml_write_string(element, attribute, value)
 
     @staticmethod
     def _indent(elem: ET.Element, level: int = 0) -> None:

@@ -53,9 +53,9 @@ class I3D_IO_PT_transform_attributes(Panel):
         layout.use_property_decorate = False
         obj = bpy.context.active_object
 
-        layout.prop(obj.i3d_attributes.visibility, 'value_i3d')
-        layout.prop(obj.i3d_attributes.clip_distance, 'value_i3d')
-        layout.prop(obj.i3d_attributes.min_clip_distance, 'value_i3d')
+        layout.prop(obj.i3d_attributes, 'visibility')
+        layout.prop(obj.i3d_attributes, 'clip_distance')
+        layout.prop(obj.i3d_attributes, 'min_clip_distance')
 
 
 @register
@@ -104,34 +104,34 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
         layout.use_property_decorate = False
         obj = bpy.context.active_object
         row = layout.row()
-        row.prop(obj.i3d_attributes.rigid_body_type, 'name_i3d')
+        row.prop(obj.i3d_attributes, 'rigid_body_type')
 
-        if obj.i3d_attributes.rigid_body_type.name_i3d != 'disabled':
+        if obj.i3d_attributes.rigid_body_type != 'disabled':
             row_compound = layout.row()
-            row_compound.prop(obj.i3d_attributes.compound, 'value_i3d')
+            row_compound.prop(obj.i3d_attributes, 'compound')
 
             row_compound_child = layout.row()
-            row_compound_child.prop(obj.i3d_attributes.compound_child, 'value_i3d')
+            row_compound_child.prop(obj.i3d_attributes, 'compound_child')
 
-            if obj.i3d_attributes.rigid_body_type.name_i3d == 'static':
+            if obj.i3d_attributes.rigid_body_type == 'static':
                 row_compound.enabled = False
                 row_compound_child.enabled = False
-                obj.i3d_attributes.compound.property_unset('value_i3d')
-                obj.i3d_attributes.compound_child.property_unset('value_i3d')
+                obj.i3d_attributes.property_unset('compound')
+                obj.i3d_attributes.property_unset('compound_child')
             else:
-                if obj.i3d_attributes.compound.value_i3d:
+                if obj.i3d_attributes.compound:
                     row_compound_child.enabled = False
-                elif obj.i3d_attributes.compound_child.value_i3d:
+                elif obj.i3d_attributes.compound_child:
                     row_compound.enabled = False
 
             row = layout.row()
-            row.prop(obj.i3d_attributes.collision, 'value_i3d')
+            row.prop(obj.i3d_attributes, 'collision')
 
             row = layout.row()
-            row.prop(obj.i3d_attributes.collision_mask, 'value_i3d')
+            row.prop(obj.i3d_attributes, 'collision_mask')
 
             row = layout.row()
-            row.prop(obj.i3d_attributes.trigger, 'value_i3d')
+            row.prop(obj.i3d_attributes, 'trigger')
 
 
 @register
@@ -152,10 +152,10 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.use_property_decorate = False
         obj = bpy.context.active_object.data
 
-        layout.prop(obj.i3d_attributes.casts_shadows, "value_i3d")
-        layout.prop(obj.i3d_attributes.receive_shadows, "value_i3d")
-        layout.prop(obj.i3d_attributes.non_renderable, "value_i3d")
-        layout.prop(obj.i3d_attributes.distance_blending, "value_i3d")
+        layout.prop(obj.i3d_attributes, "casts_shadows")
+        layout.prop(obj.i3d_attributes, "receive_shadows")
+        layout.prop(obj.i3d_attributes, "non_renderable")
+        layout.prop(obj.i3d_attributes, "distance_blending")
 
 
 @register
@@ -176,8 +176,8 @@ class I3D_IO_PT_light_attributes(Panel):
         layout.use_property_decorate = False
         obj = bpy.context.active_object.data
 
-        layout.prop(obj.i3d_attributes.depth_map_bias, "value_i3d")
-        layout.prop(obj.i3d_attributes.depth_map_slope_scale_bias, "value_i3d")
+        layout.prop(obj.i3d_attributes, "depth_map_bias")
+        layout.prop(obj.i3d_attributes, "depth_map_slope_scale_bias")
 
 
 def register():
