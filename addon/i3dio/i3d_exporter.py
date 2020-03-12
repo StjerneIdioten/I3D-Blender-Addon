@@ -366,7 +366,7 @@ class Exporter:
             default = propertygroup.i3d_map[prop_key].get('default')
             i3d_name = propertygroup.i3d_map[prop_key].get('name')
             field_type = propertygroup.i3d_map[prop_key].get('type')
-            
+
             # Special case of checking floats, since these can be not equal due to floating point errors
             if isinstance(value, float):
                 if math.isclose(value, default, abs_tol=0.0000001):
@@ -377,7 +377,6 @@ class Exporter:
             # In some cases of enums the i3d_name is actually the enum value itself. It is signaled by not having a name
             elif i3d_name is None:
                 i3d_name = value
-                prop_name = f"{i3d_name}({prop_key})"
                 value_to_write = 1
             # String field is used for unique types, that then get converted fx. HEX values. This is signaled by
             # having an extra type field in the i3d_map dictionary entry for the propertygroup

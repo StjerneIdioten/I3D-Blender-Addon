@@ -163,7 +163,7 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
 
 
 @register
-class I3DNodeTransformAttributes(bpy.types.PropertyGroup):
+class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     i3d_map = {
         'visibility': {'name': 'visibility', 'default': True},
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
@@ -255,6 +255,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'receive_shadows': {'name': 'receiveShadows', 'default': False},
         'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
+        'cpu_mesh': {'name': 'meshUsage', 'default': '0', }
     }
 
     casts_shadows: BoolProperty(
@@ -279,6 +280,16 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         name="Distance Blending",
         description="Distance Blending",
         default=i3d_map['distance_blending']['default']
+    )
+
+    cpu_mesh: EnumProperty(
+        name="CPU Mesh",
+        description="CPU Mesh",
+        items=[
+            ('0', 'Off', "Turns off CPU Mesh"),
+            ('256', 'On', "Turns on CPU Mesh")
+        ],
+        default=i3d_map['cpu_mesh']['default']
     )
 
 
@@ -324,7 +335,7 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
-    bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeTransformAttributes)
+    bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeObjectAttributes)
     bpy.types.Object.i3d_merge_group = PointerProperty(type=I3DMergeGroupObjectData)
     bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
     bpy.types.Light.i3d_attributes = PointerProperty(type=I3DNodeLightAttributes)

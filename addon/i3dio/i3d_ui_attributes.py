@@ -37,10 +37,10 @@ def register(cls):
 
 
 @register
-class I3D_IO_PT_transform_attributes(Panel):
+class I3D_IO_PT_object_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
-    bl_label = "I3D Transform Attributes"
+    bl_label = "I3D Object Attributes"
     bl_context = 'object'
 
     @classmethod
@@ -57,46 +57,17 @@ class I3D_IO_PT_transform_attributes(Panel):
         layout.prop(obj.i3d_attributes, 'clip_distance')
         layout.prop(obj.i3d_attributes, 'min_clip_distance')
 
-
-@register
-class I3D_IO_PT_merge_group_attributes(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = 'Merge Group'
-    bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_transform_attributes'
-
-    @classmethod
-    def poll(cls, context):
-        return context.object is not None
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        obj = bpy.context.active_object
-
-        row = layout.row()
-        row.prop(obj.i3d_merge_group, 'is_root')
-        if obj.i3d_merge_group.group_id is '':  # Defaults to a default initialized placeholder
-            row.enabled = False
-
-        row = layout.row()
-        row.prop(obj.i3d_merge_group, 'group_id')
-
-
-
 @register
 class I3D_IO_PT_rigid_body_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_label = 'Rigidbody'
     bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_transform_attributes'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
 
     @classmethod
     def poll(cls, context):
-        return context.object is not None
+        return context.object is not None and context.object.type == 'MESH'
 
     def draw(self, context):
         layout = self.layout
@@ -132,6 +103,41 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
 
             row = layout.row()
             row.prop(obj.i3d_attributes, 'trigger')
+        else:
+            # Reset all properties if rigidbody is disabled (This is easier than doing conditional export for now.
+            # Since properties that are defaulted, wont get exported)
+            obj.i3d_attributes.property_unset('compound')
+            obj.i3d_attributes.property_unset('compound_child')
+            obj.i3d_attributes.property_unset('collision')
+            obj.i3d_attributes.property_unset('collision_mask')
+            obj.i3d_attributes.property_unset('trigger')
+
+
+@register
+class I3D_IO_PT_merge_group_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = 'Merge Group'
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
+
+        row = layout.row()
+        row.prop(obj.i3d_merge_group, 'is_root')
+        if obj.i3d_merge_group.group_id is '':  # Defaults to a default initialized placeholder
+            row.enabled = False
+
+        row = layout.row()
+        row.prop(obj.i3d_merge_group, 'group_id')
 
 
 @register
@@ -156,6 +162,7 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "receive_shadows")
         layout.prop(obj.i3d_attributes, "non_renderable")
         layout.prop(obj.i3d_attributes, "distance_blending")
+        layout.prop(obj.i3d_attributes, "cpu_mesh")
 
 
 @register
