@@ -299,11 +299,8 @@ class Exporter:
             self.logger.info(
                 f"{node.blender_object.name!r} is a collection and it will be exported as a transformgroup with no "
                 f"translation and rotation")
-            # Collections dont have any physical properties, but the transformgroups in i3d has so it is set to 0
-            # in relation to it's parent so it stays purely organisational
-            self._xml_write_string(node_element, 'translation', "0 0 0")
-            self._xml_write_string(node_element, 'rotation', "0 0 0")
-            self._xml_write_string(node_element, 'scale', "1 1 1")
+            # Collections dont have any physical properties, but the transformgroups in i3d has so it is set to the
+            # default value of GE, which is just zeroed.
         else:
             # Apply the space transformations depending on object, since lights and cameras has their z-axis reversed
             # in GE
@@ -328,28 +325,32 @@ class Exporter:
                         f"flipped z-axis in GE of parent Light/Camera")
 
             # Translation with applied unit scaling
-            translation = "{0:.6f} {1:.6f} {2:.6f}".format(
-                *[x * bpy.context.scene.unit_settings.scale_length
-                  for x in matrix.to_translation()])
+            translation = matrix.to_translation()
+            if not self.vector_compare(translation, mathutils.Vector((0, 0, 0))):
+                # This is way too much effort to get 4 decimal points of precision and nice formatting :-P
+                translation = "{0:.6g} {1:.6g} {2:.6g}".format(*[x * bpy.context.scene.unit_settings.scale_length for x in translation])
 
-            self._xml_write_string(node_element, 'translation', translation)
-            self.logger.debug(f"{node.blender_object.name!r} translation: [{translation}]")
+                self._xml_write_string(node_element, 'translation', translation)
+                self.logger.debug(f"{node.blender_object.name!r} translation: [{translation}]")
 
             # Rotation, no unit scaling since it will always be degrees.
-            rotation = "{0:.3f} {1:.3f} {2:.3f}".format(*[math.degrees(axis) for axis in matrix.to_euler('XYZ')])
-            self._xml_write_string(node_element, 'rotation', rotation)
-            self.logger.debug(f"{node.blender_object.name!r} rotation(degrees): [{rotation}]")
+            rotation = [math.degrees(axis) for axis in matrix.to_euler('XYZ')]
+            if not self.vector_compare(mathutils.Vector(rotation), mathutils.Vector((0, 0, 0))):
+                rotation = "{0:.6g} {1:.6g} {2:.6g}".format(*rotation)
+                self._xml_write_string(node_element, 'rotation', rotation)
+                self.logger.debug(f"{node.blender_object.name!r} rotation(degrees): [{rotation}]")
 
             # Scale
             if matrix.is_negative:
                 self.logger.error(f"{node.blender_object.name!r} has one or more negative scaling components, "
                                       f"which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
-                scale = "{0:.6f} {1:.6f} {2:.6f}".format(1, 1, 1)
             else:
-                scale = "{0:.6f} {1:.6f} {2:.6f}".format(*matrix.to_scale())
+                scale = matrix.to_scale()
+                if not self.vector_compare(scale, mathutils.Vector((1, 1, 1))):
+                    scale = "{0:.6g} {1:.6g} {2:.6g}".format(*scale)
 
-            self._xml_write_string(node_element, 'scale', scale)
-            self.logger.debug(f"{node.blender_object.name!r} scale: [{scale}]")
+                    self._xml_write_string(node_element, 'scale', scale)
+                    self.logger.debug(f"{node.blender_object.name!r} scale: [{scale}]")
 
             # Write the object transform properties from the blender UI into the object
             self._xml_object_properties(node.blender_object.i3d_attributes, node)
@@ -1080,6 +1081,18 @@ class Exporter:
             return '$' + filepath[filepath.index(relative_filter) + len(relative_filter) + 1: len(filepath)]
         except ValueError:
             return filepath
+
+    @staticmethod
+    def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon=0.0000001) -> bool:
+        print(f"arg type: {type(a)}")
+        if len(a) != len(b) or not isinstance(a, mathutils.Vector) or not isinstance(b, mathutils.Vector):
+            raise TypeError("Both arguments must be vectors of equal length!")
+
+        for idx in range(0, len(a) - 1):
+            if not math.isclose(a[idx], b[idx], abs_tol=epsilon):
+                return False
+
+        return True
 
 
 class MergeGroup(object):
