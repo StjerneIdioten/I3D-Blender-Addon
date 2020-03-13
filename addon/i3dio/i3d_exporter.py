@@ -262,10 +262,10 @@ class Exporter:
                 self.logger.info(f"{node.blender_object.name!r} is parsed as a {node_type!r}")
                 # merge group id can only ever be set on an object with a mesh, so no need to check for mesh type
                 if self.export_merge_groups and node.blender_object.i3d_merge_group.group_id != '':
-                    self._xml_merge_group(node.blender_object, node_element)
+                    self._xml_merge_group(node, node_element)
                 else:
                     if node_type == 'MESH':
-                        self._xml_scene_object_shape(node.blender_object, node_element)
+                        self._xml_scene_object_shape(node, node_element)
                     elif node_type == 'EMPTY':
                         self._xml_scene_object_transform_group(node, node_element)
                     elif node_type == 'LIGHT':
@@ -274,23 +274,23 @@ class Exporter:
                         self._xml_scene_object_camera(node, node_element)
 
                     try:
-                        self._xml_object_properties(node.blender_object.data.i3d_attributes, node_element)
+                        self._xml_object_properties(node.blender_object.data.i3d_attributes, node)
                     except AttributeError:
                         self.logger.debug(f"{node.blender_object.name!r} has no i3d_attributes")
 
             for child in node.children.values():
                 self.logger.info(
                     f"Parsing child node {child.blender_object.name!r} of node {node.blender_object.name!r}")
-                child_element = ET.SubElement(node_element,
-                                              self.blender_to_i3d(child.blender_object))
-                parse_node(child, child_element)
+                child.i3d_elements['scene_node'] = ET.SubElement(node_element,
+                                                                   self.blender_to_i3d(child.blender_object))
+                parse_node(child, child.i3d_elements['scene_node'])
 
         for root_child in self._scene_graph.nodes[0].children.values():
             self.logger.info(
                 f"Parsing child node {root_child.blender_object.name!r} of root node")
-            root_child_element = ET.SubElement(self._tree.find('Scene'),
-                                               self.blender_to_i3d(root_child.blender_object))
-            parse_node(root_child, root_child_element)
+            root_child.i3d_elements['scene_node'] = ET.SubElement(self._tree.find('Scene'),
+                                                                    self.blender_to_i3d(root_child.blender_object))
+            parse_node(root_child, root_child.i3d_elements['scene_node'])
 
     def _xml_scene_object_general_data(self, node: SceneGraph.Node, node_element: ET.Element):
         self._xml_write_string(node_element, 'name', node.blender_object.name)
@@ -352,9 +352,9 @@ class Exporter:
             self.logger.debug(f"{node.blender_object.name!r} scale: [{scale}]")
 
             # Write the object transform properties from the blender UI into the object
-            self._xml_object_properties(node.blender_object.i3d_attributes, node_element)
+            self._xml_object_properties(node.blender_object.i3d_attributes, node)
 
-    def _xml_object_properties(self, propertygroup, element):
+    def _xml_object_properties(self, propertygroup, node):
         self.logger.info(f"Writing non-default properties from propertygroup: '{type(propertygroup).__name__}'")
         # Since blender properties are basically abusing the annotation system, we can also abuse this to create
         # a generic property export function by accessing the annotation dictionary
@@ -366,6 +366,7 @@ class Exporter:
             default = propertygroup.i3d_map[prop_key].get('default')
             i3d_name = propertygroup.i3d_map[prop_key].get('name')
             field_type = propertygroup.i3d_map[prop_key].get('type')
+            i3d_element = node.i3d_elements[propertygroup.i3d_map[prop_key].get('placement', 'scene_node')]
 
             # Special case of checking floats, since these can be not equal due to floating point errors
             if isinstance(value, float):
@@ -396,7 +397,7 @@ class Exporter:
                             continue
 
             self.logger.debug(f"\tProperty '{prop_name}' with value '{value}'. Default is '{default}'")
-            Exporter._xml_write_attribute(element, i3d_name, value_to_write)
+            Exporter._xml_write_attribute(i3d_element, i3d_name, value_to_write)
             properties_written += 1
 
         self.logger.info(f"Wrote '{properties_written}' properties")
@@ -830,7 +831,8 @@ class Exporter:
                     skin_bind += f"{node_id:d} "
                 self._xml_write_string(merge_group.root_object_element, 'skinBindNodeIds', skin_bind.strip())
 
-    def _xml_merge_group(self, obj: bpy.types.Object, node_element: ET.Element):
+    def _xml_merge_group(self, node, node_element: ET.Element):
+        obj = node.blender_object
         self.logger.info(f"{obj.name!r} is exported as part of a mergegroup")
         merge_group = self.merge_groups.setdefault(obj.i3d_merge_group.group_id,
                                                    MergeGroup(obj.i3d_merge_group.group_id))
@@ -846,6 +848,7 @@ class Exporter:
                 merge_group.skin_bind_id.insert(0, int(node_element.get('nodeId')))
                 _, merge_group.indexed_triangle_element = \
                     self._xml_add_indexed_triangle_set(f"{self.merge_group_prefix}{merge_group.group_id}")
+                node.i3d_elements['indexed_triangle_set'] = merge_group.indexed_triangle_element
                 mesh, obj_eval = self._object_to_evaluated_mesh(obj)
                 indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
                 self._xml_indexed_triangle_set(indexed_triangle_set, merge_group.indexed_triangle_element,
@@ -864,7 +867,7 @@ class Exporter:
                     bpy.data.objects.remove(obj_eval, do_unlink=True)
 
                 try:
-                    self._xml_object_properties(obj.data.i3d_attributes, node_element)
+                    self._xml_object_properties(obj.data.i3d_attributes, node)
                 except AttributeError:
                     self.logger.debug(f"{obj.blender_object.name!r} has no i3d_attributes")
         else:
@@ -882,9 +885,11 @@ class Exporter:
                 obj_eval.to_mesh_clear()
                 bpy.data.objects.remove(obj_eval, do_unlink=True)
 
-    def _xml_scene_object_shape(self, obj: bpy.types.Object, node_element: ET.Element):
+    def _xml_scene_object_shape(self, node, node_element: ET.Element):
+        obj = node.blender_object
         # Check if the mesh has already been defined in the i3d file
         pre_exists, indexed_triangle_element = self._xml_add_indexed_triangle_set(obj.data.name)
+        node.i3d_elements['indexed_triangle_set'] = indexed_triangle_element
         shape_id = int(indexed_triangle_element.get('shapeId'))
         if not pre_exists:
             # Fetch an evaluated mesh and the object is was generated from (Needed to clear mesh from memory)
@@ -1114,6 +1119,10 @@ class SceneGraph(object):
             self.blender_object = blender_object
             self.id = node_id
             self.parent = parent
+            self.i3d_elements = {'indexed_triangle_set': None,
+                                 'scene_node': None}
+            self.indexed_triangle_element = None
+            self.node_element = None
 
             if parent is not None:
                 parent.add_child(self)
