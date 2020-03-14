@@ -105,7 +105,7 @@ class Exporter:
             self._xml_export_to_file()
 
         # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
-        except Exception as e:
+        except Exception:
             self.logger.exception("Exception that stopped the exporter")
 
         self.logger.info(f"Export took {time.time() - time_start:.3f} seconds")
@@ -121,8 +121,9 @@ class Exporter:
         objects_to_export = bpy.context.scene.i3dio.object_types_to_export
         self.logger.info(f"Object types selected for export: {objects_to_export}")
 
-        def new_graph_node(obj: Union[bpy.types.Object, bpy.types.Collection],
-                           parent: SceneGraph.Node,
+        def new_graph_node(obj: Union[bpy.types.Object, bpy.types.CollectionObjects,
+                                      bpy.types.Collection, bpy.types.CollectionChildren],
+                           parent: ExporterNode,
                            unpack_collection: bool = False):
 
             if not isinstance(obj, bpy.types.Collection):
@@ -132,7 +133,6 @@ class Exporter:
 
                     return
 
-            node = None
             if unpack_collection:
                 node = parent
             else:
@@ -266,14 +266,14 @@ class Exporter:
                 self.logger.info(
                     f"Parsing child node {child.obj.name!r} of node {node.obj.name!r}")
                 child.i3d_elements['scene_node'] = ET.SubElement(node.i3d_elements['scene_node'],
-                                                                   self.blender_to_i3d(child.obj))
+                                                                 self.blender_to_i3d(child.obj))
                 parse_node(child)
 
         for root_child in self._scene_graph.nodes[0].children.values():
             self.logger.info(
                 f"Parsing child node {root_child.obj.name!r} of root node")
             root_child.i3d_elements['scene_node'] = ET.SubElement(self._tree.find('Scene'),
-                                                                    self.blender_to_i3d(root_child.obj))
+                                                                  self.blender_to_i3d(root_child.obj))
             parse_node(root_child)
 
     def _xml_scene_object_general_data(self, node: ExporterNode):
@@ -313,7 +313,8 @@ class Exporter:
             translation = matrix.to_translation()
             if not self.vector_compare(translation, mathutils.Vector((0, 0, 0))):
                 # This is way too much effort to get 4 decimal points of precision and nice formatting :-P
-                translation = "{0:.6g} {1:.6g} {2:.6g}".format(*[x * bpy.context.scene.unit_settings.scale_length for x in translation])
+                translation = "{0:.6g} {1:.6g} {2:.6g}".format(
+                    *[x * bpy.context.scene.unit_settings.scale_length for x in translation])
 
                 self._xml_write_string(element, 'translation', translation)
                 self.logger.debug(f"{node.obj.name!r} translation: [{translation}]")
@@ -328,7 +329,7 @@ class Exporter:
             # Scale
             if matrix.is_negative:
                 self.logger.error(f"{node.obj.name!r} has one or more negative scaling components, "
-                                      f"which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
+                                  f"which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
             else:
                 scale = matrix.to_scale()
                 if not self.vector_compare(scale, mathutils.Vector((1, 1, 1))):
@@ -371,7 +372,7 @@ class Exporter:
                 if field_type == 'HEX':
                     try:
                         value_decimal = int(value, 16)
-                    except ValueError as error:
+                    except ValueError:
                         self.logger.error(f"Supplied value '{value}' for '{prop_name}' is not a hex value!")
                         continue
                     else:
@@ -388,7 +389,7 @@ class Exporter:
 
         self.logger.info(f"Wrote '{properties_written}' properties")
 
-    def _xml_add_material(self, material):
+    def _xml_add_material(self, material: bpy.types.Material) -> int:
 
         materials_root = self._tree.find('Materials')
         material_element = materials_root.find(f".Material[@name={material.name!r}]")
@@ -414,7 +415,7 @@ class Exporter:
                             else:
                                 diffuse_image_path = color_connected_node.image.filepath
 
-                        except (AttributeError, IndexError, KeyError) as error:
+                        except (AttributeError, IndexError, KeyError):
                             self.logger.exception(f"{material.name!r} has an improperly setup Texture")
                         else:
                             if diffuse_image_path is not None:
@@ -435,7 +436,7 @@ class Exporter:
                         try:
                             normal_image_path = normal_node_socket.links[0].from_node.inputs['Color'].links[0] \
                                 .from_node.image.filepath
-                        except (AttributeError, IndexError, KeyError) as error:
+                        except (AttributeError, IndexError, KeyError):
                             self.logger.exception(f"{material.name!r} has an improperly setup Normalmap")
                         else:
                             self.logger.debug(f"{material.name!r} has Normalmap "
@@ -463,7 +464,7 @@ class Exporter:
                 if gloss_node is not None:
                     try:
                         gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
-                    except (AttributeError, IndexError, KeyError) as error:
+                    except (AttributeError, IndexError, KeyError):
                         self.logger.exception(f"{material.name!r} has an improperly setup Glossmap")
                     else:
                         self.logger.debug(f"{material.name!r} has Glossmap "
@@ -519,11 +520,12 @@ class Exporter:
                     output_dir = file_folder + '\\'
                 elif file_structure == 'BLENDER':
                     self.logger.debug(f"'{filename}' will be copied using the 'BLENDER' hierarchy structure")
-                    # TODO: Rewrite this to make it more than three levels above the blend file but allow deeper nesting,
-                    #  since current code just counts number of slashes
+                    # TODO: Rewrite this to make it more than three levels above the blend file but allow deeper nesting
+                    #  ,since current code just counts number of slashes
                     blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
                     if filepath.count("..\\") <= blender_relative_distance_limit:
-                        # relative steps to avoid copying entire folder structures ny mistake. Defaults to a absolute path.
+                        # relative steps to avoid copying entire folder structures ny mistake.
+                        # Defaults to a absolute path.
                         output_dir = filepath[
                                      2:filepath.rfind('\\') + 1]  # Remove blender relative notation and filename
                     else:
@@ -797,8 +799,10 @@ class Exporter:
                 subset = indexed_triangle_set.subsets[0]
                 self._xml_write_int(subset_element, 'firstIndex', subset[0])
                 self._xml_write_int(subset_element, 'firstVertex', subset[1])
-                self._xml_write_int(subset_element, 'numIndices', subset[2] + int(subset_element.get('numIndices', 0)))
-                self._xml_write_int(subset_element, 'numVertices', subset[3] + int(subset_element.get('numVertices', 0)))
+                self._xml_write_int(subset_element, 'numIndices', subset[2] +
+                                    int(subset_element.get('numIndices', 0)))
+                self._xml_write_int(subset_element, 'numVertices', subset[3] +
+                                    int(subset_element.get('numVertices', 0)))
         else:
             for idx, subset in enumerate(indexed_triangle_set.subsets):
                 subset_element = ET.SubElement(subsets_element, 'Subset')
