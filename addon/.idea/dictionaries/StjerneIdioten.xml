@@ -3,7 +3,9 @@
     <words>
       <w>addon</w>
       <w>depsgraph</w>
+      <w>eafp</w>
       <w>idname</w>
+      <w>levelname</w>
       <w>mergegroup</w>
       <w>mergegroups</w>
       <w>scenegraph</w>

@@ -16,7 +16,7 @@ from bpy_extras.io_utils import (
     axis_conversion
 )
 
-from . import i3d_properties
+from . import shared
 
 
 # Exporter is a singleton
@@ -59,6 +59,7 @@ class Exporter:
             self.export_merge_groups = False
 
         # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
+        # noinspection PyBroadException
         try:
             self._scene_graph = SceneGraph()
             self._filepath = filepath
@@ -120,13 +121,13 @@ class Exporter:
         objects_to_export = bpy.context.scene.i3dio.object_types_to_export
         self.logger.info(f"Object types selected for export: {objects_to_export}")
 
-        def new_graph_node(blender_object: Union[bpy.types.Object, bpy.types.Collection],
+        def new_graph_node(obj: Union[bpy.types.Object, bpy.types.Collection],
                            parent: SceneGraph.Node,
                            unpack_collection: bool = False):
 
-            if not isinstance(blender_object, bpy.types.Collection):
-                if blender_object.type not in objects_to_export:
-                    self.logger.debug(f"Object {blender_object.name!r} has type {blender_object.type!r}, "
+            if not isinstance(obj, bpy.types.Collection):
+                if obj.type not in objects_to_export:
+                    self.logger.debug(f"Object {obj.name!r} has type {obj.type!r}, "
                                       f"which is not a type selected for exporting")
 
                     return
@@ -135,40 +136,40 @@ class Exporter:
             if unpack_collection:
                 node = parent
             else:
-                node = self._scene_graph.add_node(blender_object, parent)
-                self.logger.debug(f"Added Node with ID {node.id} and name {node.blender_object.name!r}")
+                node = self._scene_graph.add_node(obj, parent)
+                self.logger.debug(f"Added Node with ID {node.id} and name {node.obj.name!r}")
 
             # Expand collection tree into the collection instance
-            if isinstance(blender_object, bpy.types.Object):
-                if blender_object.type == 'EMPTY':
-                    if blender_object.instance_collection is not None:
-                        self.logger.debug(f'{blender_object.name!r} is a collection instance and will be unpacked')
+            if isinstance(obj, bpy.types.Object):
+                if obj.type == 'EMPTY':
+                    if obj.instance_collection is not None:
+                        self.logger.debug(f'{obj.name!r} is a collection instance and will be unpacked')
                         # print(f'This is a collection instance')
-                        new_graph_node(blender_object.instance_collection, node, unpack_collection=True)
+                        new_graph_node(obj.instance_collection, node, unpack_collection=True)
 
             # Gets child objects/collections
-            if isinstance(blender_object, bpy.types.Object):
-                if len(blender_object.children):
-                    self.logger.debug(f"Adding child objects of object {blender_object.name!r}")
+            if isinstance(obj, bpy.types.Object):
+                if len(obj.children):
+                    self.logger.debug(f"Adding child objects of object {obj.name!r}")
                     # print(f'Children of object')
-                    for child in blender_object.children:
+                    for child in obj.children:
                         new_graph_node(child, node)
-                    self.logger.debug(f"Done adding child objects of object {blender_object.name!r}")
+                    self.logger.debug(f"Done adding child objects of object {obj.name!r}")
 
             # Gets child objects if it is a collection
-            if isinstance(blender_object, bpy.types.Collection):
-                if len(blender_object.children):
-                    self.logger.debug(f"Adding child collections of collection {blender_object.name!r}")
-                    for child in blender_object.children:
+            if isinstance(obj, bpy.types.Collection):
+                if len(obj.children):
+                    self.logger.debug(f"Adding child collections of collection {obj.name!r}")
+                    for child in obj.children:
                         new_graph_node(child, node)
-                    self.logger.debug(f"Done adding child collections of collection {blender_object.name!r}")
+                    self.logger.debug(f"Done adding child collections of collection {obj.name!r}")
 
-                if len(blender_object.objects):
-                    self.logger.debug(f"Adding objects of collection {blender_object.name!r}")
-                    for child in blender_object.objects:
+                if len(obj.objects):
+                    self.logger.debug(f"Adding objects of collection {obj.name!r}")
+                    for child in obj.objects:
                         if child.parent is None:
                             new_graph_node(child, node)
-                    self.logger.debug(f"Done adding objects of collection {blender_object.name!r}")
+                    self.logger.debug(f"Done adding objects of collection {obj.name!r}")
 
         selection = bpy.context.scene.i3dio.selection
         if selection == 'ALL':
@@ -232,55 +233,56 @@ class Exporter:
 
     def _xml_parse_scene_graph(self):
 
-        def parse_node(node: SceneGraph.Node, node_element: ET.Element):
+        def parse_node(node: ExporterNode):
 
-            self.logger.info(f"Parsing node with id {node.id} and name {node.blender_object.name!r}")
-            self._xml_scene_object_general_data(node, node_element)
+            self.logger.info(f"Parsing node with id {node.id} and name {node.obj.name!r}")
+            self._xml_scene_object_general_data(node)
 
-            if isinstance(node.blender_object, bpy.types.Collection):
-                self.logger.info(f"{node.blender_object.name!r} is a collection, getting parsed as a transformgroup")
-                self._xml_scene_object_transform_group(node, node_element)
+            if isinstance(node.obj, bpy.types.Collection):
+                self.logger.info(f"{node.obj.name!r} is a collection, getting parsed as a transformgroup")
+                self._xml_scene_object_transform_group(node)
             else:
-                node_type = node.blender_object.type
-                self.logger.info(f"{node.blender_object.name!r} is parsed as a {node_type!r}")
+                node_type = node.obj.type
+                self.logger.info(f"{node.obj.name!r} is parsed as a {node_type!r}")
                 # merge group id can only ever be set on an object with a mesh, so no need to check for mesh type
-                if self.export_merge_groups and node.blender_object.i3d_merge_group.group_id != '':
-                    self._xml_merge_group(node, node_element)
+                if self.export_merge_groups and node.obj.i3d_merge_group.group_id != '':
+                    self._xml_merge_group(node)
                 else:
                     if node_type == 'MESH':
-                        self._xml_scene_object_shape(node, node_element)
+                        self._xml_scene_object_shape(node)
                     elif node_type == 'EMPTY':
-                        self._xml_scene_object_transform_group(node, node_element)
+                        self._xml_scene_object_transform_group(node)
                     elif node_type == 'LIGHT':
-                        self._xml_scene_object_light(node, node_element)
+                        self._xml_scene_object_light(node)
                     elif node_type == 'CAMERA':
-                        self._xml_scene_object_camera(node, node_element)
+                        self._xml_scene_object_camera(node)
 
                     try:
-                        self._xml_object_properties(node.blender_object.data.i3d_attributes, node)
+                        self._xml_object_properties(node.obj.data.i3d_attributes, node)
                     except AttributeError:
-                        self.logger.debug(f"{node.blender_object.name!r} has no i3d_attributes")
+                        self.logger.debug(f"{node.obj.name!r} has no i3d_attributes")
 
             for child in node.children.values():
                 self.logger.info(
-                    f"Parsing child node {child.blender_object.name!r} of node {node.blender_object.name!r}")
-                child.i3d_elements['scene_node'] = ET.SubElement(node_element,
-                                                                   self.blender_to_i3d(child.blender_object))
-                parse_node(child, child.i3d_elements['scene_node'])
+                    f"Parsing child node {child.obj.name!r} of node {node.obj.name!r}")
+                child.i3d_elements['scene_node'] = ET.SubElement(node.i3d_elements['scene_node'],
+                                                                   self.blender_to_i3d(child.obj))
+                parse_node(child)
 
         for root_child in self._scene_graph.nodes[0].children.values():
             self.logger.info(
-                f"Parsing child node {root_child.blender_object.name!r} of root node")
+                f"Parsing child node {root_child.obj.name!r} of root node")
             root_child.i3d_elements['scene_node'] = ET.SubElement(self._tree.find('Scene'),
-                                                                    self.blender_to_i3d(root_child.blender_object))
-            parse_node(root_child, root_child.i3d_elements['scene_node'])
+                                                                    self.blender_to_i3d(root_child.obj))
+            parse_node(root_child)
 
-    def _xml_scene_object_general_data(self, node: SceneGraph.Node, node_element: ET.Element):
-        self._xml_write_string(node_element, 'name', node.blender_object.name)
-        self._xml_write_int(node_element, 'nodeId', node.id)
-        if isinstance(node.blender_object, bpy.types.Collection):
+    def _xml_scene_object_general_data(self, node: ExporterNode):
+        element = node.i3d_elements['scene_node']
+        self._xml_write_string(element, 'name', node.obj.name)
+        self._xml_write_int(element, 'nodeId', node.id)
+        if isinstance(node.obj, bpy.types.Collection):
             self.logger.info(
-                f"{node.blender_object.name!r} is a collection and it will be exported as a transformgroup with no "
+                f"{node.obj.name!r} is a collection and it will be exported as a transformgroup with no "
                 f"translation and rotation")
             # Collections dont have any physical properties, but the transformgroups in i3d has so it is set to the
             # default value of GE, which is just zeroed.
@@ -289,22 +291,22 @@ class Exporter:
             # in GE
             # If you want an explanation for A * B * A^-1 then go look up Transformation Matrices cause I can't
             # remember the specifics
-            self.logger.info(f"{node.blender_object.name!r} is a {node.blender_object.type!r}")
-            self.logger.debug(f"{node.blender_object.name!r} transforming to new transform-basis")
+            self.logger.info(f"{node.obj.name!r} is a {node.obj.type!r}")
+            self.logger.debug(f"{node.obj.name!r} transforming to new transform-basis")
 
-            if node.blender_object == 'LIGHT' or node.blender_object.type == 'CAMERA':
-                matrix = self._global_matrix @ node.blender_object.matrix_local
+            if node.obj == 'LIGHT' or node.obj.type == 'CAMERA':
+                matrix = self._global_matrix @ node.obj.matrix_local
                 self.logger.debug(
-                    f"{node.blender_object.name!r} will not have inversed transform applied to accommodate flipped "
+                    f"{node.obj.name!r} will not have inversed transform applied to accommodate flipped "
                     f"z-axis in GE ")
             else:
-                matrix = self._global_matrix @ node.blender_object.matrix_local @ self._global_matrix.inverted()
+                matrix = self._global_matrix @ node.obj.matrix_local @ self._global_matrix.inverted()
 
-            if node.blender_object.parent is not None:
-                if node.blender_object.parent.type == 'CAMERA' or node.blender_object.parent.type == 'LIGHT':
+            if node.obj.parent is not None:
+                if node.obj.parent.type == 'CAMERA' or node.obj.parent.type == 'LIGHT':
                     matrix = self._global_matrix.inverted() @ matrix
                     self.logger.debug(
-                        f"{node.blender_object.name!r} will be transformed once more with inverse to accommodate "
+                        f"{node.obj.name!r} will be transformed once more with inverse to accommodate "
                         f"flipped z-axis in GE of parent Light/Camera")
 
             # Translation with applied unit scaling
@@ -313,30 +315,30 @@ class Exporter:
                 # This is way too much effort to get 4 decimal points of precision and nice formatting :-P
                 translation = "{0:.6g} {1:.6g} {2:.6g}".format(*[x * bpy.context.scene.unit_settings.scale_length for x in translation])
 
-                self._xml_write_string(node_element, 'translation', translation)
-                self.logger.debug(f"{node.blender_object.name!r} translation: [{translation}]")
+                self._xml_write_string(element, 'translation', translation)
+                self.logger.debug(f"{node.obj.name!r} translation: [{translation}]")
 
             # Rotation, no unit scaling since it will always be degrees.
             rotation = [math.degrees(axis) for axis in matrix.to_euler('XYZ')]
             if not self.vector_compare(mathutils.Vector(rotation), mathutils.Vector((0, 0, 0))):
                 rotation = "{0:.6g} {1:.6g} {2:.6g}".format(*rotation)
-                self._xml_write_string(node_element, 'rotation', rotation)
-                self.logger.debug(f"{node.blender_object.name!r} rotation(degrees): [{rotation}]")
+                self._xml_write_string(element, 'rotation', rotation)
+                self.logger.debug(f"{node.obj.name!r} rotation(degrees): [{rotation}]")
 
             # Scale
             if matrix.is_negative:
-                self.logger.error(f"{node.blender_object.name!r} has one or more negative scaling components, "
+                self.logger.error(f"{node.obj.name!r} has one or more negative scaling components, "
                                       f"which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
             else:
                 scale = matrix.to_scale()
                 if not self.vector_compare(scale, mathutils.Vector((1, 1, 1))):
                     scale = "{0:.6g} {1:.6g} {2:.6g}".format(*scale)
 
-                    self._xml_write_string(node_element, 'scale', scale)
-                    self.logger.debug(f"{node.blender_object.name!r} scale: [{scale}]")
+                    self._xml_write_string(element, 'scale', scale)
+                    self.logger.debug(f"{node.obj.name!r} scale: [{scale}]")
 
             # Write the object transform properties from the blender UI into the object
-            self._xml_object_properties(node.blender_object.i3d_attributes, node)
+            self._xml_object_properties(node.obj.i3d_attributes, node)
 
     def _xml_object_properties(self, propertygroup, node):
         self.logger.info(f"Writing non-default properties from propertygroup: '{type(propertygroup).__name__}'")
@@ -815,8 +817,9 @@ class Exporter:
                     skin_bind += f"{node_id:d} "
                 self._xml_write_string(merge_group.root_object_element, 'skinBindNodeIds', skin_bind.strip())
 
-    def _xml_merge_group(self, node, node_element: ET.Element):
-        obj = node.blender_object
+    def _xml_merge_group(self, node):
+        obj = node.obj
+        element = node.i3d_elements['scene_node']
         self.logger.info(f"{obj.name!r} is exported as part of a mergegroup")
         merge_group = self.merge_groups.setdefault(obj.i3d_merge_group.group_id,
                                                    MergeGroup(obj.i3d_merge_group.group_id))
@@ -828,8 +831,8 @@ class Exporter:
             else:
                 self.logger.info(f"{obj.name!r} is the root of mergegroup '{merge_group.group_id}'")
                 merge_group.root_object = obj
-                merge_group.root_object_element = node_element
-                merge_group.skin_bind_id.insert(0, int(node_element.get('nodeId')))
+                merge_group.root_object_element = element
+                merge_group.skin_bind_id.insert(0, int(element.get('nodeId')))
                 _, merge_group.indexed_triangle_element = \
                     self._xml_add_indexed_triangle_set(f"{self.merge_group_prefix}{merge_group.group_id}")
                 node.i3d_elements['indexed_triangle_set'] = merge_group.indexed_triangle_element
@@ -839,8 +842,8 @@ class Exporter:
                                                bind_id=0, append=False)
                 obj_eval.to_mesh_clear()
                 bpy.data.objects.remove(obj_eval, do_unlink=True)
-                self._xml_write_int(node_element, 'shapeId', merge_group.shape_id)
-                self._xml_write_string(node_element, 'materialIds',
+                self._xml_write_int(element, 'shapeId', merge_group.shape_id)
+                self._xml_write_string(element, 'materialIds',
                                        self.shape_material_indexes[merge_group.shape_id])
                 for bind_id, member in enumerate(merge_group.members, start=1):
                     mesh, obj_eval = self._object_to_evaluated_mesh(member, from_frame=merge_group.root_object.matrix_world)
@@ -853,15 +856,15 @@ class Exporter:
                 try:
                     self._xml_object_properties(obj.data.i3d_attributes, node)
                 except AttributeError:
-                    self.logger.debug(f"{obj.blender_object.name!r} has no i3d_attributes")
+                    self.logger.debug(f"{obj.obj.name!r} has no i3d_attributes")
         else:
             if merge_group.root_object is None:
                 self.logger.debug(f"{obj.name!r} handled before root node of mergegroup '{merge_group.group_id}' "
                                   f"has been found, mesh export is deferred till root is found")
-                merge_group.add_member(obj, int(node_element.get('nodeId')))
+                merge_group.add_member(obj, int(element.get('nodeId')))
             else:
                 self.logger.debug(f"{obj.name!r} is added to mergegroup's IndexedTriangleSet element")
-                bind_id = merge_group.add_member(obj, int(node_element.get('nodeId')))
+                bind_id = merge_group.add_member(obj, int(element.get('nodeId')))
                 mesh, obj_eval = self._object_to_evaluated_mesh(obj, from_frame=merge_group.root_object.matrix_world)
                 indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
                 self._xml_indexed_triangle_set(indexed_triangle_set, merge_group.indexed_triangle_element,
@@ -869,8 +872,9 @@ class Exporter:
                 obj_eval.to_mesh_clear()
                 bpy.data.objects.remove(obj_eval, do_unlink=True)
 
-    def _xml_scene_object_shape(self, node, node_element: ET.Element):
-        obj = node.blender_object
+    def _xml_scene_object_shape(self, node):
+        obj = node.obj
+        element = node.i3d_elements['scene_node']
         # Check if the mesh has already been defined in the i3d file
         pre_exists, indexed_triangle_element = self._xml_add_indexed_triangle_set(obj.data.name)
         node.i3d_elements['indexed_triangle_set'] = indexed_triangle_element
@@ -890,30 +894,32 @@ class Exporter:
             self.logger.info(f"{obj.name!r} already exists in i3d file")
 
         self.logger.debug(f"{obj.name!r} has shape ID {shape_id}")
-        self._xml_write_int(node_element, 'shapeId', shape_id)
-        self._xml_write_string(node_element, 'materialIds', self.shape_material_indexes[shape_id])
+        self._xml_write_int(element, 'shapeId', shape_id)
+        self._xml_write_string(element, 'materialIds', self.shape_material_indexes[shape_id])
 
-    def _xml_scene_object_transform_group(self, node: SceneGraph.Node, node_element: ET.Element):
+    def _xml_scene_object_transform_group(self, node: ExporterNode):
         pass
 
-    def _xml_scene_object_camera(self, node: SceneGraph.Node, node_element: ET.Element):
-        camera = node.blender_object.data
-        self._xml_write_float(node_element, 'fov', camera.lens)
-        self._xml_write_float(node_element, 'nearClip', camera.clip_start)
-        self._xml_write_float(node_element, 'farClip', camera.clip_end)
-        self.logger.info(f"{node.blender_object.name!r} is a camera with fov {camera.lens}, "
+    def _xml_scene_object_camera(self, node: ExporterNode):
+        camera = node.obj.data
+        element = node.i3d_elements['scene_node']
+        self._xml_write_float(element, 'fov', camera.lens)
+        self._xml_write_float(element, 'nearClip', camera.clip_start)
+        self._xml_write_float(element, 'farClip', camera.clip_end)
+        self.logger.info(f"{node.obj.name!r} is a camera with fov {camera.lens}, "
                          f"near clipping {camera.clip_start} and far clipping {camera.clip_end}")
         if camera.type == 'ORTHO':
-            self._xml_write_bool(node_element, 'orthographic', True)
-            self._xml_write_float(node_element, 'orthographicHeight', camera.ortho_scale)
-            self.logger.info(f"{node.blender_object.name!r} is orthographic with height {camera.ortho_scale}")
+            self._xml_write_bool(element, 'orthographic', True)
+            self._xml_write_float(element, 'orthographicHeight', camera.ortho_scale)
+            self.logger.info(f"{node.obj.name!r} is orthographic with height {camera.ortho_scale}")
         else:
-            self.logger.info(f"{node.blender_object.name!r} is not orthographic")
+            self.logger.info(f"{node.obj.name!r} is not orthographic")
 
-    def _xml_scene_object_light(self, node: SceneGraph.Node, node_element: ET.Element):
-        light = node.blender_object.data
+    def _xml_scene_object_light(self, node: ExporterNode):
+        light = node.obj.data
+        element = node.i3d_elements['scene_node']
         light_type = light.type
-        self.logger.info(f"{node.blender_object.name!r} is a light of type {light_type!r}")
+        self.logger.info(f"{node.obj.name!r} is a light of type {light_type!r}")
         falloff_type = None
         if light_type == 'POINT':
             light_type = 'point'
@@ -924,44 +930,44 @@ class Exporter:
             light_type = 'spot'
             falloff_type = light.falloff_type
             cone_angle = math.degrees(light.spot_size)
-            self._xml_write_float(node_element, 'coneAngle', cone_angle)
-            self.logger.info(f"{node.blender_object.name!r} has a cone angle of {cone_angle}")
+            self._xml_write_float(element, 'coneAngle', cone_angle)
+            self.logger.info(f"{node.obj.name!r} has a cone angle of {cone_angle}")
             # Blender spot 0.0 -> 1.0, GE spot 0.0 -> 5.0
             drop_off = 5.0 * light.spot_blend
-            self._xml_write_float(node_element, 'dropOff', drop_off)
-            self.logger.info(f"{node.blender_object.name!r} has a drop off of {drop_off}")
+            self._xml_write_float(element, 'dropOff', drop_off)
+            self.logger.info(f"{node.obj.name!r} has a drop off of {drop_off}")
         elif light_type == 'AREA':
             light_type = 'point'
-            self.logger.warning(f"{node.blender_object.name!r} is an AREA light, "
+            self.logger.warning(f"{node.obj.name!r} is an AREA light, "
                                 f"which is not supported and defaults to point light")
 
-        self._xml_write_string(node_element, 'type', light_type)
+        self._xml_write_string(element, 'type', light_type)
 
         color = "{0:f} {1:f} {2:f}".format(*light.color)
-        self._xml_write_string(node_element, 'color', color)
-        self.logger.info(f"{node.blender_object.name!r} has color {color}")
+        self._xml_write_string(element, 'color', color)
+        self.logger.info(f"{node.obj.name!r} has color {color}")
 
-        self._xml_write_float(node_element, 'range', light.distance)
-        self.logger.info(f"{node.blender_object.name!r} has range {light.distance}")
+        self._xml_write_float(element, 'range', light.distance)
+        self.logger.info(f"{node.obj.name!r} has range {light.distance}")
 
-        self._xml_write_bool(node_element, 'castShadowMap', light.use_shadow)
-        self.logger.info(f"{node.blender_object.name!r} "
+        self._xml_write_bool(element, 'castShadowMap', light.use_shadow)
+        self.logger.info(f"{node.obj.name!r} "
                          f"{'casts shadows' if light.use_shadow else 'does not cast shadows'}")
 
         if falloff_type is not None:
             if falloff_type == 'CONSTANT':
                 falloff_type = 0
-                self.logger.info(f"{node.blender_object.name!r} "
+                self.logger.info(f"{node.obj.name!r} "
                                  f"has decay rate of type {'CONSTANT'} which is 0 in i3d")
             elif falloff_type == 'INVERSE_LINEAR':
                 falloff_type = 1
-                self.logger.info(f"{node.blender_object.name!r} "
+                self.logger.info(f"{node.obj.name!r} "
                                  f"has decay rate of type {'INVERSE_LINEAR'} which is 1 in i3d")
             elif falloff_type == 'INVERSE_SQUARE':
                 falloff_type = 2
-                self.logger.info(f"{node.blender_object.name!r} "
+                self.logger.info(f"{node.obj.name!r} "
                                  f"has decay rate of type {'INVERSE_SQUARE'} which is 2 in i3d")
-            self._xml_write_int(node_element, 'decayRate', falloff_type)
+            self._xml_write_int(element, 'decayRate', falloff_type)
 
     def _xml_export_to_file(self) -> None:
         self._indent(self._tree)  # Make the xml human readable by adding indents
@@ -1034,15 +1040,15 @@ class Exporter:
             if level and (not elem.tail or not elem.tail.strip()):
                 elem.tail = indents
 
-    def blender_to_i3d(self, blender_object: Union[bpy.types.Object, bpy.types.Collection]):
+    def blender_to_i3d(self, obj: Union[bpy.types.Object, bpy.types.Collection]):
         # Collections don't have an object type since they aren't objects. If they are used for organisational purposes
         # they are converted into transformgroups in the scenegraph
-        if isinstance(blender_object, bpy.types.Collection):
+        if isinstance(obj, bpy.types.Collection):
             return 'TransformGroup'
         # For setting the child meshes of a mergegroups to transformgroups
-        elif blender_object.type == 'MESH' and self.export_merge_groups:
-            if blender_object.i3d_merge_group.group_id != '':
-                if not blender_object.i3d_merge_group.is_root:
+        elif obj.type == 'MESH' and self.export_merge_groups:
+            if obj.i3d_merge_group.group_id != '':
+                if not obj.i3d_merge_group.is_root:
                     return 'TransformGroup'
 
         switcher = {
@@ -1053,7 +1059,7 @@ class Exporter:
             'LIGHT': 'Light',
             'COLLECTION': 'TransformGroup'
         }
-        return switcher[blender_object.type]
+        return switcher[obj.type]
 
     @staticmethod
     def as_fs_relative_path(filepath: str):
@@ -1136,36 +1142,24 @@ class SceneGraph(object):
         return f"{longest_string * '-'}\n" + tree_string
 
     def add_node(self,
-                 blender_object: Union[bpy.types.Object, bpy.types.Collection] = None,
-                 parent: Node = None) -> Node:
-        new_node = Node(self.ids['node'], blender_object, parent)
+                 obj: Union[bpy.types.Object, bpy.types.Collection] = None,
+                 parent: ExporterNode = None) -> ExporterNode:
+        new_node = ExporterNode(self.ids['node'], parent, obj)
         self.nodes[new_node.id] = new_node
         self.ids['node'] += 1
         return new_node
 
 
-class Node(object):
+class ExporterNode(shared.Node):
     def __init__(self,
-                 node_id: int = 0,
-                 blender_object: Union[bpy.types.Object, bpy.types.Collection] = None,
-                 parent: Node = None):
-        self.children = {}
-        self.blender_object = blender_object
-        self.id = node_id
-        self.parent = parent
-        self.i3d_elements = {'indexed_triangle_set': None,
-                             'scene_node': None}
-        self.indexed_triangle_element = None
-        self.node_element = None
-
-        if parent is not None:
-            parent.add_child(self)
+                 node_id: int or None = None,
+                 parent: ExporterNode or None = None,
+                 obj: Union[bpy.types.Object, bpy.types.Collection] or None = None):
+        super().__init__(node_id, parent)
+        self.obj = obj
 
     def __str__(self):
-        return f"{self.id}|{self.blender_object.name!r}"
-
-    def add_child(self, node: Node):
-        self.children[node.id] = node
+        return super().__str__() + f"|{self.obj.name!r}"
 
 
 class VertexItem:
