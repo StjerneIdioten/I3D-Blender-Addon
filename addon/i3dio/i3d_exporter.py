@@ -1,20 +1,3 @@
-#!/usr/bin/env python3
-
-"""
-    ##### BEGIN GPL LICENSE BLOCK #####
-  This program is free software; you can redistribute it and/or
-  modify it under the terms of the GNU General Public License
-  as published by the Free Software Foundation; either version 2
-  of the License, or (at your option) any later version.
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-  You should have received a copy of the GNU General Public License
-  along with this program; if not, write to the Free Software Foundation,
-  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
- ##### END GPL LICENSE BLOCK #####
-"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import Union
 import sys
@@ -1123,41 +1106,12 @@ class IndexedTriangleSet(object):
 
 
 class SceneGraph(object):
-    class Node(object):
-        def __init__(self,
-                     node_id: int = 0,
-                     blender_object: Union[bpy.types.Object, bpy.types.Collection] = None,
-                     parent: SceneGraph.Node = None):
-            self.children = {}
-            self.blender_object = blender_object
-            self.id = node_id
-            self.parent = parent
-            self.i3d_elements = {'indexed_triangle_set': None,
-                                 'scene_node': None}
-            self.indexed_triangle_element = None
-            self.node_element = None
-
-            if parent is not None:
-                parent.add_child(self)
-
-        def __str__(self):
-            return f"{self.id}|{self.blender_object.name!r}"
-
-        def add_child(self, node: SceneGraph.Node):
-            self.children[node.id] = node
-
-        def remove_child(self, node: SceneGraph.Node):
-            del self.children[node.id]
 
     def __init__(self):
         self.ids = {
             'node': 0
         }
         self.nodes = {}
-        self.nodes_reverse = {}
-        self.shapes = {}
-        self.materials = {}
-        self.files = {}
         # Create the root node
         self.add_node()  # Add the root node that contains the tree
 
@@ -1183,13 +1137,35 @@ class SceneGraph(object):
 
     def add_node(self,
                  blender_object: Union[bpy.types.Object, bpy.types.Collection] = None,
-                 parent: SceneGraph.Node = None) -> SceneGraph.Node:
-        new_node = SceneGraph.Node(self.ids['node'], blender_object, parent)
+                 parent: Node = None) -> Node:
+        new_node = Node(self.ids['node'], blender_object, parent)
         self.nodes[new_node.id] = new_node
-        if blender_object is not None:
-            self.nodes_reverse[blender_object.name] = new_node.id
         self.ids['node'] += 1
         return new_node
+
+
+class Node(object):
+    def __init__(self,
+                 node_id: int = 0,
+                 blender_object: Union[bpy.types.Object, bpy.types.Collection] = None,
+                 parent: Node = None):
+        self.children = {}
+        self.blender_object = blender_object
+        self.id = node_id
+        self.parent = parent
+        self.i3d_elements = {'indexed_triangle_set': None,
+                             'scene_node': None}
+        self.indexed_triangle_element = None
+        self.node_element = None
+
+        if parent is not None:
+            parent.add_child(self)
+
+    def __str__(self):
+        return f"{self.id}|{self.blender_object.name!r}"
+
+    def add_child(self, node: Node):
+        self.children[node.id] = node
 
 
 class VertexItem:
