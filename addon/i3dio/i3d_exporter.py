@@ -17,6 +17,8 @@ from bpy_extras.io_utils import (
 )
 
 from . import shared
+from . import xml_i3d
+from .xml_i3d import write_attribute
 
 
 # Exporter is a singleton
@@ -278,8 +280,8 @@ class Exporter:
 
     def _xml_scene_object_general_data(self, node: ExporterNode):
         element = node.i3d_elements['scene_node']
-        self._xml_write_string(element, 'name', node.obj.name)
-        self._xml_write_int(element, 'nodeId', node.id)
+        write_attribute(element, 'name', node.obj.name)
+        write_attribute(element, 'nodeId', node.id)
         if isinstance(node.obj, bpy.types.Collection):
             self.logger.info(
                 f"{node.obj.name!r} is a collection and it will be exported as a transformgroup with no "
@@ -316,14 +318,14 @@ class Exporter:
                 translation = "{0:.6g} {1:.6g} {2:.6g}".format(
                     *[x * bpy.context.scene.unit_settings.scale_length for x in translation])
 
-                self._xml_write_string(element, 'translation', translation)
+                write_attribute(element, 'translation', translation)
                 self.logger.debug(f"{node.obj.name!r} translation: [{translation}]")
 
             # Rotation, no unit scaling since it will always be degrees.
             rotation = [math.degrees(axis) for axis in matrix.to_euler('XYZ')]
             if not self.vector_compare(mathutils.Vector(rotation), mathutils.Vector((0, 0, 0))):
                 rotation = "{0:.6g} {1:.6g} {2:.6g}".format(*rotation)
-                self._xml_write_string(element, 'rotation', rotation)
+                write_attribute(element, 'rotation', rotation)
                 self.logger.debug(f"{node.obj.name!r} rotation(degrees): [{rotation}]")
 
             # Scale
@@ -335,7 +337,7 @@ class Exporter:
                 if not self.vector_compare(scale, mathutils.Vector((1, 1, 1))):
                     scale = "{0:.6g} {1:.6g} {2:.6g}".format(*scale)
 
-                    self._xml_write_string(element, 'scale', scale)
+                    write_attribute(element, 'scale', scale)
                     self.logger.debug(f"{node.obj.name!r} scale: [{scale}]")
 
             # Write the object transform properties from the blender UI into the object
@@ -384,7 +386,7 @@ class Exporter:
                             continue
 
             self.logger.debug(f"\tProperty '{prop_name}' with value '{value}'. Default is '{default}'")
-            Exporter._xml_write_attribute(i3d_element, i3d_name, value_to_write)
+            write_attribute(i3d_element, i3d_name, value_to_write)
             properties_written += 1
 
         self.logger.info(f"Wrote '{properties_written}' properties")
@@ -396,8 +398,8 @@ class Exporter:
         if material_element is None:
             self.logger.info(f"{material.name!r} is a new material")
             material_element = ET.SubElement(materials_root, 'Material')
-            self._xml_write_string(material_element, 'name', material.name)
-            self._xml_write_int(material_element, 'materialId', self.ids['material'])
+            write_attribute(material_element, 'name', material.name)
+            write_attribute(material_element, 'materialId', self.ids['material'])
 
             if material.use_nodes:
                 self.logger.debug(f"{material.name!r} uses nodes")
@@ -423,12 +425,11 @@ class Exporter:
                                                   f"'{Exporter.as_fs_relative_path(diffuse_image_path)}'")
                                 file_id = self._xml_add_file(diffuse_image_path)
                                 texture_element = ET.SubElement(material_element, 'Texture')
-                                self._xml_write_string(texture_element, 'fileId', f'{file_id:d}')
+                                write_attribute(texture_element, 'fileId', f'{file_id:d}')
 
-                    self._xml_write_string(material_element,
-                                           'diffuseColor',
-                                           "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(
-                                               *diffuse))
+                    write_attribute(material_element,
+                                    'diffuseColor',
+                                    "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*diffuse))
 
                     # Normal ###########################################################################################
                     normal_node_socket = material_node.inputs['Normal']
@@ -443,16 +444,16 @@ class Exporter:
                                               f"'{Exporter.as_fs_relative_path(normal_image_path)}'")
                             file_id = self._xml_add_file(normal_image_path)
                             normal_element = ET.SubElement(material_element, 'Normalmap')
-                            self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
+                            write_attribute(normal_element, 'fileId', f'{file_id:d}')
                     else:
                         self.logger.debug(f"{material.name!r} has no Normalmap")
 
                     # Specular #########################################################################################
-                    self._xml_write_string(material_element,
-                                           'specularColor',
-                                           f"{1.0 - material_node.inputs['Roughness'].default_value:f} "
-                                           f"{material_node.inputs['Specular'].default_value:.6f} "
-                                           f"{material_node.inputs['Metallic'].default_value:f}")
+                    write_attribute(material_element,
+                                    'specularColor',
+                                    f"{1.0 - material_node.inputs['Roughness'].default_value:f} "
+                                    f"{material_node.inputs['Specular'].default_value:.6f} "
+                                    f"{material_node.inputs['Metallic'].default_value:f}")
                 else:
                     self.logger.warning(f"{material.name!r} uses nodes but Principled BSDF node is not found!")
 
@@ -471,19 +472,19 @@ class Exporter:
                                           f"'{Exporter.as_fs_relative_path(gloss_image_path)}'")
                         file_id = self._xml_add_file(gloss_image_path)
                         normal_element = ET.SubElement(material_element, 'Glossmap')
-                        self._xml_write_string(normal_element, 'fileId', f'{file_id:d}')
+                        write_attribute(normal_element, 'fileId', f'{file_id:d}')
                 else:
                     self.logger.debug(f"{material.name!r} has no Glossmap")
 
             else:
                 self.logger.debug(f"{material.name!r} does not use nodes")
-                self._xml_write_string(material_element,
-                                       'diffuseColor',
-                                       "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*material.diffuse_color))
+                write_attribute(material_element,
+                                'diffuseColor',
+                                "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*material.diffuse_color))
 
-                self._xml_write_string(material_element,
-                                       'specularColor',
-                                       f"{1.0 - material.roughness:f} {1:.6f} {material.metallic:f}")
+                write_attribute(material_element,
+                                'specularColor',
+                                f"{1.0 - material.roughness:f} {1:.6f} {material.metallic:f}")
 
             self.ids['material'] += 1
         else:
@@ -566,8 +567,8 @@ class Exporter:
             self.ids['file'] += 1
             self._file_indexes[filepath_resolved] = file_id
 
-            self._xml_write_int(file_element, 'fileId', file_id)
-            self._xml_write_string(file_element, 'filename', filepath_resolved)
+            write_attribute(file_element, 'fileId', file_id)
+            write_attribute(file_element, 'filename', filepath_resolved)
 
         self.logger.debug(f"'{filename}' has file ID {file_id}")
         return file_id
@@ -586,8 +587,8 @@ class Exporter:
             self.ids['shape'] += 1
             # Create triangle element and necessary sub-elements
             indexed_triangle_element = ET.SubElement(shape_root, 'IndexedTriangleSet')
-            self._xml_write_string(indexed_triangle_element, 'name', name)
-            self._xml_write_int(indexed_triangle_element, 'shapeId', shape_id)
+            write_attribute(indexed_triangle_element, 'name', name)
+            write_attribute(indexed_triangle_element, 'shapeId', shape_id)
             ET.SubElement(indexed_triangle_element, 'Vertices')
             ET.SubElement(indexed_triangle_element, 'Triangles')
             ET.SubElement(indexed_triangle_element, 'Subsets')
@@ -740,35 +741,35 @@ class Exporter:
         vertices_element = indexed_triangle_element.find(f".Vertices")
 
         if bind_id is not None:
-            self._xml_write_bool(vertices_element, 'singleblendweights', True)
+            write_attribute(vertices_element, 'singleblendweights', True)
 
         for vertex_data in indexed_triangle_set.vertices:
             vertex_element = ET.SubElement(vertices_element, 'v')
-            self._xml_write_string(vertex_element, 'n', vertex_data['n'])
-            self._xml_write_string(vertex_element, 'p', vertex_data['p'])
+            write_attribute(vertex_element, 'n', vertex_data['n'])
+            write_attribute(vertex_element, 'p', vertex_data['p'])
             if 'c' in vertex_data:
-                self._xml_write_string(vertex_element, 'c', vertex_data['c'])
+                write_attribute(vertex_element, 'c', vertex_data['c'])
             for uv_key, uv_data in vertex_data['uvs'].items():
-                self._xml_write_string(vertex_element, uv_key, uv_data)
+                write_attribute(vertex_element, uv_key, uv_data)
             if bind_id is not None:
-                self._xml_write_int(vertex_element, 'bi', bind_id)
+                write_attribute(vertex_element, 'bi', bind_id)
 
         # Check the first vertex to see if it has a color component (Since they all have it then)
         if 'c' in indexed_triangle_set.vertices[0]:
-            self._xml_write_bool(vertices_element, 'color', True)
+            write_attribute(vertices_element, 'color', True)
 
         # TODO: Check uv limit in GE, Old addon only supported 4
         for count, uv in enumerate(indexed_triangle_set.vertices[0]['uvs']):
             if count < 4:
-                self._xml_write_bool(vertices_element, f'uv{count}', True)
+                write_attribute(vertices_element, f'uv{count}', True)
 
         prev_vertex_count = int(vertices_element.get('count', 0))
 
-        self._xml_write_int(vertices_element,
-                            'count',
-                            len(indexed_triangle_set.vertices) + int(vertices_element.get('count', 0)))
-        self._xml_write_bool(vertices_element, 'normal', True)
-        self._xml_write_bool(vertices_element, 'tangent', True)
+        write_attribute(vertices_element,
+                        'count',
+                        len(indexed_triangle_set.vertices) + int(vertices_element.get('count', 0)))
+        write_attribute(vertices_element, 'normal', True)
+        write_attribute(vertices_element, 'tangent', True)
 
         # Triangles ################################################################################################
         triangles_element = indexed_triangle_element.find(f".Triangles")
@@ -779,11 +780,11 @@ class Exporter:
             for elem in triangle:
                 triangle_vertex_index += f"{elem + prev_vertex_count} "
 
-            self._xml_write_string(triangle_element, 'vi', triangle_vertex_index.strip())
+            write_attribute(triangle_element, 'vi', triangle_vertex_index.strip())
 
-        self._xml_write_int(triangles_element,
-                            'count',
-                            len(indexed_triangle_set.triangles) + int(triangles_element.get('count', 0)))
+        write_attribute(triangles_element,
+                        'count',
+                        len(indexed_triangle_set.triangles) + int(triangles_element.get('count', 0)))
 
         # Subsets ##################################################################################################
         subsets_element = indexed_triangle_element.find(f".Subsets")
@@ -797,21 +798,21 @@ class Exporter:
                 subset_count = 1
             else:
                 subset = indexed_triangle_set.subsets[0]
-                self._xml_write_int(subset_element, 'firstIndex', subset[0])
-                self._xml_write_int(subset_element, 'firstVertex', subset[1])
-                self._xml_write_int(subset_element, 'numIndices', subset[2] +
-                                    int(subset_element.get('numIndices', 0)))
-                self._xml_write_int(subset_element, 'numVertices', subset[3] +
-                                    int(subset_element.get('numVertices', 0)))
+                write_attribute(subset_element, 'firstIndex', subset[0])
+                write_attribute(subset_element, 'firstVertex', subset[1])
+                write_attribute(subset_element, 'numIndices', subset[2] +
+                                int(subset_element.get('numIndices', 0)))
+                write_attribute(subset_element, 'numVertices', subset[3] +
+                                int(subset_element.get('numVertices', 0)))
         else:
             for idx, subset in enumerate(indexed_triangle_set.subsets):
                 subset_element = ET.SubElement(subsets_element, 'Subset')
-                self._xml_write_int(subset_element, 'firstIndex', subset[0])
-                self._xml_write_int(subset_element, 'firstVertex', subset[1])
-                self._xml_write_int(subset_element, 'numIndices', subset[2])
-                self._xml_write_int(subset_element, 'numVertices', subset[3])
+                write_attribute(subset_element, 'firstIndex', subset[0])
+                write_attribute(subset_element, 'firstVertex', subset[1])
+                write_attribute(subset_element, 'numIndices', subset[2])
+                write_attribute(subset_element, 'numVertices', subset[3])
 
-        self._xml_write_int(subsets_element, 'count', subset_count)
+        write_attribute(subsets_element, 'count', subset_count)
 
     def _xml_resolve_skin_ids(self):
         for merge_group in self.merge_groups.values():
@@ -819,7 +820,7 @@ class Exporter:
                 skin_bind = ""
                 for node_id in merge_group.skin_bind_id:
                     skin_bind += f"{node_id:d} "
-                self._xml_write_string(merge_group.root_object_element, 'skinBindNodeIds', skin_bind.strip())
+                write_attribute(merge_group.root_object_element, 'skinBindNodeIds', skin_bind.strip())
 
     def _xml_merge_group(self, node):
         obj = node.obj
@@ -846,11 +847,12 @@ class Exporter:
                                                bind_id=0, append=False)
                 obj_eval.to_mesh_clear()
                 bpy.data.objects.remove(obj_eval, do_unlink=True)
-                self._xml_write_int(element, 'shapeId', merge_group.shape_id)
-                self._xml_write_string(element, 'materialIds',
-                                       self.shape_material_indexes[merge_group.shape_id])
+                write_attribute(element, 'shapeId', merge_group.shape_id)
+                write_attribute(element, 'materialIds',
+                                self.shape_material_indexes[merge_group.shape_id])
                 for bind_id, member in enumerate(merge_group.members, start=1):
-                    mesh, obj_eval = self._object_to_evaluated_mesh(member, from_frame=merge_group.root_object.matrix_world)
+                    mesh, obj_eval = self._object_to_evaluated_mesh(member,
+                                                                    from_frame=merge_group.root_object.matrix_world)
                     indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
                     self._xml_indexed_triangle_set(indexed_triangle_set, merge_group.indexed_triangle_element,
                                                    bind_id=bind_id, append=True)
@@ -898,8 +900,8 @@ class Exporter:
             self.logger.info(f"{obj.name!r} already exists in i3d file")
 
         self.logger.debug(f"{obj.name!r} has shape ID {shape_id}")
-        self._xml_write_int(element, 'shapeId', shape_id)
-        self._xml_write_string(element, 'materialIds', self.shape_material_indexes[shape_id])
+        write_attribute(element, 'shapeId', shape_id)
+        write_attribute(element, 'materialIds', self.shape_material_indexes[shape_id])
 
     def _xml_scene_object_transform_group(self, node: ExporterNode):
         pass
@@ -907,14 +909,14 @@ class Exporter:
     def _xml_scene_object_camera(self, node: ExporterNode):
         camera = node.obj.data
         element = node.i3d_elements['scene_node']
-        self._xml_write_float(element, 'fov', camera.lens)
-        self._xml_write_float(element, 'nearClip', camera.clip_start)
-        self._xml_write_float(element, 'farClip', camera.clip_end)
+        write_attribute(element, 'fov', camera.lens)
+        write_attribute(element, 'nearClip', camera.clip_start)
+        write_attribute(element, 'farClip', camera.clip_end)
         self.logger.info(f"{node.obj.name!r} is a camera with fov {camera.lens}, "
                          f"near clipping {camera.clip_start} and far clipping {camera.clip_end}")
         if camera.type == 'ORTHO':
-            self._xml_write_bool(element, 'orthographic', True)
-            self._xml_write_float(element, 'orthographicHeight', camera.ortho_scale)
+            write_attribute(element, 'orthographic', True)
+            write_attribute(element, 'orthographicHeight', camera.ortho_scale)
             self.logger.info(f"{node.obj.name!r} is orthographic with height {camera.ortho_scale}")
         else:
             self.logger.info(f"{node.obj.name!r} is not orthographic")
@@ -934,27 +936,27 @@ class Exporter:
             light_type = 'spot'
             falloff_type = light.falloff_type
             cone_angle = math.degrees(light.spot_size)
-            self._xml_write_float(element, 'coneAngle', cone_angle)
+            write_attribute(element, 'coneAngle', cone_angle)
             self.logger.info(f"{node.obj.name!r} has a cone angle of {cone_angle}")
             # Blender spot 0.0 -> 1.0, GE spot 0.0 -> 5.0
             drop_off = 5.0 * light.spot_blend
-            self._xml_write_float(element, 'dropOff', drop_off)
+            write_attribute(element, 'dropOff', drop_off)
             self.logger.info(f"{node.obj.name!r} has a drop off of {drop_off}")
         elif light_type == 'AREA':
             light_type = 'point'
             self.logger.warning(f"{node.obj.name!r} is an AREA light, "
                                 f"which is not supported and defaults to point light")
 
-        self._xml_write_string(element, 'type', light_type)
+        write_attribute(element, 'type', light_type)
 
         color = "{0:f} {1:f} {2:f}".format(*light.color)
-        self._xml_write_string(element, 'color', color)
+        write_attribute(element, 'color', color)
         self.logger.info(f"{node.obj.name!r} has color {color}")
 
-        self._xml_write_float(element, 'range', light.distance)
+        write_attribute(element, 'range', light.distance)
         self.logger.info(f"{node.obj.name!r} has range {light.distance}")
 
-        self._xml_write_bool(element, 'castShadowMap', light.use_shadow)
+        write_attribute(element, 'castShadowMap', light.use_shadow)
         self.logger.info(f"{node.obj.name!r} "
                          f"{'casts shadows' if light.use_shadow else 'does not cast shadows'}")
 
@@ -971,78 +973,16 @@ class Exporter:
                 falloff_type = 2
                 self.logger.info(f"{node.obj.name!r} "
                                  f"has decay rate of type {'INVERSE_SQUARE'} which is 2 in i3d")
-            self._xml_write_int(element, 'decayRate', falloff_type)
+            write_attribute(element, 'decayRate', falloff_type)
 
     def _xml_export_to_file(self) -> None:
-        self._indent(self._tree)  # Make the xml human readable by adding indents
+        xml_i3d.add_indentations(self._tree)  # Make the xml human readable by adding indents
         try:
             ET.ElementTree(self._tree).write(self._filepath, xml_declaration=True, encoding='iso-8859-1', method='xml')
-            # print(f"Exported to {self._filepath}")
         except Exception as error:  # A bit slouchy exception handling. Should be more specific and not catch all
             self.logger.exception(error)
         else:
             self.logger.info(f"Wrote i3d to file '{self._filepath}'")
-
-    @staticmethod
-    def _xml_write_int(element: ET.Element, attribute: str, value: int) -> None:
-        """Write the attribute into the element with formatting for ints"""
-        element.set(attribute, f"{value:d}")
-
-    @staticmethod
-    def _xml_write_float(element: ET.Element, attribute: str, value: float) -> None:
-        """Write the attribute into the element with formatting for floats"""
-        element.set(attribute, f"{value:.7f}")
-
-    @staticmethod
-    def _xml_write_bool(element: ET.Element, attribute: str, value: bool) -> None:
-        """Write the attribute into the element with formatting for booleans"""
-        element.set(attribute, f"{value!s}".lower())
-
-    @staticmethod
-    def _xml_write_string(element: ET.Element, attribute: str, value: str) -> None:
-        """Write the attribute into the element with formatting for strings"""
-        element.set(attribute, value)
-
-    @staticmethod
-    def _xml_write_attribute(element: ET.Element, attribute: str, value) -> None:
-        if isinstance(value, float):
-            Exporter._xml_write_float(element, attribute, value)
-        elif isinstance(value, bool):  # Order matters, since bool is an int subclass!
-            Exporter._xml_write_bool(element, attribute, value)
-        elif isinstance(value, int):
-            Exporter._xml_write_int(element, attribute, value)
-        elif isinstance(value, str):
-            Exporter._xml_write_string(element, attribute, value)
-
-    @staticmethod
-    def _indent(elem: ET.Element, level: int = 0) -> None:
-        """
-        Used for pretty printing the xml since etree does not indent elements and keeps everything in one continues
-        string and since i3d files are supposed to be human readable, we need indentation. There is a patch for
-        pretty printing on its way in the standard library, but it is not available until python 3.9 comes around.
-
-        The module 'lxml' could also be used since it has pretty-printing, but that would introduce an external
-        library dependency for the addon.
-
-        The source code from this solution is taken from http://effbot.org/zone/element-lib.htm#prettyprint
-
-        It recursively checks every element and adds a newline + space indents to the element to make it pretty and
-        easily readable. This technically changes the xml, but the giants engine does not seem to mind the linebreaks
-        and spaces, when parsing the i3d file.
-        """
-        indents = '\n' + level * '  '
-        if len(elem):
-            if not elem.text or not elem.text.strip():
-                elem.text = indents + '  '
-            if not elem.tail or not elem.tail.strip():
-                elem.tail = indents
-            for elem in elem:
-                Exporter._indent(elem, level + 1)
-            if not elem.tail or not elem.tail.strip():
-                elem.tail = indents
-        else:
-            if level and (not elem.tail or not elem.tail.strip()):
-                elem.tail = indents
 
     def blender_to_i3d(self, obj: Union[bpy.types.Object, bpy.types.Collection]):
         # Collections don't have an object type since they aren't objects. If they are used for organisational purposes
