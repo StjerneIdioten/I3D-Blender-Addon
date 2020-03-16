@@ -10,24 +10,28 @@ import logging
 
 # Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
-import bpy
 
+import bpy
 from bpy_extras.io_utils import (
     axis_conversion
 )
 
 from . import shared
 from . import xml_i3d
-from .xml_i3d import write_attribute
+from .xml_i3d import (write_attribute, add_indentations)
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+logger.handlers = []
 
 
 # Exporter is a singleton
 class Exporter:
 
     def __init__(self, filepath: str, axis_forward, axis_up):
-        self.logger = logging.getLogger(__name__)
-        self.logger.setLevel(logging.DEBUG)
-        self.logger.handlers = []  # Clear handlers between runs since the logging module keeps track outside addon
+        #logger = logging.getLogger(__name__)
+        logger.setLevel(logging.DEBUG)
+        logger.handlers = []  # Clear handlers between runs since the logging module keeps track outside addon
 
         formatter = logging.Formatter('%(funcName)s:%(levelname)s: %(message)s')
 
@@ -38,7 +42,7 @@ class Exporter:
 
             self._log_file_handler.setFormatter(formatter)
 
-            self.logger.addHandler(self._log_file_handler)
+            logger.addHandler(self._log_file_handler)
 
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
@@ -46,18 +50,18 @@ class Exporter:
             console_handler.setLevel(logging.DEBUG)
         else:
             console_handler.setLevel(logging.WARNING)
-        self.logger.addHandler(console_handler)
+        logger.addHandler(console_handler)
 
-        self.logger.info(f"Blender version is: {bpy.app.version_string}")
-        self.logger.info(f"I3D Exporter version is: {sys.modules['i3dio'].bl_info.get('version')}")
-        self.logger.info(f"Exporting to {filepath}")
+        logger.info(f"Blender version is: {bpy.app.version_string}")
+        logger.info(f"I3D Exporter version is: {sys.modules['i3dio'].bl_info.get('version')}")
+        logger.info(f"Exporting to {filepath}")
         time_start = time.time()
 
         if 'MERGE_GROUPS' in bpy.context.scene.i3dio.features_to_export:
-            self.logger.info(f"Mergegroup export is enabled")
+            logger.info(f"Mergegroup export is enabled")
             self.export_merge_groups = True
         else:
-            self.logger.info(f"Mergegroup export is disabled")
+            logger.info(f"Mergegroup export is disabled")
             self.export_merge_groups = False
 
         # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
@@ -94,23 +98,23 @@ class Exporter:
 
             if self.export_merge_groups:
                 self._xml_resolve_skin_ids()
-                self.logger.info(f"Number of mergegroups: {len(self.merge_groups)}")
+                logger.info(f"Number of mergegroups: {len(self.merge_groups)}")
                 for name, merge_group in self.merge_groups.items():
                     if merge_group.root_object is not None:
-                        self.logger.info(f"Mergegroup '{name}' has root node {merge_group.root_object.name!r}")
+                        logger.info(f"Mergegroup '{name}' has root node {merge_group.root_object.name!r}")
                     else:
-                        self.logger.info(f"Mergegroup '{name}' has no root")
-                    self.logger.info(f"Mergegroup '{name}' has {len(merge_group.members)} members (Root not counted)")
+                        logger.info(f"Mergegroup '{name}' has no root")
+                    logger.info(f"Mergegroup '{name}' has {len(merge_group.members)} members (Root not counted)")
                     for member in merge_group.members:
-                        self.logger.debug(f"\t{member.name!r}")
+                        logger.debug(f"\t{member.name!r}")
 
             self._xml_export_to_file()
 
         # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
         except Exception:
-            self.logger.exception("Exception that stopped the exporter")
+            logger.exception("Exception that stopped the exporter")
 
-        self.logger.info(f"Export took {time.time() - time_start:.3f} seconds")
+        logger.info(f"Export took {time.time() - time_start:.3f} seconds")
 
         # EAFP
         try:
@@ -121,7 +125,7 @@ class Exporter:
     def _xml_build_scene_graph(self):
 
         objects_to_export = bpy.context.scene.i3dio.object_types_to_export
-        self.logger.info(f"Object types selected for export: {objects_to_export}")
+        logger.info(f"Object types selected for export: {objects_to_export}")
 
         def new_graph_node(obj: Union[bpy.types.Object, bpy.types.CollectionObjects,
                                       bpy.types.Collection, bpy.types.CollectionChildren],
@@ -130,7 +134,7 @@ class Exporter:
 
             if not isinstance(obj, bpy.types.Collection):
                 if obj.type not in objects_to_export:
-                    self.logger.debug(f"Object {obj.name!r} has type {obj.type!r}, "
+                    logger.debug(f"Object {obj.name!r} has type {obj.type!r}, "
                                       f"which is not a type selected for exporting")
 
                     return
@@ -139,48 +143,48 @@ class Exporter:
                 node = parent
             else:
                 node = self._scene_graph.add_node(obj, parent)
-                self.logger.debug(f"Added Node with ID {node.id} and name {node.obj.name!r}")
+                logger.debug(f"Added Node with ID {node.id} and name {node.obj.name!r}")
 
             # Expand collection tree into the collection instance
             if isinstance(obj, bpy.types.Object):
                 if obj.type == 'EMPTY':
                     if obj.instance_collection is not None:
-                        self.logger.debug(f'{obj.name!r} is a collection instance and will be unpacked')
+                        logger.debug(f'{obj.name!r} is a collection instance and will be unpacked')
                         # print(f'This is a collection instance')
                         new_graph_node(obj.instance_collection, node, unpack_collection=True)
 
             # Gets child objects/collections
             if isinstance(obj, bpy.types.Object):
                 if len(obj.children):
-                    self.logger.debug(f"Adding child objects of object {obj.name!r}")
+                    logger.debug(f"Adding child objects of object {obj.name!r}")
                     # print(f'Children of object')
                     for child in obj.children:
                         new_graph_node(child, node)
-                    self.logger.debug(f"Done adding child objects of object {obj.name!r}")
+                    logger.debug(f"Done adding child objects of object {obj.name!r}")
 
             # Gets child objects if it is a collection
             if isinstance(obj, bpy.types.Collection):
                 if len(obj.children):
-                    self.logger.debug(f"Adding child collections of collection {obj.name!r}")
+                    logger.debug(f"Adding child collections of collection {obj.name!r}")
                     for child in obj.children:
                         new_graph_node(child, node)
-                    self.logger.debug(f"Done adding child collections of collection {obj.name!r}")
+                    logger.debug(f"Done adding child collections of collection {obj.name!r}")
 
                 if len(obj.objects):
-                    self.logger.debug(f"Adding objects of collection {obj.name!r}")
+                    logger.debug(f"Adding objects of collection {obj.name!r}")
                     for child in obj.objects:
                         if child.parent is None:
                             new_graph_node(child, node)
-                    self.logger.debug(f"Done adding objects of collection {obj.name!r}")
+                    logger.debug(f"Done adding objects of collection {obj.name!r}")
 
         selection = bpy.context.scene.i3dio.selection
         if selection == 'ALL':
-            self.logger.info("Export selection is master collection 'Scene Collection'")
+            logger.info("Export selection is master collection 'Scene Collection'")
             selection = bpy.context.scene.collection
             new_graph_node(selection, self._scene_graph.nodes[0])
         elif selection == 'ACTIVE_COLLECTION':
             selection = bpy.context.view_layer.active_layer_collection.collection
-            self.logger.info(f"Export selection is collection {selection.name!r}")
+            logger.info(f"Export selection is collection {selection.name!r}")
             new_graph_node(selection, self._scene_graph.nodes[0])
         elif selection == 'SELECTED_OBJECTS':
             # Generate active object list and loop over that somehow
@@ -237,15 +241,15 @@ class Exporter:
 
         def parse_node(node: ExporterNode):
 
-            self.logger.info(f"Parsing node with id {node.id} and name {node.obj.name!r}")
+            logger.info(f"Parsing node with id {node.id} and name {node.obj.name!r}")
             self._xml_scene_object_general_data(node)
 
             if isinstance(node.obj, bpy.types.Collection):
-                self.logger.info(f"{node.obj.name!r} is a collection, getting parsed as a transformgroup")
+                logger.info(f"{node.obj.name!r} is a collection, getting parsed as a transformgroup")
                 self._xml_scene_object_transform_group(node)
             else:
                 node_type = node.obj.type
-                self.logger.info(f"{node.obj.name!r} is parsed as a {node_type!r}")
+                logger.info(f"{node.obj.name!r} is parsed as a {node_type!r}")
                 # merge group id can only ever be set on an object with a mesh, so no need to check for mesh type
                 if self.export_merge_groups and node.obj.i3d_merge_group.group_id != '':
                     self._xml_merge_group(node)
@@ -262,17 +266,17 @@ class Exporter:
                     try:
                         self._xml_object_properties(node.obj.data.i3d_attributes, node)
                     except AttributeError:
-                        self.logger.debug(f"{node.obj.name!r} has no i3d_attributes")
+                        logger.debug(f"{node.obj.name!r} has no i3d_attributes")
 
             for child in node.children.values():
-                self.logger.info(
+                logger.info(
                     f"Parsing child node {child.obj.name!r} of node {node.obj.name!r}")
                 child.i3d_elements['scene_node'] = ET.SubElement(node.i3d_elements['scene_node'],
                                                                  self.blender_to_i3d(child.obj))
                 parse_node(child)
 
         for root_child in self._scene_graph.nodes[0].children.values():
-            self.logger.info(
+            logger.info(
                 f"Parsing child node {root_child.obj.name!r} of root node")
             root_child.i3d_elements['scene_node'] = ET.SubElement(self._tree.find('Scene'),
                                                                   self.blender_to_i3d(root_child.obj))
@@ -283,7 +287,7 @@ class Exporter:
         write_attribute(element, 'name', node.obj.name)
         write_attribute(element, 'nodeId', node.id)
         if isinstance(node.obj, bpy.types.Collection):
-            self.logger.info(
+            logger.info(
                 f"{node.obj.name!r} is a collection and it will be exported as a transformgroup with no "
                 f"translation and rotation")
             # Collections dont have any physical properties, but the transformgroups in i3d has so it is set to the
@@ -293,12 +297,12 @@ class Exporter:
             # in GE
             # If you want an explanation for A * B * A^-1 then go look up Transformation Matrices cause I can't
             # remember the specifics
-            self.logger.info(f"{node.obj.name!r} is a {node.obj.type!r}")
-            self.logger.debug(f"{node.obj.name!r} transforming to new transform-basis")
+            logger.info(f"{node.obj.name!r} is a {node.obj.type!r}")
+            logger.debug(f"{node.obj.name!r} transforming to new transform-basis")
 
             if node.obj == 'LIGHT' or node.obj.type == 'CAMERA':
                 matrix = self._global_matrix @ node.obj.matrix_local
-                self.logger.debug(
+                logger.debug(
                     f"{node.obj.name!r} will not have inversed transform applied to accommodate flipped "
                     f"z-axis in GE ")
             else:
@@ -307,7 +311,7 @@ class Exporter:
             if node.obj.parent is not None:
                 if node.obj.parent.type == 'CAMERA' or node.obj.parent.type == 'LIGHT':
                     matrix = self._global_matrix.inverted() @ matrix
-                    self.logger.debug(
+                    logger.debug(
                         f"{node.obj.name!r} will be transformed once more with inverse to accommodate "
                         f"flipped z-axis in GE of parent Light/Camera")
 
@@ -319,18 +323,18 @@ class Exporter:
                     *[x * bpy.context.scene.unit_settings.scale_length for x in translation])
 
                 write_attribute(element, 'translation', translation)
-                self.logger.debug(f"{node.obj.name!r} translation: [{translation}]")
+                logger.debug(f"{node.obj.name!r} translation: [{translation}]")
 
             # Rotation, no unit scaling since it will always be degrees.
             rotation = [math.degrees(axis) for axis in matrix.to_euler('XYZ')]
             if not self.vector_compare(mathutils.Vector(rotation), mathutils.Vector((0, 0, 0))):
                 rotation = "{0:.6g} {1:.6g} {2:.6g}".format(*rotation)
                 write_attribute(element, 'rotation', rotation)
-                self.logger.debug(f"{node.obj.name!r} rotation(degrees): [{rotation}]")
+                logger.debug(f"{node.obj.name!r} rotation(degrees): [{rotation}]")
 
             # Scale
             if matrix.is_negative:
-                self.logger.error(f"{node.obj.name!r} has one or more negative scaling components, "
+                logger.error(f"{node.obj.name!r} has one or more negative scaling components, "
                                   f"which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
             else:
                 scale = matrix.to_scale()
@@ -338,13 +342,13 @@ class Exporter:
                     scale = "{0:.6g} {1:.6g} {2:.6g}".format(*scale)
 
                     write_attribute(element, 'scale', scale)
-                    self.logger.debug(f"{node.obj.name!r} scale: [{scale}]")
+                    logger.debug(f"{node.obj.name!r} scale: [{scale}]")
 
             # Write the object transform properties from the blender UI into the object
             self._xml_object_properties(node.obj.i3d_attributes, node)
 
     def _xml_object_properties(self, propertygroup, node):
-        self.logger.info(f"Writing non-default properties from propertygroup: '{type(propertygroup).__name__}'")
+        logger.info(f"Writing non-default properties from propertygroup: '{type(propertygroup).__name__}'")
         # Since blender properties are basically abusing the annotation system, we can also abuse this to create
         # a generic property export function by accessing the annotation dictionary
         properties_written = 0
@@ -375,34 +379,34 @@ class Exporter:
                     try:
                         value_decimal = int(value, 16)
                     except ValueError:
-                        self.logger.error(f"Supplied value '{value}' for '{prop_name}' is not a hex value!")
+                        logger.error(f"Supplied value '{value}' for '{prop_name}' is not a hex value!")
                         continue
                     else:
                         if 0 <= value_decimal <= 2**32-1:  # Check that it is actually a 32-bit unsigned int
                             value_to_write = value_decimal
                         else:
-                            self.logger.warning(f"Supplied value '{value}' for '{prop_name}' is out of bounds."
+                            logger.warning(f"Supplied value '{value}' for '{prop_name}' is out of bounds."
                                                 f" It should be within range [0, ffffffff] (32-bit unsigned)")
                             continue
 
-            self.logger.debug(f"\tProperty '{prop_name}' with value '{value}'. Default is '{default}'")
+            logger.debug(f"\tProperty '{prop_name}' with value '{value}'. Default is '{default}'")
             write_attribute(i3d_element, i3d_name, value_to_write)
             properties_written += 1
 
-        self.logger.info(f"Wrote '{properties_written}' properties")
+        logger.info(f"Wrote '{properties_written}' properties")
 
     def _xml_add_material(self, material: bpy.types.Material) -> int:
 
         materials_root = self._tree.find('Materials')
         material_element = materials_root.find(f".Material[@name={material.name!r}]")
         if material_element is None:
-            self.logger.info(f"{material.name!r} is a new material")
+            logger.info(f"{material.name!r} is a new material")
             material_element = ET.SubElement(materials_root, 'Material')
             write_attribute(material_element, 'name', material.name)
             write_attribute(material_element, 'materialId', self.ids['material'])
 
             if material.use_nodes:
-                self.logger.debug(f"{material.name!r} uses nodes")
+                logger.debug(f"{material.name!r} uses nodes")
                 material_node = material.node_tree.nodes.get('Principled BSDF')
                 if material_node is not None:
                     # Diffuse ##########################################################################################
@@ -418,10 +422,10 @@ class Exporter:
                                 diffuse_image_path = color_connected_node.image.filepath
 
                         except (AttributeError, IndexError, KeyError):
-                            self.logger.exception(f"{material.name!r} has an improperly setup Texture")
+                            logger.exception(f"{material.name!r} has an improperly setup Texture")
                         else:
                             if diffuse_image_path is not None:
-                                self.logger.debug(f"{material.name!r} has Texture "
+                                logger.debug(f"{material.name!r} has Texture "
                                                   f"'{Exporter.as_fs_relative_path(diffuse_image_path)}'")
                                 file_id = self._xml_add_file(diffuse_image_path)
                                 texture_element = ET.SubElement(material_element, 'Texture')
@@ -438,15 +442,15 @@ class Exporter:
                             normal_image_path = normal_node_socket.links[0].from_node.inputs['Color'].links[0] \
                                 .from_node.image.filepath
                         except (AttributeError, IndexError, KeyError):
-                            self.logger.exception(f"{material.name!r} has an improperly setup Normalmap")
+                            logger.exception(f"{material.name!r} has an improperly setup Normalmap")
                         else:
-                            self.logger.debug(f"{material.name!r} has Normalmap "
+                            logger.debug(f"{material.name!r} has Normalmap "
                                               f"'{Exporter.as_fs_relative_path(normal_image_path)}'")
                             file_id = self._xml_add_file(normal_image_path)
                             normal_element = ET.SubElement(material_element, 'Normalmap')
                             write_attribute(normal_element, 'fileId', f'{file_id:d}')
                     else:
-                        self.logger.debug(f"{material.name!r} has no Normalmap")
+                        logger.debug(f"{material.name!r} has no Normalmap")
 
                     # Specular #########################################################################################
                     write_attribute(material_element,
@@ -455,7 +459,7 @@ class Exporter:
                                     f"{material_node.inputs['Specular'].default_value:.6f} "
                                     f"{material_node.inputs['Metallic'].default_value:f}")
                 else:
-                    self.logger.warning(f"{material.name!r} uses nodes but Principled BSDF node is not found!")
+                    logger.warning(f"{material.name!r} uses nodes but Principled BSDF node is not found!")
 
                 # Gloss ################################################################################################
 
@@ -466,18 +470,18 @@ class Exporter:
                     try:
                         gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
                     except (AttributeError, IndexError, KeyError):
-                        self.logger.exception(f"{material.name!r} has an improperly setup Glossmap")
+                        logger.exception(f"{material.name!r} has an improperly setup Glossmap")
                     else:
-                        self.logger.debug(f"{material.name!r} has Glossmap "
+                        logger.debug(f"{material.name!r} has Glossmap "
                                           f"'{Exporter.as_fs_relative_path(gloss_image_path)}'")
                         file_id = self._xml_add_file(gloss_image_path)
                         normal_element = ET.SubElement(material_element, 'Glossmap')
                         write_attribute(normal_element, 'fileId', f'{file_id:d}')
                 else:
-                    self.logger.debug(f"{material.name!r} has no Glossmap")
+                    logger.debug(f"{material.name!r} has no Glossmap")
 
             else:
-                self.logger.debug(f"{material.name!r} does not use nodes")
+                logger.debug(f"{material.name!r} does not use nodes")
                 write_attribute(material_element,
                                 'diffuseColor',
                                 "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*material.diffuse_color))
@@ -488,10 +492,10 @@ class Exporter:
 
             self.ids['material'] += 1
         else:
-            self.logger.info(f"{material.name!r} is already in i3d file")
+            logger.info(f"{material.name!r} is already in i3d file")
 
         material_id = int(material_element.get('materialId'))
-        self.logger.debug(f"{material.name!r} has material ID {material_id}")
+        logger.debug(f"{material.name!r} has material ID {material_id}")
         return material_id
 
     def _xml_add_file(self, filepath, file_folder='textures') -> int:
@@ -503,8 +507,8 @@ class Exporter:
         filepath_i3d = self._filepath[0:self._filepath.rfind('\\') + 1]
         file_structure = bpy.context.scene.i3dio.file_structure
 
-        self.logger.debug(f"'{filename}' has blender relative path '{filepath}'")
-        self.logger.debug(f"'{filename}' has absolute path '{filepath_absolute}'")
+        logger.debug(f"'{filename}' has blender relative path '{filepath}'")
+        logger.debug(f"'{filename}' has absolute path '{filepath_absolute}'")
 
         # Check if the file is relative to the fs data folder and thus should be references as such
         filepath_resolved = Exporter.as_fs_relative_path(filepath_absolute)
@@ -513,14 +517,14 @@ class Exporter:
         # Resolve the filename and write the file
         if filepath_resolved[0] != '$':
             if bpy.context.scene.i3dio.copy_files:
-                self.logger.info(f"'{filename}' is non-relative to FS and will be copied")
+                logger.info(f"'{filename}' is non-relative to FS and will be copied")
                 if file_structure == 'FLAT':
-                    self.logger.debug(f"'{filename}' will be copied using the 'FLAT' hierarchy structure")
+                    logger.debug(f"'{filename}' will be copied using the 'FLAT' hierarchy structure")
                 elif file_structure == 'MODHUB':
-                    self.logger.debug(f"'{filename}' will be copied using the 'MODHUB' hierarchy structure")
+                    logger.debug(f"'{filename}' will be copied using the 'MODHUB' hierarchy structure")
                     output_dir = file_folder + '\\'
                 elif file_structure == 'BLENDER':
-                    self.logger.debug(f"'{filename}' will be copied using the 'BLENDER' hierarchy structure")
+                    logger.debug(f"'{filename}' will be copied using the 'BLENDER' hierarchy structure")
                     # TODO: Rewrite this to make it more than three levels above the blend file but allow deeper nesting
                     #  ,since current code just counts number of slashes
                     blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
@@ -530,7 +534,7 @@ class Exporter:
                         output_dir = filepath[
                                      2:filepath.rfind('\\') + 1]  # Remove blender relative notation and filename
                     else:
-                        self.logger.debug(
+                        logger.debug(
                             f"'{filename}' exists more than {blender_relative_distance_limit} folders away "
                             f"from .blend file. Defaulting to absolute path and no copying.")
                         output_dir = filepath_absolute[0:filepath_absolute.rfind('\\') + 1]
@@ -550,12 +554,12 @@ class Exporter:
                             except shutil.SameFileError:
                                 pass  # Ignore if source and destination is the same file
                             else:
-                                self.logger.info(f"'{filename}' copied to '{filepath_i3d + output_dir + filename}'")
+                                logger.info(f"'{filename}' copied to '{filepath_i3d + output_dir + filename}'")
                     else:
-                        self.logger.info(f"'{filename}' is already indexed in i3d file")
+                        logger.info(f"'{filename}' is already indexed in i3d file")
 
         else:
-            self.logger.debug(f"'{filename}' was resolved to FS relative path '{filepath_resolved}'")
+            logger.debug(f"'{filename}' was resolved to FS relative path '{filepath_resolved}'")
 
         # Predicate search feature of ElemTree does NOT play nicely with the filepath names, so we loop the old
         # fashioned way
@@ -570,7 +574,7 @@ class Exporter:
             write_attribute(file_element, 'fileId', file_id)
             write_attribute(file_element, 'filename', filepath_resolved)
 
-        self.logger.debug(f"'{filename}' has file ID {file_id}")
+        logger.debug(f"'{filename}' has file ID {file_id}")
         return file_id
 
     def _xml_add_indexed_triangle_set(self, name: str) -> [bool, ET.Element]:
@@ -580,7 +584,7 @@ class Exporter:
         pre_existed = True
         indexed_triangle_element = shape_root.find(f".IndexedTriangleSet[@name='{name}']")
         if indexed_triangle_element is None:
-            self.logger.info(f"'{name}' is a new IndexedTriangleSet")
+            logger.info(f"'{name}' is a new IndexedTriangleSet")
             pre_existed = False
             # Get and increment shape id
             shape_id = self.ids['shape']
@@ -603,10 +607,10 @@ class Exporter:
             # Generate an object evaluated from the dependency graph
             # The copy is important since the depsgraph will store changes to the evaluated object
             obj_resolved = obj.evaluated_get(self._depsgraph).copy()
-            self.logger.info(f"{obj.name!r} is exported with modifiers applied")
+            logger.info(f"{obj.name!r} is exported with modifiers applied")
         else:
             obj_resolved = obj.copy()
-            self.logger.info(f"{obj.name!r} is exported without modifiers applied")
+            logger.info(f"{obj.name!r} is exported without modifiers applied")
 
         # Get the mesh from the resolved object, which contains all of the modifiers applied (but not object transform)
         mesh = obj_resolved.to_mesh(preserve_all_data_layers=True, depsgraph=self._depsgraph)
@@ -616,14 +620,14 @@ class Exporter:
 
         conversion_matrix = self._global_matrix
         if bpy.context.scene.i3dio.apply_unit_scale:
-            self.logger.info(f"{obj.name!r} has unit scaling applied")
+            logger.info(f"{obj.name!r} has unit scaling applied")
             conversion_matrix = mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) \
                 @ conversion_matrix
 
         mesh.transform(conversion_matrix)
         if conversion_matrix.is_negative:
             mesh.flip_normals()
-            self.logger.debug(f"{obj.name!r} conversion matrix is negative, flipping normals")
+            logger.debug(f"{obj.name!r} conversion matrix is negative, flipping normals")
 
         # Calculates triangles from mesh polygons
         mesh.calc_loop_triangles()
@@ -637,12 +641,12 @@ class Exporter:
         indexed_triangle_set.name = mesh.name
         # Make sure that the mesh has some form of material added. Since GE requires at least a default material
         if len(mesh.materials) == 0:
-            self.logger.info(f"{mesh.name!r} has no material assigned")
+            logger.info(f"{mesh.name!r} has no material assigned")
             if bpy.data.materials.get('i3d_default_material') is None:
                 bpy.data.materials.new('i3d_default_material')
-                self.logger.info(f"Default material does not exist. Creating i3d_default_material")
+                logger.info(f"Default material does not exist. Creating i3d_default_material")
             mesh.materials.append(bpy.data.materials.get('i3d_default_material'))
-            self.logger.info(f"{mesh.name!r} assigned default material i3d_default_material")
+            logger.info(f"{mesh.name!r} assigned default material i3d_default_material")
 
         # Group triangles by subset, since they need to be exported in correct order per material subset to the i3d
         triangle_subsets = {}
@@ -650,7 +654,7 @@ class Exporter:
             triangle_material = mesh.materials[triangle.material_index]
             if triangle_material.name not in triangle_subsets:
                 triangle_subsets[triangle_material.name] = []
-                self.logger.info(f"{mesh.name!r} has material {triangle_material.name!r}")
+                logger.info(f"{mesh.name!r} has material {triangle_material.name!r}")
                 # TODO: Look at this material stuff
                 material_id = self._xml_add_material(triangle_material)
                 if mesh_id in self.shape_material_indexes.keys():
@@ -666,7 +670,7 @@ class Exporter:
         indices_total = 0  # Total amount of indices, since i3d format needs this number (for some reason)
 
         if len(mesh.vertex_colors):
-            self.logger.info(f"{mesh.name!r} has colour painted vertices")
+            logger.info(f"{mesh.name!r} has colour painted vertices")
 
         for mat, subset in triangle_subsets.items():
             number_of_indices = 0
@@ -724,13 +728,13 @@ class Exporter:
             indexed_triangle_set.subsets[-1].append(number_of_indices)
             indexed_triangle_set.subsets[-1].append(number_of_vertices)
 
-            self.logger.debug(f"{mesh.name!r} has subset '{mat}' with {len(subset)} triangles, "
+            logger.debug(f"{mesh.name!r} has subset '{mat}' with {len(subset)} triangles, "
                               f"{number_of_vertices} vertices and {number_of_indices} indices")
             indices_total += number_of_indices
 
-        self.logger.debug(f"{mesh.name!r} has a total of {len(indexed_triangle_set.vertices)} vertices")
-        self.logger.debug(f"{mesh.name!r} consists of {len(indexed_triangle_set.triangles)} triangles")
-        self.logger.info(f"{mesh.name!r} has {len(indexed_triangle_set.subsets)} subsets")
+        logger.debug(f"{mesh.name!r} has a total of {len(indexed_triangle_set.vertices)} vertices")
+        logger.debug(f"{mesh.name!r} consists of {len(indexed_triangle_set.triangles)} triangles")
+        logger.info(f"{mesh.name!r} has {len(indexed_triangle_set.subsets)} subsets")
 
         return indexed_triangle_set
 
@@ -793,7 +797,7 @@ class Exporter:
         if append:
             subset_element = subsets_element.find(f".Subset")
             if subset_count > 1:
-                self.logger.error(f"Multiple subsets(materials) are not supported for mergegroups! "
+                logger.error(f"Multiple subsets(materials) are not supported for mergegroups! "
                                   f"This will most likely crash GE or give weird behaviour!")
                 subset_count = 1
             else:
@@ -825,16 +829,16 @@ class Exporter:
     def _xml_merge_group(self, node):
         obj = node.obj
         element = node.i3d_elements['scene_node']
-        self.logger.info(f"{obj.name!r} is exported as part of a mergegroup")
+        logger.info(f"{obj.name!r} is exported as part of a mergegroup")
         merge_group = self.merge_groups.setdefault(obj.i3d_merge_group.group_id,
                                                    MergeGroup(obj.i3d_merge_group.group_id))
         if obj.i3d_merge_group.is_root:
             if merge_group.root_object is not None:
-                self.logger.warning(f"{obj.name!r} is set as a root node, but a "
+                logger.warning(f"{obj.name!r} is set as a root node, but a "
                                     f"root node has already been registered for "
                                     f"merge group '{merge_group.group_id}'. Object mesh wont be exported!")
             else:
-                self.logger.info(f"{obj.name!r} is the root of mergegroup '{merge_group.group_id}'")
+                logger.info(f"{obj.name!r} is the root of mergegroup '{merge_group.group_id}'")
                 merge_group.root_object = obj
                 merge_group.root_object_element = element
                 merge_group.skin_bind_id.insert(0, int(element.get('nodeId')))
@@ -862,14 +866,14 @@ class Exporter:
                 try:
                     self._xml_object_properties(obj.data.i3d_attributes, node)
                 except AttributeError:
-                    self.logger.debug(f"{obj.obj.name!r} has no i3d_attributes")
+                    logger.debug(f"{obj.obj.name!r} has no i3d_attributes")
         else:
             if merge_group.root_object is None:
-                self.logger.debug(f"{obj.name!r} handled before root node of mergegroup '{merge_group.group_id}' "
+                logger.debug(f"{obj.name!r} handled before root node of mergegroup '{merge_group.group_id}' "
                                   f"has been found, mesh export is deferred till root is found")
                 merge_group.add_member(obj, int(element.get('nodeId')))
             else:
-                self.logger.debug(f"{obj.name!r} is added to mergegroup's IndexedTriangleSet element")
+                logger.debug(f"{obj.name!r} is added to mergegroup's IndexedTriangleSet element")
                 bind_id = merge_group.add_member(obj, int(element.get('nodeId')))
                 mesh, obj_eval = self._object_to_evaluated_mesh(obj, from_frame=merge_group.root_object.matrix_world)
                 indexed_triangle_set = self._mesh_to_indexed_triangle_set(mesh, merge_group.shape_id)
@@ -897,9 +901,9 @@ class Exporter:
             # Clean out the object copy
             bpy.data.objects.remove(obj_eval, do_unlink=True)
         else:
-            self.logger.info(f"{obj.name!r} already exists in i3d file")
+            logger.info(f"{obj.name!r} already exists in i3d file")
 
-        self.logger.debug(f"{obj.name!r} has shape ID {shape_id}")
+        logger.debug(f"{obj.name!r} has shape ID {shape_id}")
         write_attribute(element, 'shapeId', shape_id)
         write_attribute(element, 'materialIds', self.shape_material_indexes[shape_id])
 
@@ -912,20 +916,20 @@ class Exporter:
         write_attribute(element, 'fov', camera.lens)
         write_attribute(element, 'nearClip', camera.clip_start)
         write_attribute(element, 'farClip', camera.clip_end)
-        self.logger.info(f"{node.obj.name!r} is a camera with fov {camera.lens}, "
+        logger.info(f"{node.obj.name!r} is a camera with fov {camera.lens}, "
                          f"near clipping {camera.clip_start} and far clipping {camera.clip_end}")
         if camera.type == 'ORTHO':
             write_attribute(element, 'orthographic', True)
             write_attribute(element, 'orthographicHeight', camera.ortho_scale)
-            self.logger.info(f"{node.obj.name!r} is orthographic with height {camera.ortho_scale}")
+            logger.info(f"{node.obj.name!r} is orthographic with height {camera.ortho_scale}")
         else:
-            self.logger.info(f"{node.obj.name!r} is not orthographic")
+            logger.info(f"{node.obj.name!r} is not orthographic")
 
     def _xml_scene_object_light(self, node: ExporterNode):
         light = node.obj.data
         element = node.i3d_elements['scene_node']
         light_type = light.type
-        self.logger.info(f"{node.obj.name!r} is a light of type {light_type!r}")
+        logger.info(f"{node.obj.name!r} is a light of type {light_type!r}")
         falloff_type = None
         if light_type == 'POINT':
             light_type = 'point'
@@ -937,41 +941,41 @@ class Exporter:
             falloff_type = light.falloff_type
             cone_angle = math.degrees(light.spot_size)
             write_attribute(element, 'coneAngle', cone_angle)
-            self.logger.info(f"{node.obj.name!r} has a cone angle of {cone_angle}")
+            logger.info(f"{node.obj.name!r} has a cone angle of {cone_angle}")
             # Blender spot 0.0 -> 1.0, GE spot 0.0 -> 5.0
             drop_off = 5.0 * light.spot_blend
             write_attribute(element, 'dropOff', drop_off)
-            self.logger.info(f"{node.obj.name!r} has a drop off of {drop_off}")
+            logger.info(f"{node.obj.name!r} has a drop off of {drop_off}")
         elif light_type == 'AREA':
             light_type = 'point'
-            self.logger.warning(f"{node.obj.name!r} is an AREA light, "
+            logger.warning(f"{node.obj.name!r} is an AREA light, "
                                 f"which is not supported and defaults to point light")
 
         write_attribute(element, 'type', light_type)
 
         color = "{0:f} {1:f} {2:f}".format(*light.color)
         write_attribute(element, 'color', color)
-        self.logger.info(f"{node.obj.name!r} has color {color}")
+        logger.info(f"{node.obj.name!r} has color {color}")
 
         write_attribute(element, 'range', light.distance)
-        self.logger.info(f"{node.obj.name!r} has range {light.distance}")
+        logger.info(f"{node.obj.name!r} has range {light.distance}")
 
         write_attribute(element, 'castShadowMap', light.use_shadow)
-        self.logger.info(f"{node.obj.name!r} "
+        logger.info(f"{node.obj.name!r} "
                          f"{'casts shadows' if light.use_shadow else 'does not cast shadows'}")
 
         if falloff_type is not None:
             if falloff_type == 'CONSTANT':
                 falloff_type = 0
-                self.logger.info(f"{node.obj.name!r} "
+                logger.info(f"{node.obj.name!r} "
                                  f"has decay rate of type {'CONSTANT'} which is 0 in i3d")
             elif falloff_type == 'INVERSE_LINEAR':
                 falloff_type = 1
-                self.logger.info(f"{node.obj.name!r} "
+                logger.info(f"{node.obj.name!r} "
                                  f"has decay rate of type {'INVERSE_LINEAR'} which is 1 in i3d")
             elif falloff_type == 'INVERSE_SQUARE':
                 falloff_type = 2
-                self.logger.info(f"{node.obj.name!r} "
+                logger.info(f"{node.obj.name!r} "
                                  f"has decay rate of type {'INVERSE_SQUARE'} which is 2 in i3d")
             write_attribute(element, 'decayRate', falloff_type)
 
@@ -980,9 +984,9 @@ class Exporter:
         try:
             ET.ElementTree(self._tree).write(self._filepath, xml_declaration=True, encoding='iso-8859-1', method='xml')
         except Exception as error:  # A bit slouchy exception handling. Should be more specific and not catch all
-            self.logger.exception(error)
+            logger.exception(error)
         else:
-            self.logger.info(f"Wrote i3d to file '{self._filepath}'")
+            logger.info(f"Wrote i3d to file '{self._filepath}'")
 
     def blender_to_i3d(self, obj: Union[bpy.types.Object, bpy.types.Collection]):
         # Collections don't have an object type since they aren't objects. If they are used for organisational purposes

@@ -13,7 +13,7 @@ from bpy.types import (
     Panel
 )
 
-from . import i3d_exporter, i3d_properties
+from . import exporter, i3d_properties
 
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
@@ -32,7 +32,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     # Add remaining properties from original addon as they get implemented
 
     def execute(self, context):
-        exporter = i3d_exporter.Exporter(self.filepath, self.axis_forward, self.axis_up)
+        export = exporter.Exporter(self.filepath, self.axis_forward, self.axis_up)
         return {'FINISHED'}
 
     def draw(self, context):

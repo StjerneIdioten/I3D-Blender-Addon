@@ -22,8 +22,8 @@ if "bpy" in locals():
         importlib.reload(i3d_ui)
     if 'i3d_ui_attributes' in locals():
         importlib.reload(i3d_ui_attributes)
-    if 'i3d_exporter' in locals():
-        importlib.reload(i3d_exporter)
+    if 'exporter' in locals():
+        importlib.reload(exporter)
     print("Reloaded multifiles")
 else:
     from . import i3d_ui, i3d_ui_attributes, i3d_properties
