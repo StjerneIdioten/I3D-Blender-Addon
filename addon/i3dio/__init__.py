@@ -16,6 +16,12 @@
 # Reimport modules when refreshing blender to show changes
 if "bpy" in locals():
     import importlib
+    if 'debugging' in locals():
+        importlib.reload(debugging)
+    if 'xml_i3d' in locals():
+        importlib.reload(xml_i3d)
+    if 'shared' in locals():
+        importlib.reload(shared)
     if 'i3d_properties' in locals():
         importlib.reload(i3d_properties)
     if 'i3d_ui' in locals():
@@ -31,7 +37,6 @@ else:
 
 import bpy
 
-print(__file__)
 
 bl_info = {
     "name": "Unofficial GIANTS I3D Exporter Tools",

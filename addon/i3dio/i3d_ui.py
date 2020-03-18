@@ -13,7 +13,7 @@ from bpy.types import (
     Panel
 )
 
-from . import exporter, i3d_properties
+from . import exporter, xml_i3d, i3d_properties
 
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')
@@ -23,8 +23,8 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     bl_label = "Export I3D"
     bl_options = {'PRESET'}  # 'PRESET' enables the preset dialog for saving settings as preset
 
-    filename_ext = ".i3d"
-    filter_glob: StringProperty(default="*.i3d",
+    filename_ext = xml_i3d.file_ending
+    filter_glob: StringProperty(default=f"*{xml_i3d.file_ending}",
                                 options={'HIDDEN'},
                                 maxlen=255,
                                 )
@@ -32,7 +32,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     # Add remaining properties from original addon as they get implemented
 
     def execute(self, context):
-        export = exporter.Exporter(self.filepath, self.axis_forward, self.axis_up)
+        exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
         return {'FINISHED'}
 
     def draw(self, context):

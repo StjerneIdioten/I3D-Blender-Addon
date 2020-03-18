@@ -3,6 +3,12 @@ precision """
 
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
 
+root_attributes = {'version': '1.6',
+                   'xmlns:sxi': 'http://www.w3.org/2001/XMLSchema-instance',
+                   'xsi:noNamespaceSchemaLocation': 'http://i3d.giants.ch/schema/i3d-1.6.xsd'}
+
+file_ending = '.i3d'
+
 
 def write_int(element: ET.Element, attribute: str, value: int) -> None:
     """Write the attribute into the element with formatting for ints"""
