@@ -52,10 +52,13 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
 
         # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
         try:
-            i3d = shared.I3D(name=bpy.path.display_name_from_filepath(filepath), i3d_file_path=filepath)
-
-
-
+            global_matrix = axis_conversion(
+                to_forward=axis_forward,
+                to_up=axis_up,
+            ).to_4x4()
+            i3d = shared.I3D(name=bpy.path.display_name_from_filepath(filepath), i3d_file_path=filepath, conversion_matrix=global_matrix)
+            obj = bpy.context.active_object
+            i3d.add_transformgroup_node(obj)
             i3d.export_to_i3d_file()
             # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
         except Exception:
@@ -71,7 +74,6 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
 
         debugging.addon_logger.removeHandler(log_file_handler)
         debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
-
 
 # Exporter is a singleton
 class Exporter:
@@ -89,7 +91,7 @@ class Exporter:
             filename = filepath[0:len(filepath) - len(xml_i3d.file_ending)] + '_export_log.txt'
             log_file_handler = logging.FileHandler(filename, mode='w')
             log_file_handler.setLevel(logging.DEBUG)
-            log_file_handler.setFormatter(formatter)
+            #log_file_handler.setFormatter(formatter)
 
             addon_logger.addHandler(log_file_handler)
 
@@ -285,71 +287,6 @@ class Exporter:
             root_child.i3d_elements['scene_node'] = ET.SubElement(self._tree.find('Scene'),
                                                                   self.blender_to_i3d(root_child.obj))
             parse_node(root_child)
-
-    def _xml_scene_object_general_data(self, node: ExporterNode):
-        element = node.i3d_elements['scene_node']
-        write_attribute(element, 'name', node.obj.name)
-        write_attribute(element, 'nodeId', node.id)
-        if isinstance(node.obj, bpy.types.Collection):
-            self.logger.info(
-                f"{node.obj.name!r} is a collection and it will be exported as a transformgroup with no "
-                f"translation and rotation")
-            # Collections dont have any physical properties, but the transformgroups in i3d has so it is set to the
-            # default value of GE, which is just zeroed.
-        else:
-            # Apply the space transformations depending on object, since lights and cameras has their z-axis reversed
-            # in GE
-            # If you want an explanation for A * B * A^-1 then go look up Transformation Matrices cause I can't
-            # remember the specifics
-            self.logger.info(f"{node.obj.name!r} is a {node.obj.type!r}")
-            self.logger.debug(f"{node.obj.name!r} transforming to new transform-basis")
-
-            if node.obj == 'LIGHT' or node.obj.type == 'CAMERA':
-                matrix = self._global_matrix @ node.obj.matrix_local
-                self.logger.debug(
-                    f"{node.obj.name!r} will not have inversed transform applied to accommodate flipped "
-                    f"z-axis in GE ")
-            else:
-                matrix = self._global_matrix @ node.obj.matrix_local @ self._global_matrix.inverted()
-
-            if node.obj.parent is not None:
-                if node.obj.parent.type == 'CAMERA' or node.obj.parent.type == 'LIGHT':
-                    matrix = self._global_matrix.inverted() @ matrix
-                    self.logger.debug(
-                        f"{node.obj.name!r} will be transformed once more with inverse to accommodate "
-                        f"flipped z-axis in GE of parent Light/Camera")
-
-            # Translation with applied unit scaling
-            translation = matrix.to_translation()
-            if not self.vector_compare(translation, mathutils.Vector((0, 0, 0))):
-                # This is way too much effort to get 4 decimal points of precision and nice formatting :-P
-                translation = "{0:.6g} {1:.6g} {2:.6g}".format(
-                    *[x * bpy.context.scene.unit_settings.scale_length for x in translation])
-
-                write_attribute(element, 'translation', translation)
-                self.logger.debug(f"{node.obj.name!r} translation: [{translation}]")
-
-            # Rotation, no unit scaling since it will always be degrees.
-            rotation = [math.degrees(axis) for axis in matrix.to_euler('XYZ')]
-            if not self.vector_compare(mathutils.Vector(rotation), mathutils.Vector((0, 0, 0))):
-                rotation = "{0:.6g} {1:.6g} {2:.6g}".format(*rotation)
-                write_attribute(element, 'rotation', rotation)
-                self.logger.debug(f"{node.obj.name!r} rotation(degrees): [{rotation}]")
-
-            # Scale
-            if matrix.is_negative:
-                self.logger.error(f"{node.obj.name!r} has one or more negative scaling components, "
-                                  f"which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
-            else:
-                scale = matrix.to_scale()
-                if not self.vector_compare(scale, mathutils.Vector((1, 1, 1))):
-                    scale = "{0:.6g} {1:.6g} {2:.6g}".format(*scale)
-
-                    write_attribute(element, 'scale', scale)
-                    self.logger.debug(f"{node.obj.name!r} scale: [{scale}]")
-
-            # Write the object transform properties from the blender UI into the object
-            self._xml_object_properties(node.obj.i3d_attributes, node)
 
     def _xml_object_properties(self, propertygroup, node):
         self.logger.info(f"Writing non-default properties from propertygroup: '{type(propertygroup).__name__}'")
@@ -911,9 +848,6 @@ class Exporter:
         write_attribute(element, 'shapeId', shape_id)
         write_attribute(element, 'materialIds', self.shape_material_indexes[shape_id])
 
-    def _xml_scene_object_transform_group(self, node: ExporterNode):
-        pass
-
     def _xml_scene_object_camera(self, node: ExporterNode):
         camera = node.obj.data
         element = node.i3d_elements['scene_node']
@@ -1022,18 +956,6 @@ class Exporter:
             return '$' + filepath[filepath.index(relative_filter) + len(relative_filter) + 1: len(filepath)]
         except ValueError:
             return filepath
-
-    @staticmethod
-    def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon=0.0000001) -> bool:
-        print(f"arg type: {type(a)}")
-        if len(a) != len(b) or not isinstance(a, mathutils.Vector) or not isinstance(b, mathutils.Vector):
-            raise TypeError("Both arguments must be vectors of equal length!")
-
-        for idx in range(0, len(a) - 1):
-            if not math.isclose(a[idx], b[idx], abs_tol=epsilon):
-                return False
-
-        return True
 
 
 class MergeGroup(object):
