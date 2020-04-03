@@ -51,7 +51,8 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         description="Select which part of the scene to export",
         items=[
             ('ALL', "Everything", "Export everything from the scene master collection"),
-            ('ACTIVE_COLLECTION', "Active Collection", "Export only the active collection and all its children")
+            ('ACTIVE_COLLECTION', "Active Collection", "Export only the active collection and all its children"),
+            ('ACTIVE_OBJECT', "Active Object", "Export only the active object and its children")
         ],
         default='ACTIVE_COLLECTION'
     )
