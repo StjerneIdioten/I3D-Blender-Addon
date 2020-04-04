@@ -1,5 +1,5 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import Union
+from typing import Union, Tuple, List
 import sys
 import os
 import time
@@ -17,6 +17,7 @@ from bpy_extras.io_utils import (
 )
 
 from . import shared
+from .shared import BlenderObject
 from . import xml_i3d
 from .xml_i3d import (write_attribute, add_indentations)
 from . import debugging
@@ -85,10 +86,83 @@ def _export_active_collection(i3d: shared.I3D):
 
 
 def _export_active_object(i3d: shared.I3D):
-    obj = bpy.context.active_object
-    i3d.add_transformgroup_node(obj)
-    i3d.export_to_i3d_file()
+    logger.info("'Active Object' export is selected")
+    if bpy.context.active_object is not None:
+        _export(i3d, [bpy.context.active_object])
+    else:
+        logger.warning("No active object, aborting export")
 
 
 def _export_selected_objects(i3d: shared.I3D):
     pass
+
+
+def _export(i3d: shared.I3D, root_objects: List[BlenderObject]):
+    for blender_object in root_objects:
+        _add_object_to_i3d(i3d, blender_object)
+    i3d.export_to_i3d_file()
+
+
+def _add_object_to_i3d(i3d: shared.I3D, obj: BlenderObject, parent: shared.Node = None) -> None:
+    # Collections are checked first since these are always exported in some form
+    if isinstance(obj, bpy.types.Collection):
+        logger.debug(f"[{obj.name}] is a 'Collection'")
+        node = i3d.add_transformgroup_node(obj, parent)
+        _process_collection_objects(i3d, obj, node)
+        return
+    else:
+        logger.debug(f"[{obj.name}] is of type {obj.type!r}")
+        if obj.type not in bpy.context.scene.i3dio.object_types_to_export:
+            logger.debug(f"[{obj.name}] has type {obj.type!r} which is not a type selected for exporting")
+            return
+        elif obj.type == 'MESH':
+            node = i3d.add_shape_node(obj, parent)
+        elif obj.type == 'EMPTY':
+            node = i3d.add_transformgroup_node(obj, parent)
+            if obj.instance_collection is not None:
+                logger.debug(f"[{obj.name}] is a collection instance and will be instanced into the 'Empty' object")
+                # This is a collection instance so the children needs to be fetched from the referenced collection and
+                # be 'instanced' as children of the 'Empty' object directly.
+                _process_collection_objects(i3d, obj.instance_collection, node)
+                return
+        elif obj.type == 'LIGHT':
+            node = i3d.add_light_node(obj, parent)
+        elif obj.type == 'CAMERA':
+            node = i3d.add_camera_node(obj, parent)
+        else:
+            raise NotImplementedError(f"Object type: {obj.type!r} is not supported yet")
+
+        # Process children of objects (other objects) and children of collections (other collections)
+        # WARNING: Might be slow due to searching through the entire object list in the blend file:
+        # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
+        logger.debug(f"[{obj.name}] processing objects children")
+        for child in obj.children:
+            _add_object_to_i3d(i3d, child, node)
+        logger.debug(f"[{obj.name}] no more children to process in object")
+
+
+def _process_collection_objects(i3d: shared.I3D, collection: bpy.types.Collection, parent: shared.Node):
+    """Handles adding object children of collections. Since collections stores their objects in a list named 'objects'
+    instead of the 'children' list, which only contains child collections. And they need to be iterated slightly
+    different"""
+
+    # Iterate child collections first, since they appear at the top in the blender outliner
+    logger.debug(f"[{collection.name}] processing collections children")
+    for child in collection.children.values():
+        _add_object_to_i3d(i3d, child, parent)
+    logger.debug(f"[{collection.name}] no more children to process in collection")
+
+    # Then iterate over the objects contained in the collection
+    logger.debug(f"[{collection.name}] processing collection objects")
+    for child in collection.objects:
+        # If a collection consists of an object, which has it's own children objects. These children will also be a
+        # a part of the collections objects. Which means that they would be added twice without this check. One for the
+        # object itself and one for the collection.
+        if child.parent is None:
+            _add_object_to_i3d(i3d, child, parent)
+    logger.debug(f"[{collection.name}] no more objects to process in collection")
+
+
+
+
+

@@ -1,6 +1,6 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union)
+from typing import (Union, List)
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from typing import Type
@@ -13,6 +13,8 @@ from . import debugging
 from . import xml_i3d
 
 logger = logging.getLogger(__name__)
+
+BlenderObject = Union[bpy.types.Object, bpy.types.Collection]
 
 
 class I3D:
@@ -64,6 +66,14 @@ class I3D:
 
     def add_transformgroup_node(self, empty_object: [bpy.types.Object, bpy.types.Collection], parent: Node = None) -> Node:
         return self._add_node(TransformGroupNode, empty_object, parent)
+
+    def add_light_node(self, light_object: bpy.types.Object, parent: Node = None) -> Node:
+        """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
+        return self._add_node(LightNode, light_object, parent)
+
+    def add_camera_node(self, camera_object: bpy.types.Object, parent: Node = None) -> Node:
+        """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
+        return self._add_node(CameraNode, camera_object, parent)
 
     def get_scene_as_formatted_string(self):
         """Tree represented as depth first"""
@@ -119,7 +129,7 @@ class Node(ABC):
         except AttributeError:
             pass
 
-        self.logger.info(f"is created as a node")
+        self.logger.debug(f"Initialized as a '{self.__class__.__name__}'")
 
     def __str__(self):
         return f"{self.id}"
@@ -129,11 +139,11 @@ class Node(ABC):
 
     @abstractmethod
     def create_xml_element(self) -> ET.Element:
-        self.logger.debug(f"Filling out basic attributes")
+        self.logger.debug(f"Filling out basic attributes, {{name='{self.blender_object.name}', nodeId='{self.id}'}}")
         attributes = {'name': self.blender_object.name, 'nodeId': self.id}
         try:
             self.element = ET.SubElement(self.parent.element, type(self).ELEMENT_TAG, attributes)
-            self.logger.debug(f"has a parent element")
+            self.logger.debug(f"has parent element with name [{self.parent.blender_object.name}]")
         except AttributeError:
             self.logger.debug(f"has no parent element")
             self.element = ET.Element(type(self).ELEMENT_TAG, attributes)
