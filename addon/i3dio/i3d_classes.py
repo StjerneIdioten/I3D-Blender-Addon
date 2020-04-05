@@ -14,8 +14,6 @@ from . import xml_i3d
 
 logger = logging.getLogger(__name__)
 
-BlenderObject = Union[bpy.types.Object, bpy.types.Collection]
-
 
 class I3D:
     """A special node which is the root node for the entire I3D file. It essentially represents the i3d file"""
@@ -274,12 +272,4 @@ class CameraNode(Node):
         super().export_transform_to_xml_element(object_transform=matrix)
 
 
-def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon=0.0000001) -> bool:
-    if len(a) != len(b) or not isinstance(a, mathutils.Vector) or not isinstance(b, mathutils.Vector):
-        raise TypeError("Both arguments must be vectors of equal length!")
 
-    for idx in range(0, len(a)):
-        if not math.isclose(a[idx], b[idx], abs_tol=epsilon):
-            return False
-
-    return True

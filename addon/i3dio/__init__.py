@@ -20,8 +20,8 @@ if "bpy" in locals():
         importlib.reload(debugging)
     if 'xml_i3d' in locals():
         importlib.reload(xml_i3d)
-    if 'shared' in locals():
-        importlib.reload(shared)
+    if 'i3d_classes' in locals():
+        importlib.reload(i3d_classes)
     if 'i3d_properties' in locals():
         importlib.reload(i3d_properties)
     if 'i3d_ui' in locals():
