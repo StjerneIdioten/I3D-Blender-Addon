@@ -230,7 +230,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'receive_shadows': {'name': 'receiveShadows', 'default': False},
         'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
-        'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'indexed_triangle_set'}
+        'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'}
     }
 
     casts_shadows: BoolProperty(

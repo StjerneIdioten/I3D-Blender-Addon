@@ -19,3 +19,5 @@ def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon=0.0000001) 
             return False
 
     return True
+
+

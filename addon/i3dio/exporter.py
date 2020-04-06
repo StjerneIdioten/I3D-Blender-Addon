@@ -1,15 +1,8 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import Union, Tuple, List
+from typing import List
 import sys
-import os
 import time
-import shutil
-import math
-import mathutils
 import logging
-
-# Old exporter used cElementTree for speed, but it was deprecated to compatibility status in python 3.3
-import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
 
 import bpy
 from bpy_extras.io_utils import (
@@ -19,7 +12,6 @@ from bpy_extras.io_utils import (
 from . import i3d_classes
 from .utility import BlenderObject
 from . import xml_i3d
-from .xml_i3d import (write_attribute, add_indentations)
 from . import debugging
 
 logger = logging.getLogger(__name__)

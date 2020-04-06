@@ -1,6 +1,6 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, List)
+from typing import (Union, Dict)
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from typing import Type
@@ -11,6 +11,7 @@ import bpy
 
 from . import debugging
 from . import xml_i3d
+from . import utility
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +119,7 @@ class Node(ABC):
         self.children = []
         self.i3d = i3d
         self.blender_object = blender_object
-        self.element = None
+        self.xml_elements: Dict[str, Union[ET.Element, None]] = {'Node': None}
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': self.blender_object.name})
 
@@ -129,11 +130,23 @@ class Node(ABC):
 
         self.logger.debug(f"Initialized as a '{self.__class__.__name__}'")
 
+    @property
+    def element(self) -> Union[ET.Element, None]:
+        return self.xml_elements['Node']
+
+    @element.setter
+    def element(self, value):
+        self.xml_elements['Node'] = value
+
     def __str__(self):
         return f"{self.id}"
 
-    def add_child(self, node: Node):
-        self.children.append(node)
+    def _write_attribute(self, name: str, value, element_idx='Node') -> None:
+        xml_i3d.write_attribute(self.xml_elements[element_idx], name, value)
+
+    def _write_properties(self):
+        xml_i3d.write_property_group(self.blender_object.i3d_attributes, self.xml_elements)
+        xml_i3d.write_property_group(self.blender_object.data.i3d_attributes, self.xml_elements)
 
     @abstractmethod
     def create_xml_element(self) -> ET.Element:
@@ -149,6 +162,8 @@ class Node(ABC):
         self._write_attribute('name', self.blender_object.name)
         self._write_attribute('nodeId', self.id)
 
+        self._write_properties()
+
         return self.element
 
     @abstractmethod
@@ -163,7 +178,7 @@ class Node(ABC):
 
         translation = matrix.to_translation()
         self.logger.debug(f"translation is {translation}")
-        if not vector_compare(translation, mathutils.Vector((0, 0, 0))):
+        if not utility.vector_compare(translation, mathutils.Vector((0, 0, 0))):
             translation = "{0:.6g} {1:.6g} {2:.6g}".format(
                 *[x * bpy.context.scene.unit_settings.scale_length for x in translation])
 
@@ -174,7 +189,7 @@ class Node(ABC):
 
         # Rotation, no unit scaling since it will always be degrees.
         rotation = [math.degrees(axis) for axis in matrix.to_euler('XYZ')]
-        if not vector_compare(mathutils.Vector(rotation), mathutils.Vector((0, 0, 0))):
+        if not utility.vector_compare(mathutils.Vector(rotation), mathutils.Vector((0, 0, 0))):
             rotation = "{0:.6g} {1:.6g} {2:.6g}".format(*rotation)
             self._write_attribute('rotation', rotation)
             self.logger.debug(f"has rotation(degrees): [{rotation}]")
@@ -185,17 +200,14 @@ class Node(ABC):
                               f"which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
         else:
             scale = matrix.to_scale()
-            if not vector_compare(scale, mathutils.Vector((1, 1, 1))):
+            if not utility.vector_compare(scale, mathutils.Vector((1, 1, 1))):
                 scale = "{0:.6g} {1:.6g} {2:.6g}".format(*scale)
 
                 self._write_attribute('scale', scale)
                 self.logger.debug(f"has scale: [{scale}]")
 
-        # Write the object transform properties from the blender UI into the object
-        #self._xml_object_properties(node.obj.i3d_attributes, node)
-
-    def _write_attribute(self, name: str, value) -> None:
-        xml_i3d.write_attribute(self.element, name, value)
+    def add_child(self, node: Node):
+        self.children.append(node)
 
 
 class ShapeNode(Node):
@@ -203,7 +215,7 @@ class ShapeNode(Node):
 
     def __init__(self, id_: int, mesh_object: bpy.types.Object, i3d: I3D, parent: Node or None = None):
         super().__init__(id_=id_, blender_object=mesh_object, i3d=i3d, parent=parent)
-        self.indexed_triangle_set = None
+        self.xml_elements['IndexedTriangleSet'] = None
 
     def create_xml_element(self) -> ET.Element:
         super().create_xml_element()

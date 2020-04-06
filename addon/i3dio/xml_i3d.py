@@ -1,7 +1,12 @@
 """This module contains functionality for handling the i3d xml format such as reading and writing with correct
 precision """
-
+from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
+from typing import (Union, Dict)
+import math
+import logging
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
+
+logger = logging.getLogger(__name__)
 
 root_attributes = {'version': '1.6',
                    'xmlns:sxi': 'http://www.w3.org/2001/XMLSchema-instance',
@@ -39,6 +44,55 @@ def write_attribute(element: ET.Element, attribute: str, value) -> None:
         write_int(element, attribute, value)
     elif isinstance(value, str):
         write_string(element, attribute, value)
+
+
+def write_property_group(property_group, elements: Dict[str, Union[ET.Element, None]]) -> None:
+    logger.info(f"Writing non-default properties from propertygroup: '{type(property_group).__name__}'")
+    # Since blender properties are basically abusing the annotation system, we can also abuse this to create
+    # a generic property export function by accessing the annotation dictionary
+    properties_written = 0
+    for prop_key in property_group.__annotations__.keys():
+        prop_name = prop_key
+        value = getattr(property_group, prop_key)
+        value_to_write = value
+        default = property_group.i3d_map[prop_key].get('default')
+        i3d_name = property_group.i3d_map[prop_key].get('name')
+        field_type = property_group.i3d_map[prop_key].get('type')
+        i3d_placement = property_group.i3d_map[prop_key].get('placement', 'Node')
+
+        # Special case of checking floats, since these can be not equal due to floating point errors
+        if isinstance(value, float):
+            if math.isclose(value, default, abs_tol=0.0000001):
+                continue
+        # In the case that the value is default, then just ignore it
+        elif value == default:
+            continue
+        # In some cases of enums the i3d_name is actually the enum value itself. It is signaled by not having a name
+        elif i3d_name is None:
+            i3d_name = value
+            value_to_write = 1
+        # String field is used for unique types, that then get converted fx. HEX values. This is signaled by
+        # having an extra type field in the i3d_map dictionary entry for the propertygroup
+        elif field_type is not None:
+            if field_type == 'HEX':
+                try:
+                    value_decimal = int(value, 16)
+                except ValueError:
+                    logger.error(f"Supplied value '{value}' for '{prop_name}' is not a hex value!")
+                    continue
+                else:
+                    if 0 <= value_decimal <= 2**32-1:  # Check that it is actually a 32-bit unsigned int
+                        value_to_write = value_decimal
+                    else:
+                        logger.warning(f"Supplied value '{value}' for '{prop_name}' is out of bounds."
+                                       f" It should be within range [0, ffffffff] (32-bit unsigned)")
+                        continue
+
+        logger.debug(f"Property '{prop_name}' with value '{value}'. Default is '{default}'")
+        write_attribute(elements[i3d_placement], i3d_name, value_to_write)
+        properties_written += 1
+
+    logger.info(f"Wrote '{properties_written}' properties")
 
 
 def add_indentations(element: ET.Element, level: int = 0) -> None:
