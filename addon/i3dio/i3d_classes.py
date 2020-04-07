@@ -52,7 +52,7 @@ class I3D:
 
     def _add_node(self, node_type: Type[Node], object_: bpy.types.Object, parent: Node = None) -> Node:
         node = node_type(self._next_available_id('node'), object_, self, parent)
-        node.create_xml_element()
+        node.export_object_to_xml()
         if parent is None:
             self.scene_root_nodes.append(node)
             self.xml_elements['Scene'].append(node.element)
@@ -128,6 +128,7 @@ class Node(ABC):
         except AttributeError:
             pass
 
+        self._create_xml_element()
         self.logger.debug(f"Initialized as a '{self.__class__.__name__}'")
 
     @property
@@ -146,15 +147,25 @@ class Node(ABC):
 
     def _write_properties(self):
         # Write general node properties (Transform properties in Giants Engine)
-        xml_i3d.write_property_group(self.blender_object.i3d_attributes, self.xml_elements)
+        try:
+            xml_i3d.write_property_group(self.blender_object.i3d_attributes, self.xml_elements)
+        except AttributeError:
+            # Not all nodes has general node properties, such as collections.
+            pass
+
         # Try to write node specific properties, not all nodes have these (Such as cameras)
         try:
             xml_i3d.write_property_group(self.blender_object.data.i3d_attributes, self.xml_elements)
         except AttributeError:
             self.logger.debug('Has no data specific attributes')
 
+    @property
     @abstractmethod
-    def create_xml_element(self) -> ET.Element:
+    def _transform_for_conversion(self) -> Union[mathutils.Matrix, None]:
+        """Different node types have different requirements for getting converted into i3d coordinates"""
+        raise NotImplementedError
+
+    def _create_xml_element(self) -> ET.Element:
         self.logger.debug(f"Filling out basic attributes, {{name='{self.blender_object.name}', nodeId='{self.id}'}}")
         attributes = {'name': self.blender_object.name, 'nodeId': self.id}
         try:
@@ -167,13 +178,14 @@ class Node(ABC):
         self._write_attribute('name', self.blender_object.name)
         self._write_attribute('nodeId', self.id)
 
-        self._write_properties()
-
         return self.element
 
-    @abstractmethod
-    def export_transform_to_xml_element(self, object_transform: mathutils.Matrix) -> None:
+    def _add_transform_to_xml_element(self, object_transform: Union[mathutils.Matrix, None]) -> None:
         """This method checks the parent and adjusts the transform before exporting"""
+        if object_transform is None:
+            # This essentially sets the entire transform to be default. Since GE loads defaults when no data is present.
+            return
+
         self.logger.debug(f"transforming to new transform-basis with {object_transform}")
         matrix = object_transform
         if self.parent is not None:
@@ -211,6 +223,10 @@ class Node(ABC):
                 self._write_attribute('scale', scale)
                 self.logger.debug(f"has scale: [{scale}]")
 
+    def export_object_to_xml(self):
+        self._write_properties()
+        self._add_transform_to_xml_element(self._transform_for_conversion)
+
     def add_child(self, node: Node):
         self.children.append(node)
 
@@ -222,14 +238,9 @@ class ShapeNode(Node):
         super().__init__(id_=id_, blender_object=mesh_object, i3d=i3d, parent=parent)
         self.xml_elements['IndexedTriangleSet'] = None
 
-    def create_xml_element(self) -> ET.Element:
-        super().create_xml_element()
-        self.export_transform_to_xml_element(self.blender_object)
-        return self.element
-
-    def export_transform_to_xml_element(self, object_transform: mathutils.Matrix) -> None:
-        matrix = self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
-        super().export_transform_to_xml_element(object_transform=matrix)
+    @property
+    def _transform_for_conversion(self) -> mathutils.Matrix:
+        return self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
 
 
 class TransformGroupNode(Node):
@@ -239,20 +250,16 @@ class TransformGroupNode(Node):
                  i3d: I3D, parent: Node or None = None):
         super().__init__(id_=id_, blender_object=empty_object, i3d=i3d, parent=parent)
 
-    def create_xml_element(self) -> ET.Element:
-        super().create_xml_element()
-        # Empty nodes can either contain an Object or a Collection and collections does not have transforms, but should
-        # be exported with defaults instead. If no transform is present in the i3d data, then GE will automatically
-        # initialize defaults.
+    @property
+    def _transform_for_conversion(self) -> mathutils.Matrix:
         try:
-            self.export_transform_to_xml_element(self.blender_object.matrix_local)
-        except Exception:
+            conversion_matrix = self.i3d.conversion_matrix @ \
+                                self.blender_object.matrix_local @ \
+                                self.i3d.conversion_matrix.inverted()
+        except AttributeError:
             self.logger.info(f"is a Collection and it will be exported as a transformgroup with default transform")
-        return self.element
-
-    def export_transform_to_xml_element(self, object_transform: mathutils.Matrix) -> None:
-        matrix = self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
-        super().export_transform_to_xml_element(object_transform=matrix)
+            conversion_matrix = None
+        return conversion_matrix
 
 
 class LightNode(Node):
@@ -261,15 +268,56 @@ class LightNode(Node):
     def __init__(self, id_: int, light_object: bpy.types.Object, i3d: I3D, parent: Node or None = None):
         super().__init__(id_=id_, blender_object=light_object, i3d=i3d, parent=parent)
 
-    def create_xml_element(self) -> ET.Element:
-        super().create_xml_element()
-        self.export_transform_to_xml_element(self.blender_object)
-        return self.element
+    @property
+    def _transform_for_conversion(self) -> mathutils.Matrix:
+        return self.i3d.conversion_matrix @ self.blender_object.matrix_local
 
-    def export_transform_to_xml_element(self, object_transform: mathutils.Matrix) -> None:
-        # The matrix is not multiplied by the inverse, which will flip the z-axis which is how it is in GE
-        matrix = self.i3d.conversion_matrix @ self.blender_object.matrix_local
-        super().export_transform_to_xml_element(object_transform=matrix)
+    def export_object_to_xml(self):
+        light = self.blender_object.data
+        self.logger.info(f"Is a light of type {light.type!r}")
+        falloff_type = None
+        if light.type == 'POINT':
+            light_type = 'point'
+            falloff_type = light.falloff_type
+        elif light.type == 'SUN':
+            light_type = 'directional'
+        elif light.type == 'SPOT':
+            light_type = 'spot'
+            falloff_type = light.falloff_type
+            cone_angle = math.degrees(light.spot_size)
+            self._write_attribute('coneAngle', cone_angle)
+            self.logger.info(f"Has a cone angle of {cone_angle}")
+            # Blender spot 0.0 -> 1.0, GE spot 0.0 -> 5.0
+            drop_off = 5.0 * light.spot_blend
+            self._write_attribute('dropOff', drop_off)
+            self.logger.info(f"Has a drop off of {drop_off}")
+        elif light.type == 'AREA':
+            light_type = 'point'
+            self.logger.warning(f"Is an AREA light, which is not supported and defaults to point light")
+
+        self._write_attribute('type', light_type)
+
+        color = "{0:f} {1:f} {2:f}".format(*light.color)
+        self._write_attribute('color', color)
+        self.logger.info(f"Has color {color}")
+
+        self._write_attribute('range', light.distance)
+        self.logger.info(f"Has range {light.distance}")
+
+        self._write_attribute('castShadowMap', light.use_shadow)
+        self.logger.info('casts shadows' if light.use_shadow else 'does not cast shadows')
+
+        if falloff_type is not None:
+            if falloff_type == 'CONSTANT':
+                falloff_type = 0
+                self.logger.info(f"Has decay rate of type {'CONSTANT'} which is '0' in i3d")
+            elif falloff_type == 'INVERSE_LINEAR':
+                falloff_type = 1
+                self.logger.info(f"Has decay rate of type {'INVERSE_LINEAR'} which is '1' in i3d")
+            elif falloff_type == 'INVERSE_SQUARE':
+                falloff_type = 2
+                self.logger.info(f"has decay rate of type {'INVERSE_SQUARE'} which is '2' in i3d")
+            self._write_attribute('decayRate', falloff_type)
 
 
 class CameraNode(Node):
@@ -278,18 +326,12 @@ class CameraNode(Node):
     def __init__(self, id_: int, camera_object: bpy.types.Object, i3d: I3D, parent: Node or None = None):
         super().__init__(id_=id_, blender_object=camera_object, i3d=i3d, parent=parent)
 
-    def create_xml_element(self) -> ET.Element:
-        super().create_xml_element()
-        self.export_transform_to_xml_element(self.blender_object)
-        self.export_camera_to_xml_element()
-        return self.element
+    @property
+    def _transform_for_conversion(self) -> mathutils.Matrix:
+        return self.i3d.conversion_matrix @ self.blender_object.matrix_local
 
-    def export_transform_to_xml_element(self, object_transform: mathutils.Matrix) -> None:
-        # The matrix is not multiplied by the inverse, which will flip the z-axis which is how it is in GE
-        matrix = self.i3d.conversion_matrix @ self.blender_object.matrix_local
-        super().export_transform_to_xml_element(object_transform=matrix)
-
-    def export_camera_to_xml_element(self):
+    def export_object_to_xml(self):
+        super().export_object_to_xml()
         camera = self.blender_object.data
         self._write_attribute('fov', camera.lens)
         self._write_attribute('nearClip', camera.clip_start)
