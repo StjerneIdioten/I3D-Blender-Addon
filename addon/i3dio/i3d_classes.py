@@ -145,8 +145,13 @@ class Node(ABC):
         xml_i3d.write_attribute(self.xml_elements[element_idx], name, value)
 
     def _write_properties(self):
+        # Write general node properties (Transform properties in Giants Engine)
         xml_i3d.write_property_group(self.blender_object.i3d_attributes, self.xml_elements)
-        xml_i3d.write_property_group(self.blender_object.data.i3d_attributes, self.xml_elements)
+        # Try to write node specific properties, not all nodes have these (Such as cameras)
+        try:
+            xml_i3d.write_property_group(self.blender_object.data.i3d_attributes, self.xml_elements)
+        except AttributeError:
+            self.logger.debug('Has no data specific attributes')
 
     @abstractmethod
     def create_xml_element(self) -> ET.Element:
@@ -276,6 +281,7 @@ class CameraNode(Node):
     def create_xml_element(self) -> ET.Element:
         super().create_xml_element()
         self.export_transform_to_xml_element(self.blender_object)
+        self.export_camera_to_xml_element()
         return self.element
 
     def export_transform_to_xml_element(self, object_transform: mathutils.Matrix) -> None:
@@ -283,5 +289,13 @@ class CameraNode(Node):
         matrix = self.i3d.conversion_matrix @ self.blender_object.matrix_local
         super().export_transform_to_xml_element(object_transform=matrix)
 
-
-
+    def export_camera_to_xml_element(self):
+        camera = self.blender_object.data
+        self._write_attribute('fov', camera.lens)
+        self._write_attribute('nearClip', camera.clip_start)
+        self._write_attribute('farClip', camera.clip_end)
+        self.logger.info(f"FOV: '{camera.lens}', Near Clip: '{camera.clip_start}', Far Clip: '{camera.clip_end}'")
+        if camera.type == 'ORTHO':
+            self._write_attribute('orthographic', True)
+            self._write_attribute('orthographicHeight', camera.ortho_scale)
+            self.logger.info(f"Orthographic camera with height '{camera.ortho_scale}'")
