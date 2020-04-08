@@ -95,7 +95,7 @@ def _export(i3d: i3d_classes.I3D, root_objects: List[BlenderObject]):
     i3d.export_to_i3d_file()
 
 
-def _add_object_to_i3d(i3d: i3d_classes.I3D, obj: BlenderObject, parent: i3d_classes.Node = None) -> None:
+def _add_object_to_i3d(i3d: i3d_classes.I3D, obj: BlenderObject, parent: i3d_classes.SceneGraphNode = None) -> None:
     # Collections are checked first since these are always exported in some form
     if isinstance(obj, bpy.types.Collection):
         logger.debug(f"[{obj.name}] is a 'Collection'")
@@ -133,7 +133,7 @@ def _add_object_to_i3d(i3d: i3d_classes.I3D, obj: BlenderObject, parent: i3d_cla
         logger.debug(f"[{obj.name}] no more children to process in object")
 
 
-def _process_collection_objects(i3d: i3d_classes.I3D, collection: bpy.types.Collection, parent: i3d_classes.Node):
+def _process_collection_objects(i3d: i3d_classes.I3D, collection: bpy.types.Collection, parent: i3d_classes.SceneGraphNode):
     """Handles adding object children of collections. Since collections stores their objects in a list named 'objects'
     instead of the 'children' list, which only contains child collections. And they need to be iterated slightly
     different"""

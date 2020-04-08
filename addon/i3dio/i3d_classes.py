@@ -1,6 +1,6 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, Dict)
+from typing import (Union, Dict, List)
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 from typing import Type
@@ -23,6 +23,7 @@ class I3D:
                                                   {'object_name': name})
         self._ids = {
             'node': 1,
+            'shape': 1,
             'material': 1,
             'file': 1,
         }
@@ -31,6 +32,7 @@ class I3D:
             'i3d_file_path': i3d_file_path,
         }
 
+        # Initialize top-level categories
         self.xml_elements = {'Root': ET.Element('i3D', {**{'name': name}, **xml_i3d.root_attributes})}
         self.xml_elements['Asset'] = ET.SubElement(self.xml_elements['Root'], 'Asset')
         self.xml_elements['Files'] = ET.SubElement(self.xml_elements['Root'], 'Files')
@@ -44,35 +46,48 @@ class I3D:
         self.scene_root_nodes = []
         self.conversion_matrix = conversion_matrix
 
+        self.shapes: Dict[Union[str, int], IndexedTriangleSet] = {}
+
     # Private Methods ##################################################################################################
     def _next_available_id(self, id_type: str) -> int:
         next_id = self._ids[id_type]
         self._ids[id_type] += 1
         return next_id
 
-    def _add_node(self, node_type: Type[Node], object_: bpy.types.Object, parent: Node = None) -> Node:
+    def _add_node(self, node_type: Type[SceneGraphNode], object_: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         node = node_type(self._next_available_id('node'), object_, self, parent)
-        node.export_object_to_xml()
+        node.export_node_to_xml()
         if parent is None:
             self.scene_root_nodes.append(node)
             self.xml_elements['Scene'].append(node.element)
         return node
 
     # Public Methods ###################################################################################################
-    def add_shape_node(self, mesh_object: bpy.types.Object, parent: Node = None) -> Node:
+    def add_shape_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(ShapeNode, mesh_object, parent)
 
-    def add_transformgroup_node(self, empty_object: [bpy.types.Object, bpy.types.Collection], parent: Node = None) -> Node:
+    def add_transformgroup_node(self, empty_object: [bpy.types.Object, bpy.types.Collection], parent: SceneGraphNode = None) -> SceneGraphNode:
         return self._add_node(TransformGroupNode, empty_object, parent)
 
-    def add_light_node(self, light_object: bpy.types.Object, parent: Node = None) -> Node:
+    def add_light_node(self, light_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(LightNode, light_object, parent)
 
-    def add_camera_node(self, camera_object: bpy.types.Object, parent: Node = None) -> Node:
+    def add_camera_node(self, camera_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(CameraNode, camera_object, parent)
+
+    def add_shape(self, mesh_object: bpy.types.Mesh) -> int:
+        name = mesh_object.name
+        if name not in self.shapes:
+            shape_id = self._next_available_id('shape')
+            indexed_triangle_set = IndexedTriangleSet(shape_id, self, mesh_object)
+            # Store a reference to the shape from both it's name and its shape id
+            self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
+            self.xml_elements['Shapes'].append(indexed_triangle_set.element)
+            return shape_id
+        return self.shapes[name].id
 
     def get_scene_as_formatted_string(self):
         """Tree represented as depth first"""
@@ -109,27 +124,71 @@ class Node(ABC):
     def ELEMENT_TAG(cls):  # Every node type has a certain tag in the i3d-file fx. 'Shape' or 'Light'
         return NotImplementedError
 
+    def __init__(self, id_: int, i3d: I3D, parent: Union[Node, None] = None):
+        self.id = id_
+        self.i3d = i3d
+        self.parent = parent
+        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
+                                                  {'object_name': self.name})
+        self._create_xml_element()
+
+    @property
+    @abstractmethod
+    def name(self):
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def element(self):
+        raise NotImplementedError
+
+    @element.setter
+    @abstractmethod
+    def element(self, value):
+        raise NotImplementedError
+
+    def _create_xml_element(self) -> ET.Element:
+        self.logger.debug(f"Filling out basic attributes, {{name='{self.name}', nodeId='{self.id}'}}")
+        attributes = {'name': self.name, 'nodeId': self.id}
+        try:
+            self.element = ET.SubElement(self.parent.element, type(self).ELEMENT_TAG, attributes)
+            self.logger.debug(f"has parent element with name [{self.parent.name}]")
+        except AttributeError:
+            self.element = ET.Element(type(self).ELEMENT_TAG, attributes)
+
+        self._write_attribute('name', self.name)
+        self._write_attribute('nodeId', self.id)
+
+        return self.element
+
+    def export_node_to_xml(self):
+        raise NotImplementedError
+
+    def _write_attribute(self, name: str, value) -> None:
+        xml_i3d.write_attribute(self.element, name, value)
+
+
+class SceneGraphNode(Node):
+
     def __init__(self, id_: int,
                  blender_object: [bpy.types.Object, bpy.types.Collection],
                  i3d: I3D,
-                 parent: Node or None = None,
+                 parent: Union[SceneGraphNode, None] = None,
                  ):
-        self.id = id_
-        self.parent = parent
         self.children = []
-        self.i3d = i3d
         self.blender_object = blender_object
         self.xml_elements: Dict[str, Union[ET.Element, None]] = {'Node': None}
-        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                                  {'object_name': self.blender_object.name})
-
         try:
             self.parent.add_child(self)
         except AttributeError:
             pass
 
-        self._create_xml_element()
+        super().__init__(id_, i3d, parent)
         self.logger.debug(f"Initialized as a '{self.__class__.__name__}'")
+
+    @property
+    def name(self):
+        return self.blender_object.name
 
     @property
     def element(self) -> Union[ET.Element, None]:
@@ -142,8 +201,11 @@ class Node(ABC):
     def __str__(self):
         return f"{self.id}"
 
-    def _write_attribute(self, name: str, value, element_idx='Node') -> None:
-        xml_i3d.write_attribute(self.xml_elements[element_idx], name, value)
+    def _write_attribute(self, name: str, value, element_idx=None) -> None:
+        if element_idx is None:
+            super()._write_attribute(name, value)
+        else:
+            xml_i3d.write_attribute(self.xml_elements[element_idx], name, value)
 
     def _write_properties(self):
         # Write general node properties (Transform properties in Giants Engine)
@@ -164,21 +226,6 @@ class Node(ABC):
     def _transform_for_conversion(self) -> Union[mathutils.Matrix, None]:
         """Different node types have different requirements for getting converted into i3d coordinates"""
         raise NotImplementedError
-
-    def _create_xml_element(self) -> ET.Element:
-        self.logger.debug(f"Filling out basic attributes, {{name='{self.blender_object.name}', nodeId='{self.id}'}}")
-        attributes = {'name': self.blender_object.name, 'nodeId': self.id}
-        try:
-            self.element = ET.SubElement(self.parent.element, type(self).ELEMENT_TAG, attributes)
-            self.logger.debug(f"has parent element with name [{self.parent.blender_object.name}]")
-        except AttributeError:
-            self.logger.debug(f"has no parent element")
-            self.element = ET.Element(type(self).ELEMENT_TAG, attributes)
-
-        self._write_attribute('name', self.blender_object.name)
-        self._write_attribute('nodeId', self.id)
-
-        return self.element
 
     def _add_transform_to_xml_element(self, object_transform: Union[mathutils.Matrix, None]) -> None:
         """This method checks the parent and adjusts the transform before exporting"""
@@ -223,18 +270,18 @@ class Node(ABC):
                 self._write_attribute('scale', scale)
                 self.logger.debug(f"has scale: [{scale}]")
 
-    def export_object_to_xml(self):
+    def export_node_to_xml(self):
         self._write_properties()
         self._add_transform_to_xml_element(self._transform_for_conversion)
 
-    def add_child(self, node: Node):
+    def add_child(self, node: SceneGraphNode):
         self.children.append(node)
 
 
-class ShapeNode(Node):
+class ShapeNode(SceneGraphNode):
     ELEMENT_TAG = 'Shape'
 
-    def __init__(self, id_: int, mesh_object: bpy.types.Object, i3d: I3D, parent: Node or None = None):
+    def __init__(self, id_: int, mesh_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode or None = None):
         super().__init__(id_=id_, blender_object=mesh_object, i3d=i3d, parent=parent)
         self.xml_elements['IndexedTriangleSet'] = None
 
@@ -242,12 +289,17 @@ class ShapeNode(Node):
     def _transform_for_conversion(self) -> mathutils.Matrix:
         return self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
 
+    def export_node_to_xml(self):
+        super().export_node_to_xml()
+        shape_id = self.i3d.add_shape(self.blender_object.data)
+        self._write_attribute('shapeId', shape_id)
 
-class TransformGroupNode(Node):
+
+class TransformGroupNode(SceneGraphNode):
     ELEMENT_TAG = 'TransformGroup'
 
     def __init__(self, id_: int, empty_object: [bpy.types.Object, bpy.types.Collection],
-                 i3d: I3D, parent: Node or None = None):
+                 i3d: I3D, parent: SceneGraphNode or None = None):
         super().__init__(id_=id_, blender_object=empty_object, i3d=i3d, parent=parent)
 
     @property
@@ -262,10 +314,10 @@ class TransformGroupNode(Node):
         return conversion_matrix
 
 
-class LightNode(Node):
+class LightNode(SceneGraphNode):
     ELEMENT_TAG = 'Light'
 
-    def __init__(self, id_: int, light_object: bpy.types.Object, i3d: I3D, parent: Node or None = None):
+    def __init__(self, id_: int, light_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode or None = None):
         super().__init__(id_=id_, blender_object=light_object, i3d=i3d, parent=parent)
 
     @property
@@ -320,10 +372,10 @@ class LightNode(Node):
             self._write_attribute('decayRate', falloff_type)
 
 
-class CameraNode(Node):
+class CameraNode(SceneGraphNode):
     ELEMENT_TAG = 'Camera'
 
-    def __init__(self, id_: int, camera_object: bpy.types.Object, i3d: I3D, parent: Node or None = None):
+    def __init__(self, id_: int, camera_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode or None = None):
         super().__init__(id_=id_, blender_object=camera_object, i3d=i3d, parent=parent)
 
     @property
@@ -341,3 +393,29 @@ class CameraNode(Node):
             self._write_attribute('orthographic', True)
             self._write_attribute('orthographicHeight', camera.ortho_scale)
             self.logger.info(f"Orthographic camera with height '{camera.ortho_scale}'")
+
+
+class IndexedTriangleSet(Node):
+    ELEMENT_TAG = 'IndexedTriangleSet'
+
+    def __init__(self, id_: int, i3d: I3D, mesh_object: bpy.types.Mesh):
+        self.id = id_
+        self.i3d = i3d
+        self.mesh_object = mesh_object
+        self._element = None
+        super().__init__(id_, i3d, None)
+
+    @property
+    def name(self):
+        return self.mesh_object.name
+
+    @property
+    def element(self):
+        return self._element
+
+    @element.setter
+    def element(self, value):
+        self._element = value
+
+    def export_node_to_xml(self):
+        pass
