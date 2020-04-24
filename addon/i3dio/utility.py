@@ -21,3 +21,13 @@ def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon=0.0000001) 
     return True
 
 
+def as_fs_relative_path(filepath: str):
+    """If the filepath is relative to the fs dir, then return it with $ referring to the fs data dir
+    else return the path"""
+    relative_filter = 'Farming Simulator 19'
+    try:
+        return '$' + filepath[filepath.index(relative_filter) + len(relative_filter) + 1: len(filepath)]
+    except ValueError:
+        return filepath
+
+
