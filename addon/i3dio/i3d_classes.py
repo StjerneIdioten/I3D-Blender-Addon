@@ -339,6 +339,7 @@ class ShapeNode(SceneGraphNode):
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object))
         self.logger.debug(f"has shape ID '{self.shape_id}'")
         self._write_attribute('shapeId', self.shape_id)
+        self._write_attribute('materialIds', self.i3d.shapes[self.shape_id].material_indexes)
         super().populate_xml_element()
 
 
@@ -450,12 +451,13 @@ class IndexedTriangleSet(Node):
     ID_FIELD_NAME = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh):
-        self.id = id_
-        self.i3d = i3d
-        self.evaluated_mesh = evaluated_mesh
+        self.id: int = id_
+        self.i3d: I3D = i3d
+        self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
         self.vertices: OrderedDict[Vertex, int] = collections.OrderedDict()
         self.triangles: List[List[int]] = list()  # List of lists of vertex indexes
         self.subsets: OrderedDict[str, SubSet] = collections.OrderedDict()
+        self.material_indexes: str = ''
         super().__init__(id_, i3d, None)
 
     def _create_xml_element(self) -> None:
@@ -581,12 +583,16 @@ class IndexedTriangleSet(Node):
 
         # Write subsets
         for _, subset in self.subsets.items():
+            self.material_indexes += f"{subset.material_id} "
             subset_attributes = {'firstIndex': f"{subset.first_index}",
                                  'firstVertex': f"{subset.first_vertex}",
                                  'numIndices': f"{subset.number_of_indices}",
                                  'numVertices': f"{subset.number_of_vertices}"}
 
             ET.SubElement(self.xml_elements['subsets'], 'Subset', subset_attributes)
+
+        # Removes the last whitespace from the string, since an extra will always be added
+        self.material_indexes = self.material_indexes.strip()
 
 
 class SubSet:
