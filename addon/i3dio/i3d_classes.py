@@ -121,7 +121,14 @@ class I3D:
         return self.materials[default_material_name]
 
     def add_file(self, path_to_file: str) -> int:
-        return self._next_available_id('file')
+        if path_to_file not in self.files:
+            self.logger.debug(f"New File")
+            file_id = self._next_available_id('file')
+            file = File(file_id, self, path_to_file)
+            self.files.update(dict.fromkeys([file_id, path_to_file], file))
+            self.xml_elements['Files'].append(file.element)
+            return file_id
+        return self.files[path_to_file].id
 
     def get_setting(self, setting: str):
         return self.settings[setting]
@@ -164,13 +171,13 @@ class Node(ABC):
     @property
     @classmethod
     @abstractmethod
-    def ID_FIELD_NAME(cls):  # Every node type has a certain tag in the i3d-file fx. 'Shape' or 'Light'
+    def ID_FIELD_NAME(cls):  # The name of the id tag changes from node to node, but it is still an ID
         return NotImplementedError
 
     @property
     @classmethod
     @abstractmethod
-    def NAME_FIELD_NAME(cls):  # Every node type has a certain tag in the i3d-file fx. 'Shape' or 'Light'
+    def NAME_FIELD_NAME(cls):  # The name of the name tag can change from node to node
         return NotImplementedError
 
     def __init__(self, id_: int, i3d: I3D, parent: Union[Node, None] = None):
@@ -755,7 +762,7 @@ class Material(Node):
                 self.logger.debug(f"Has Glossmap '{utility.as_fs_relative_path(gloss_image_path)}'")
                 file_id = self.i3d.add_file(gloss_image_path)
                 self.xml_elements['Glossmap'] = ET.SubElement(self.element, 'Glossmap')
-                self._write_attribute('fileId', file_id, self.xml_elements['Glossmap'])
+                self._write_attribute('fileId', file_id, 'Glossmap')
         else:
             self.logger.debug(f"Has no Glossmap")
 
@@ -777,7 +784,7 @@ class Material(Node):
                 self.logger.debug(f"Has Normalmap '{utility.as_fs_relative_path(normal_image_path)}'")
                 file_id = self.i3d.add_file(normal_image_path)
                 self.xml_elements['Normalmap'] = ET.SubElement(self.element, 'Normalmap')
-                self._write_attribute('fileId', file_id, self.xml_elements['Normalmap'])
+                self._write_attribute('fileId', file_id, 'Normalmap')
         else:
             self.logger.debug(f"Has no Normalmap")
 
@@ -799,7 +806,7 @@ class Material(Node):
                     self.logger.debug(f"Has diffuse texture '{utility.as_fs_relative_path(diffuse_image_path)}'")
                     file_id = self.i3d.add_file(diffuse_image_path)
                     self.xml_elements['Texture'] = ET.SubElement(self.element, 'Texture')
-                    self._write_attribute('fileId', file_id, self.xml_elements['Texture'])
+                    self._write_attribute('fileId', file_id, 'Texture')
         # Write the diffuse colors
         self._write_diffuse(diffuse)
 
