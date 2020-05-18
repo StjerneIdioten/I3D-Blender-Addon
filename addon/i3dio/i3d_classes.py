@@ -27,9 +27,9 @@ class I3D:
             'material': 1,
             'file': 1,
         }
-
         self.paths = {
             'i3d_file_path': i3d_file_path,
+            'i3d_folder': i3d_file_path[0:i3d_file_path.rfind('\\') + 1],
         }
 
         # Initialize top-level categories
@@ -120,15 +120,20 @@ class I3D:
         # Return the default material
         return self.materials[default_material_name]
 
-    def add_file(self, path_to_file: str) -> int:
+    def add_file(self, file_type: Type[File], path_to_file: str) -> int:
         if path_to_file not in self.files:
             self.logger.debug(f"New File")
             file_id = self._next_available_id('file')
-            file = File(file_id, self, path_to_file)
-            self.files.update(dict.fromkeys([file_id, path_to_file], file))
+            file = file_type(file_id, self, path_to_file)
+            # Store with reference to blender path instead of potential relative path, to avoid unnecessary creation of
+            # a file before looking it up in the files dictionary.
+            self.files.update(dict.fromkeys([file_id, file.blender_path], file))
             self.xml_elements['Files'].append(file.element)
             return file_id
         return self.files[path_to_file].id
+
+    def add_file_image(self, path_to_file: str) -> int:
+        return self.add_file(Image, path_to_file)
 
     def get_setting(self, setting: str):
         return self.settings[setting]
@@ -185,8 +190,7 @@ class Node(ABC):
         self.i3d = i3d
         self.parent = parent
         self.xml_elements = {}
-        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                                  {'object_name': self.name})
+        self.logger = self._set_logging_output_name_field()
         self._create_xml_element()
         self.populate_xml_element()
 
@@ -205,6 +209,11 @@ class Node(ABC):
     def element(self, value):
         raise NotImplementedError
 
+    def _set_logging_output_name_field(self):
+        return debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
+                                           {'object_name': self.name})
+
+
     def _create_xml_element(self):
         self.logger.debug(f"Filling out basic attributes, {{name='{self.name}', nodeId='{self.id}'}}")
         attributes = {type(self).NAME_FIELD_NAME: self.name, type(self).ID_FIELD_NAME: str(self.id)}
@@ -214,9 +223,10 @@ class Node(ABC):
         except AttributeError:
             self.element = ET.Element(type(self).ELEMENT_TAG, attributes)
 
-    @abstractmethod
     def populate_xml_element(self):
-        raise NotImplementedError
+        # This should be overwritten in derived nodes, if they need to add extra attributes/xml-elements to the base
+        # element. This get's call from the default constructor after the base xml element has been created.
+        pass
 
     def _write_attribute(self, name: str, value, element_idx=None) -> None:
         if element_idx is None:
@@ -760,7 +770,7 @@ class Material(Node):
                 self.logger.exception(f"Has an improperly setup Glossmap")
             else:
                 self.logger.debug(f"Has Glossmap '{utility.as_fs_relative_path(gloss_image_path)}'")
-                file_id = self.i3d.add_file(gloss_image_path)
+                file_id = self.i3d.add_file_image(gloss_image_path)
                 self.xml_elements['Glossmap'] = ET.SubElement(self.element, 'Glossmap')
                 self._write_attribute('fileId', file_id, 'Glossmap')
         else:
@@ -782,7 +792,7 @@ class Material(Node):
                 self.logger.exception(f"Has an improperly setup Normalmap")
             else:
                 self.logger.debug(f"Has Normalmap '{utility.as_fs_relative_path(normal_image_path)}'")
-                file_id = self.i3d.add_file(normal_image_path)
+                file_id = self.i3d.add_file_image(normal_image_path)
                 self.xml_elements['Normalmap'] = ET.SubElement(self.element, 'Normalmap')
                 self._write_attribute('fileId', file_id, 'Normalmap')
         else:
@@ -804,7 +814,7 @@ class Material(Node):
             else:
                 if diffuse_image_path is not None:
                     self.logger.debug(f"Has diffuse texture '{utility.as_fs_relative_path(diffuse_image_path)}'")
-                    file_id = self.i3d.add_file(diffuse_image_path)
+                    file_id = self.i3d.add_file_image(diffuse_image_path)
                     self.xml_elements['Texture'] = ET.SubElement(self.element, 'Texture')
                     self._write_attribute('fileId', file_id, 'Texture')
         # Write the diffuse colors
@@ -827,15 +837,23 @@ class File(Node):
     ELEMENT_TAG = 'File'
     NAME_FIELD_NAME = 'filename'
     ID_FIELD_NAME = 'fileId'
+    @property
+    @classmethod
+    @abstractmethod
+    def MODHUB_FOLDER(cls):  # The name of the folder that it should go in for the modhub export type
+        return NotImplementedError
 
     def __init__(self, id_: int, i3d: I3D, filepath: str):
         self.blender_path = filepath  # This should be supplied as the normal blender relative path
+        self.resolved_path = bpy.path.abspath(self.blender_path)  # Initialize as blender path as default if no changes are made
+        self.file_name = bpy.path.display_name_from_filepath(self.blender_path)
+        self.file_extension = self.blender_path[self.blender_path.rfind('.'):len(self.blender_path)]
         self._xml_element = None
         super().__init__(id_, i3d, None)
 
     @property
     def name(self):
-        return self.blender_path
+        return self.resolved_path
 
     @property
     def element(self):
@@ -845,9 +863,63 @@ class File(Node):
     def element(self, value):
         self._xml_element = value
 
+    # The log gets to scrambled if files are referred by their full path, so just use the filename instead
+    def _set_logging_output_name_field(self):
+        return debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
+                                           {'object_name': self.file_name + self.file_extension})
+
     def _create_xml_element(self):
+        # In files, the node name attribute (filename) is also the path to the file. So this needs to be resolved
+        # before creating the xml element
+        self._resolve_filepath()
         super()._create_xml_element()
 
-    def populate_xml_element(self):
-        pass
+    def _resolve_filepath(self):
+        filepath_absolute = bpy.path.abspath(self.blender_path)
+        filepath_relative_to_fs = utility.as_fs_relative_path(filepath_absolute)
+
+        if filepath_relative_to_fs[0] == '$':
+            self.resolved_path = filepath_relative_to_fs
+        elif bpy.context.scene.i3dio.copy_files:
+            self._copy_file()
+        else:
+            self.resolved_path = filepath_absolute
+
+        self.logger.info(f"Resolved filepath: {self.resolved_path}")
+
+    def _copy_file(self):
+        resolved_directory = ""
+        write_directory = self.i3d.paths['i3d_folder'] + '\\'
+        self.logger.info(f"is not an FS builtin and will be copied")
+        file_structure = bpy.context.scene.i3dio.file_structure
+        if file_structure == 'FLAT':
+            self.logger.debug(f"will be copied using the 'FLAT' hierarchy structure")
+        elif file_structure == 'MODHUB':
+            self.logger.debug(f"will be copied using the 'MODHUB' hierarchy structure")
+            resolved_directory = type(self).MODHUB_FOLDER + '\\'
+            write_directory += resolved_directory
+        elif file_structure == 'BLENDER':
+            self.logger.debug(f"'will be copied using the 'BLENDER' hierarchy structure")
+            # TODO: Rewrite this to make it more than three levels above the blend file but allow deeper nesting
+            #  ,since current code just counts number of slashes
+            blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
+            # relative steps to avoid copying entire folder structures ny mistake. Defaults to an absolute path.
+            if self.blender_path.count("..\\") <= blender_relative_distance_limit:
+                # Remove blender relative notation and filename
+                resolved_directory = self.blender_path[2:self.blender_path.rfind('\\') + 1]
+            else:
+                self.logger.debug(f"'exists more than {blender_relative_distance_limit} folders away "
+                                  f"from .blend file. Defaulting to absolute path and no copying.")
+                self.resolved_path = bpy.path.abspath(self.blender_path)
+                return
+
+        self.resolved_path = resolved_directory + self.file_name + self.file_extension
+
+
+class Image(File):
+    MODHUB_FOLDER = 'textures'
+
+
+
+
 
