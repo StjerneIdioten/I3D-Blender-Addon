@@ -85,12 +85,17 @@ def _export_active_object(i3d: i3d_classes.I3D):
         logger.warning("No active object, aborting export")
 
 
+# TODO: Maybe this should export a sort of skeleton structure if the parents of an object isn't selected?
 def _export_selected_objects(i3d: i3d_classes.I3D):
-    pass
+    logger.info("'Selected Objects' export is selected'")
+    if bpy.context.selected_objects:
+        _export(i3d, bpy.context.selected_objects)
+    else:
+        logger.warning("No selected objects, aborting export")
 
 
-def _export(i3d: i3d_classes.I3D, root_objects: List[BlenderObject]):
-    for blender_object in root_objects:
+def _export(i3d: i3d_classes.I3D, objects: List[BlenderObject]):
+    for blender_object in objects:
         _add_object_to_i3d(i3d, blender_object)
     i3d.export_to_i3d_file()
 
@@ -108,7 +113,11 @@ def _add_object_to_i3d(i3d: i3d_classes.I3D, obj: BlenderObject, parent: i3d_cla
             logger.debug(f"[{obj.name}] has type {obj.type!r} which is not a type selected for exporting")
             return
         elif obj.type == 'MESH':
-            node = i3d.add_shape_node(obj, parent)
+            # Currently the check for a mergegroup relies solely on whether or not a name is set for it
+            if obj.i3d_merge_group.group_id != "":
+                i3d.add_merge_group_node(obj, parent)
+            else:
+                node = i3d.add_shape_node(obj, parent)
         elif obj.type == 'EMPTY':
             node = i3d.add_transformgroup_node(obj, parent)
             if obj.instance_collection is not None:

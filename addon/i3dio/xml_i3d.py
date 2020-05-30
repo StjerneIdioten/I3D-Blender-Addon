@@ -14,6 +14,8 @@ root_attributes = {'version': '1.6',
 
 file_ending = '.i3d'
 
+merge_group_prefix = 'MergedMesh_'
+
 
 def write_int(element: ET.Element, attribute: str, value: int) -> None:
     """Write the attribute into the element with formatting for ints"""

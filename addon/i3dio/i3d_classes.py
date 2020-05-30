@@ -51,6 +51,7 @@ class I3D:
         self.shapes: Dict[Union[str, int], IndexedTriangleSet] = {}
         self.materials: Dict[Union[str, int], Material] = {}
         self.files: Dict[Union[str, int], File] = {}
+        self.merge_groups: Dict[str, MergeGroup] = {}
 
         # Save all settings for the current run unto the I3D to abstract it from the nodes themselves
         self.settings = {}
@@ -63,7 +64,8 @@ class I3D:
         self._ids[id_type] += 1
         return next_id
 
-    def _add_node(self, node_type: Type[SceneGraphNode], object_: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
+    def _add_node(self, node_type: Type[SceneGraphNode], object_: bpy.types.Object, parent: SceneGraphNode = None) \
+            -> SceneGraphNode:
         node = node_type(self._next_available_id('node'), object_, self, parent)
         if parent is None:
             self.scene_root_nodes.append(node)
@@ -75,7 +77,38 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(ShapeNode, mesh_object, parent)
 
-    def add_transformgroup_node(self, empty_object: [bpy.types.Object, bpy.types.Collection], parent: SceneGraphNode = None) -> SceneGraphNode:
+    def add_merge_group_node(self, merge_group_object: bpy.types.Object, parent: SceneGraphNode = None) \
+            -> [SceneGraphNode, None]:
+        self.logger.debug("Adding merge group node")
+        merge_group_id = merge_group_object.i3d_merge_group.group_id
+        merge_group_name = xml_i3d.merge_group_prefix + merge_group_id
+        node_to_return = None
+        if merge_group_name not in self.merge_groups:
+            self.logger.debug("New merge group")
+            merge_group = self.merge_groups[merge_group_name] = MergeGroup(merge_group_name)
+            if merge_group_object.i3d_merge_group.is_root:
+                node_to_return = self._add_node(MergeGroupRoot, merge_group_object, parent)
+                merge_group.set_root(node_to_return)
+            else:
+                node_to_return = self._add_node(MergeGroupChild, merge_group_object, parent)
+                merge_group.add_child(node_to_return)
+        else:
+            self.logger.debug("Merge group already exists")
+            merge_group = self.merge_groups[merge_group_name]
+            if merge_group_object.i3d_merge_group.is_root:
+                if merge_group.root_node is not None:
+                    self.logger.warning(f"Merge group '{merge_group_id}' already has a root node! "
+                                        f"The object '{merge_group_object.name}' will be ignored for export")
+                else:
+                    node_to_return = self._add_node(MergeGroupRoot, merge_group_object, parent)
+                    merge_group.set_root(node_to_return)
+            else:
+                node_to_return = self._add_node(MergeGroupChild, merge_group_object, parent)
+                merge_group.add_child(node_to_return)
+        return node_to_return
+
+    def add_transformgroup_node(self, empty_object: [bpy.types.Object, bpy.types.Collection],
+                                parent: SceneGraphNode = None) -> SceneGraphNode:
         return self._add_node(TransformGroupNode, empty_object, parent)
 
     def add_light_node(self, light_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
@@ -215,7 +248,6 @@ class Node(ABC):
         return debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                            {'object_name': self.name})
 
-
     def _create_xml_element(self):
         self.logger.debug(f"Filling out basic attributes, {{name='{self.name}', nodeId='{self.id}'}}")
         attributes = {type(self).NAME_FIELD_NAME: self.name, type(self).ID_FIELD_NAME: str(self.id)}
@@ -242,7 +274,7 @@ class SceneGraphNode(Node):
     ID_FIELD_NAME = 'nodeId'
 
     def __init__(self, id_: int,
-                 blender_object: [bpy.types.Object, bpy.types.Collection],
+                 blender_object: [bpy.types.Object, bpy.types.Collection, None],
                  i3d: I3D,
                  parent: Union[SceneGraphNode, None] = None,
                  ):
@@ -346,7 +378,7 @@ class SceneGraphNode(Node):
 class ShapeNode(SceneGraphNode):
     ELEMENT_TAG = 'Shape'
 
-    def __init__(self, id_: int, mesh_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode or None = None):
+    def __init__(self, id_: int, mesh_object: [bpy.types.Object, None], i3d: I3D, parent: [SceneGraphNode or None] = None):
         super().__init__(id_=id_, blender_object=mesh_object, i3d=i3d, parent=parent)
         self.shape_id = None
 
@@ -462,6 +494,43 @@ class CameraNode(SceneGraphNode):
             self._write_attribute('orthographicHeight', camera.ortho_scale)
             self.logger.info(f"Orthographic camera with height '{camera.ortho_scale}'")
         super().populate_xml_element()
+
+
+class MergeGroup:
+    def __init__(self, name: str):
+        self.name = name
+        self.root_node: [MergeGroupRoot, None] = None
+        self.child_nodes: List[MergeGroupChild] = list()  # List of child nodes for the merge group
+        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
+                                                  {'object_name': self.name})
+        self.logger.debug("Initialized merge group")
+
+    # Should only be run once, when the root node is found.
+    def set_root(self, root_node: MergeGroupRoot):
+        self.root_node = root_node
+        if self.child_nodes:
+            self.logger.debug(f"{len(self.child_nodes)} were added before the root node was found")
+            for child in self.child_nodes:
+                self.root_node.add_child(child)
+        else:
+            self.logger.debug("No pre-added children before root was found")
+        return self.root_node
+
+    def add_child(self, child_node: MergeGroupChild):
+        self.child_nodes.append(child_node)
+        if self.root_node is not None:
+            self.root_node.add_child(self.child_nodes[-1])
+        return self.child_nodes[-1]
+
+
+class MergeGroupRoot(ShapeNode):
+
+    def add_child(self, child: MergeGroupChild):
+        self.logger.debug("Adding Child")
+
+
+class MergeGroupChild(TransformGroupNode):
+    pass
 
 
 class IndexedTriangleSet(Node):
