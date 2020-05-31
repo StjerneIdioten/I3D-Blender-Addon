@@ -1,6 +1,6 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, Dict, List, Type, OrderedDict)
+from typing import (Union, Dict, List, Type, OrderedDict, Optional)
 import xml.etree.ElementTree as ET
 from abc import ABC, abstractmethod
 import collections
@@ -82,7 +82,7 @@ class I3D:
         self.logger.debug("Adding merge group node")
         merge_group_id = merge_group_object.i3d_merge_group.group_id
         merge_group_name = xml_i3d.merge_group_prefix + merge_group_id
-        node_to_return = None
+        node_to_return: [MergeGroupRoot or MergeGroupRoot] = None
         if merge_group_name not in self.merge_groups:
             self.logger.debug("New merge group")
             merge_group = self.merge_groups[merge_group_name] = MergeGroup(merge_group_name)
@@ -119,16 +119,23 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(CameraNode, camera_object, parent)
 
-    def add_shape(self, evaluated_mesh: EvaluatedMesh) -> int:
-        name = evaluated_mesh.name
+    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None) -> int:
+        if shape_name is None:
+            name = evaluated_mesh.name
+        else:
+            name = shape_name
+
         if name not in self.shapes:
             shape_id = self._next_available_id('shape')
-            indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh)
+            indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name)
             # Store a reference to the shape from both it's name and its shape id
             self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
             return shape_id
         return self.shapes[name].id
+
+    def get_shape_by_id(self, shape_id: int):
+        return self.shapes[shape_id]
 
     def add_material(self, blender_material: bpy.types.Material) -> int:
         name = blender_material.name
@@ -386,8 +393,11 @@ class ShapeNode(SceneGraphNode):
     def _transform_for_conversion(self) -> mathutils.Matrix:
         return self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
 
-    def populate_xml_element(self):
+    def add_shape(self):
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object))
+
+    def populate_xml_element(self):
+        self.add_shape()
         self.logger.debug(f"has shape ID '{self.shape_id}'")
         self._write_attribute('shapeId', self.shape_id)
         self._write_attribute('materialIds', self.i3d.shapes[self.shape_id].material_indexes)
@@ -525,8 +535,19 @@ class MergeGroup:
 
 class MergeGroupRoot(ShapeNode):
 
+    def __init__(self, id_: int, merge_group_object: [bpy.types.Object, None], i3d: I3D, parent: [SceneGraphNode or None] = None):
+        self.merge_group_name = xml_i3d.merge_group_prefix + merge_group_object.i3d_merge_group.group_id
+        self.skin_bind_ids = f"{id_:d} "
+        super().__init__(id_=id_, mesh_object=merge_group_object, i3d=i3d, parent=parent)
+
+    # Override default shape behaviour to use the merge group mesh name instead of the blender objects name
+    def add_shape(self):
+        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.merge_group_name)
+
     def add_child(self, child: MergeGroupChild):
         self.logger.debug("Adding Child")
+        self.skin_bind_ids += f"{child.id:d} "
+        self._write_attribute('skinBindNodeIds', self.skin_bind_ids[:-1])
 
 
 class MergeGroupChild(TransformGroupNode):
@@ -538,7 +559,7 @@ class IndexedTriangleSet(Node):
     NAME_FIELD_NAME = 'name'
     ID_FIELD_NAME = 'shapeId'
 
-    def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh):
+    def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None):
         self.id: int = id_
         self.i3d: I3D = i3d
         self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
@@ -546,6 +567,10 @@ class IndexedTriangleSet(Node):
         self.triangles: List[List[int]] = list()  # List of lists of vertex indexes
         self.subsets: OrderedDict[str, SubSet] = collections.OrderedDict()
         self.material_indexes: str = ''
+        if shape_name is None:
+            self.shape_name = self.evaluated_mesh.name
+        else:
+            self.shape_name = shape_name
         super().__init__(id_, i3d, None)
 
     def _create_xml_element(self) -> None:
@@ -556,7 +581,7 @@ class IndexedTriangleSet(Node):
 
     @property
     def name(self):
-        return self.evaluated_mesh.name
+        return self.shape_name
 
     @property
     def element(self):
