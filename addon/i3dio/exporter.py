@@ -70,11 +70,13 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
 
 
 def _export_active_scene_master_collection(i3d: i3d_classes.I3D):
-    pass
+    logger.info("'Master Collection' export is selected")
+    _export(i3d, [bpy.context.scene.collection])
 
 
 def _export_active_collection(i3d: i3d_classes.I3D):
-    pass
+    logger.info("f'Active collection' export is selected")
+    _export(i3d, [bpy.context.view_layer.active_layer_collection.collection])
 
 
 def _export_active_object(i3d: i3d_classes.I3D):
