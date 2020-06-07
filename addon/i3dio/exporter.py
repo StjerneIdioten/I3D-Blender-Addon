@@ -75,7 +75,7 @@ def _export_active_scene_master_collection(i3d: I3D):
 
 
 def _export_active_collection(i3d: I3D):
-    logger.info("f'Active collection' export is selected")
+    logger.info("'Active collection' export is selected")
     _export(i3d, [bpy.context.view_layer.active_layer_collection.collection])
 
 
