@@ -31,6 +31,10 @@ class MergeGroupRoot(ShapeNode):
         self.i3d.shapes[self.shape_id].append_from_evaluated_mesh(
             EvaluatedMesh(self.i3d, child.blender_object, reference_frame=self.blender_object.matrix_world))
 
+    def populate_xml_element(self):
+        super().populate_xml_element()
+        self._write_attribute('skinBindNodeIds', self.skin_bind_ids[:-1])
+
 
 class MergeGroup:
     def __init__(self, name: str):
