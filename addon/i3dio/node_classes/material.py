@@ -1,0 +1,112 @@
+import bpy
+import xml.etree.ElementTree as ET
+from .node import Node
+from ..i3d import I3D
+from .. import utility
+
+
+class Material(Node):
+    ELEMENT_TAG = 'Material'
+    NAME_FIELD_NAME = 'name'
+    ID_FIELD_NAME = 'materialId'
+
+    def __init__(self, id_: int, i3d: I3D, blender_material: bpy.types.Material):
+        self.blender_material = blender_material
+        super().__init__(id_, i3d, None)
+
+    @property
+    def name(self):
+        return self.blender_material.name
+
+    @property
+    def element(self):
+        return self.xml_elements['node']
+
+    @element.setter
+    def element(self, value):
+        self.xml_elements['node'] = value
+
+    def populate_xml_element(self):
+        if self.blender_material.use_nodes:
+            self._resolve_with_nodes()
+        else:
+            self._resolve_without_nodes()
+
+    def _resolve_with_nodes(self):
+        main_node = self.blender_material.node_tree.nodes.get('Principled BSDF')
+        if main_node is not None:
+            self._diffuse_from_nodes(main_node)
+            self._normal_from_nodes(main_node)
+            self._specular_from_nodes(main_node)
+        else:
+            self.logger.warning(f"Uses nodes but Principled BSDF node is not found!")
+
+        gloss_node = self.blender_material.node_tree.nodes.get('Glossmap')
+        if gloss_node is not None:
+            try:
+                gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
+            except (AttributeError, IndexError, KeyError):
+                self.logger.exception(f"Has an improperly setup Glossmap")
+            else:
+                self.logger.debug(f"Has Glossmap '{utility.as_fs_relative_path(gloss_image_path)}'")
+                file_id = self.i3d.add_file_image(gloss_image_path)
+                self.xml_elements['Glossmap'] = ET.SubElement(self.element, 'Glossmap')
+                self._write_attribute('fileId', file_id, 'Glossmap')
+        else:
+            self.logger.debug(f"Has no Glossmap")
+
+    def _specular_from_nodes(self, node):
+        specular = [1.0 - node.inputs['Roughness'].default_value,
+                    node.inputs['Specular'].default_value,
+                    node.inputs['Metallic'].default_value]
+        self._write_specular(specular)
+
+    def _normal_from_nodes(self, node):
+        normal_node_socket = node.inputs['Normal']
+        if normal_node_socket.is_linked:
+            try:
+                normal_image_path = normal_node_socket.links[0].from_node.inputs['Color'].links[0] \
+                    .from_node.image.filepath
+            except (AttributeError, IndexError, KeyError):
+                self.logger.exception(f"Has an improperly setup Normalmap")
+            else:
+                self.logger.debug(f"Has Normalmap '{utility.as_fs_relative_path(normal_image_path)}'")
+                file_id = self.i3d.add_file_image(normal_image_path)
+                self.xml_elements['Normalmap'] = ET.SubElement(self.element, 'Normalmap')
+                self._write_attribute('fileId', file_id, 'Normalmap')
+        else:
+            self.logger.debug(f"Has no Normalmap")
+
+    def _diffuse_from_nodes(self, node):
+        color_socket = node.inputs['Base Color']
+        diffuse = color_socket.default_value
+        if color_socket.is_linked:
+            try:
+                color_connected_node = color_socket.links[0].from_node
+                if color_connected_node.bl_idname == 'ShaderNodeRGB':
+                    diffuse = color_connected_node.outputs[0].default_value
+                    diffuse_image_path = None
+                else:
+                    diffuse_image_path = color_connected_node.image.filepath
+            except (AttributeError, IndexError, KeyError):
+                self.logger.exception(f"Has an improperly setup Texture")
+            else:
+                if diffuse_image_path is not None:
+                    self.logger.debug(f"Has diffuse texture '{utility.as_fs_relative_path(diffuse_image_path)}'")
+                    file_id = self.i3d.add_file_image(diffuse_image_path)
+                    self.xml_elements['Texture'] = ET.SubElement(self.element, 'Texture')
+                    self._write_attribute('fileId', file_id, 'Texture')
+        # Write the diffuse colors
+        self._write_diffuse(diffuse)
+
+    def _resolve_without_nodes(self):
+        material = self.blender_material
+        self._write_diffuse(material.diffuse_color)
+        self._write_specular([1.0 - material.roughness, 1, material.metallic])
+        self.logger.debug(f"Does not use nodes")
+
+    def _write_diffuse(self, diffuse_color):
+        self._write_attribute('diffuseColor', "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*diffuse_color))
+
+    def _write_specular(self, specular_color):
+        self._write_attribute('specularColor', "{0:.6f} {1:.6f} {2:.6f}".format(*specular_color))

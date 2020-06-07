@@ -9,7 +9,8 @@ from bpy_extras.io_utils import (
     axis_conversion
 )
 
-from . import i3d_classes
+from .i3d import I3D
+from .node_classes.node import SceneGraphNode
 from .utility import BlenderObject
 from . import xml_i3d
 from . import debugging
@@ -38,10 +39,9 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
 
         # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
         try:
-            i3d = i3d_classes.I3D(name=bpy.path.display_name_from_filepath(filepath),
-                                  i3d_file_path=filepath,
-                                  conversion_matrix=axis_conversion(to_forward=axis_forward,
-                                                                    to_up=axis_up,).to_4x4())
+            i3d = I3D(name=bpy.path.display_name_from_filepath(filepath),
+                      i3d_file_path=filepath,
+                      conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up,).to_4x4())
 
             export_selection = bpy.context.scene.i3dio.selection
             if export_selection == 'ALL':
@@ -69,17 +69,17 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
         debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
 
 
-def _export_active_scene_master_collection(i3d: i3d_classes.I3D):
+def _export_active_scene_master_collection(i3d: I3D):
     logger.info("'Master Collection' export is selected")
     _export(i3d, [bpy.context.scene.collection])
 
 
-def _export_active_collection(i3d: i3d_classes.I3D):
+def _export_active_collection(i3d: I3D):
     logger.info("f'Active collection' export is selected")
     _export(i3d, [bpy.context.view_layer.active_layer_collection.collection])
 
 
-def _export_active_object(i3d: i3d_classes.I3D):
+def _export_active_object(i3d: I3D):
     logger.info("'Active Object' export is selected")
     if bpy.context.active_object is not None:
         _export(i3d, [bpy.context.active_object])
@@ -88,7 +88,7 @@ def _export_active_object(i3d: i3d_classes.I3D):
 
 
 # TODO: Maybe this should export a sort of skeleton structure if the parents of an object isn't selected?
-def _export_selected_objects(i3d: i3d_classes.I3D):
+def _export_selected_objects(i3d: I3D):
     logger.info("'Selected Objects' export is selected'")
     if bpy.context.selected_objects:
         _export(i3d, bpy.context.selected_objects)
@@ -96,13 +96,13 @@ def _export_selected_objects(i3d: i3d_classes.I3D):
         logger.warning("No selected objects, aborting export")
 
 
-def _export(i3d: i3d_classes.I3D, objects: List[BlenderObject]):
+def _export(i3d: I3D, objects: List[BlenderObject]):
     for blender_object in objects:
         _add_object_to_i3d(i3d, blender_object)
     i3d.export_to_i3d_file()
 
 
-def _add_object_to_i3d(i3d: i3d_classes.I3D, obj: BlenderObject, parent: i3d_classes.SceneGraphNode = None) -> None:
+def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
     # Collections are checked first since these are always exported in some form
     if isinstance(obj, bpy.types.Collection):
         logger.debug(f"[{obj.name}] is a 'Collection'")
@@ -144,7 +144,7 @@ def _add_object_to_i3d(i3d: i3d_classes.I3D, obj: BlenderObject, parent: i3d_cla
         logger.debug(f"[{obj.name}] no more children to process in object")
 
 
-def _process_collection_objects(i3d: i3d_classes.I3D, collection: bpy.types.Collection, parent: i3d_classes.SceneGraphNode):
+def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, parent: SceneGraphNode):
     """Handles adding object children of collections. Since collections stores their objects in a list named 'objects'
     instead of the 'children' list, which only contains child collections. And they need to be iterated slightly
     different"""

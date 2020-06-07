@@ -13,30 +13,34 @@
                 ##### END GPL LICENSE BLOCK #####
 """
 
+
 # Reimport modules when refreshing blender to show changes
 if "bpy" in locals():
     import importlib
-    if 'debugging' in locals():
-        importlib.reload(debugging)
-    if 'xml_i3d' in locals():
-        importlib.reload(xml_i3d)
-    if 'i3d_classes' in locals():
-        importlib.reload(i3d_classes)
-    if 'i3d_properties' in locals():
-        importlib.reload(i3d_properties)
-    if 'i3d_ui' in locals():
-        importlib.reload(i3d_ui)
-    if 'i3d_ui_attributes' in locals():
-        importlib.reload(i3d_ui_attributes)
-    if 'exporter' in locals():
-        importlib.reload(exporter)
-    print("Reloaded multifiles")
+    import types
+    import sys
+    print("\n".join(locals()))
+
+    # This should probably be 'automated' in some sense, by just supplying the module folder
+    importlib.reload(sys.modules['i3dio.node_classes.node'])
+    importlib.reload(sys.modules['i3dio.node_classes.shape'])
+    importlib.reload(sys.modules['i3dio.node_classes.merge_group'])
+    importlib.reload(sys.modules['i3dio.node_classes.material'])
+    importlib.reload(sys.modules['i3dio.node_classes.file'])
+
+    locals_copy = dict(locals())
+    for var in locals_copy:
+        tmp = locals_copy[var]
+        if isinstance(tmp, types.ModuleType):
+            if tmp.__package__ in ['i3dio']:
+                print(f"Reloading: {var}")
+                importlib.reload(tmp)
 else:
-    from . import i3d_ui, i3d_ui_attributes, i3d_properties
+    from . import ui_export, ui_attributes, properties
+    print("\n".join(locals()))
     print("Imported multifiles")
 
 import bpy
-
 
 bl_info = {
     "name": "Unofficial GIANTS I3D Exporter Tools",
@@ -56,19 +60,20 @@ bl_info = {
 
 # File -> Export item
 def menu_func_export(self, context):
-    self.layout.operator(i3d_ui.I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
+    print(locals())
+    self.layout.operator(ui_export.I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
 
 
 def register():
-    i3d_properties.register()
-    i3d_ui_attributes.register()
-    i3d_ui.register()
+    properties.register()
+    ui_attributes.register()
+    ui_export.register()
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
 
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
-    i3d_ui.unregister()
-    i3d_ui_attributes.unregister()
-    i3d_properties.unregister()
+    ui_export.unregister()
+    ui_attributes.unregister()
+    properties.unregister()
 

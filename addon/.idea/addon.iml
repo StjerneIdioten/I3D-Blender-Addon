@@ -3,6 +3,7 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/i3dio" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/i3dio/node_classes" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
     <content url="file://$MODULE_DIR$/../../blender_autocomplete/2.82" />

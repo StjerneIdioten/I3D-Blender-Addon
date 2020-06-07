@@ -7,7 +7,7 @@ from bpy.props import (
     PointerProperty
 )
 
-from . import i3d_properties
+from . import properties
 
 
 classes = []
