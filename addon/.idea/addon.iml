@@ -6,8 +6,12 @@
       <sourceFolder url="file://$MODULE_DIR$/i3dio/node_classes" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
-    <content url="file://$MODULE_DIR$/../../blender_autocomplete/2.82" />
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+  <component name="PackageRequirementsSettings">
+    <option name="requirementsPath" value="D:\Github\I3D-Blender-Addon\addon\requirements.txt" />
+    <option name="versionSpecifier" value="Greater or equal (&gt;=x.y.z)" />
+    <option name="modifyBaseFiles" value="true" />
   </component>
 </module>

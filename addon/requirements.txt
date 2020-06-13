@@ -1,0 +1,2 @@
+typing>=3.7.4.1
+fake-bpy-module-2.82>=20200514
