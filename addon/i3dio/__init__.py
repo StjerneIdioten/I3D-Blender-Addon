@@ -19,7 +19,6 @@ if "bpy" in locals():
     import importlib
     import types
     import sys
-    print("\n".join(locals()))
 
     # This should probably be 'automated' in some sense, by just supplying the module folder
     importlib.reload(sys.modules['i3dio.node_classes.node'])
@@ -33,12 +32,9 @@ if "bpy" in locals():
         tmp = locals_copy[var]
         if isinstance(tmp, types.ModuleType):
             if tmp.__package__ in ['i3dio']:
-                print(f"Reloading: {var}")
                 importlib.reload(tmp)
 else:
     from . import ui_export, ui_attributes, properties
-    print("\n".join(locals()))
-    print("Imported multifiles")
 
 import bpy
 
