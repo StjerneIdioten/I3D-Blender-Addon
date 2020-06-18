@@ -109,3 +109,7 @@ class File(Node):
 
 class Image(File):
     MODHUB_FOLDER = 'textures'
+
+
+class Shader(File):
+    MODHUB_FOLDER = 'shaders'
