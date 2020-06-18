@@ -34,7 +34,7 @@ if "bpy" in locals():
             if tmp.__package__ in ['i3dio']:
                 importlib.reload(tmp)
 else:
-    from . import ui_export, ui_attributes, properties
+    from . import ui_export, ui_attributes, ui_shader_picker, properties
 
 import bpy
 
@@ -63,6 +63,7 @@ def menu_func_export(self, context):
 def register():
     properties.register()
     ui_attributes.register()
+    ui_shader_picker.register()
     ui_export.register()
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
@@ -70,6 +71,7 @@ def register():
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     ui_export.unregister()
+    ui_shader_picker.unregister()
     ui_attributes.unregister()
     properties.unregister()
 

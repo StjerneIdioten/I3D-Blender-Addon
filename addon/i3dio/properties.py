@@ -324,3 +324,7 @@ def unregister():
     del bpy.types.Object.i3d_attributes
     del bpy.types.Mesh.i3d_attributes
     del bpy.types.Light.i3d_attributes
+
+
+
+
