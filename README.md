@@ -45,6 +45,14 @@ Current Priorities listed in order
 
 * Working towards first feature-complete stable release
 
+## Installation
+The [Releases](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases) page will always contain a release with the latest features tagged "latest". This might not be stable, so use with care. The page also holds other releases that I add once I deem them to have been tested properly, but keep in mind that at this point this is all pre-release stuff, so make sure to keep a backup of your blend files as I cannot guarantee that the exporter will keep them in a usable state.
+All of these releases are packaged as blender expects them and should be installed just like any other addon for blender.
+
+If you wish to fork the repository and play around with the code, then you need to put the git repository somewhere and symlink the "addon/i3dio" folder into your version of blenders addon folder.
+
+It is probably also worth mentioning that this addon is NOT linux/mac compatible. It could become it, but I have not given that any thought since the Giants Engine is not running on anything but windows anyway.
+
 ## Access
 
 This has mostly been a solo project so far, but any help is appreciated.
