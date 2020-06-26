@@ -17,6 +17,7 @@ classes = []
 
 # A module value to represent what the field shows when a shader is not selected
 shader_unselected_default_text = ''
+shader_no_variations = 'NONE'
 
 
 def register(cls):
@@ -28,13 +29,11 @@ def register(cls):
 class I3DShaderParameter(bpy.types.PropertyGroup):
     name: StringProperty(default='Unnamed Attribute')
     enabled: BoolProperty(default=False)
-    type: EnumProperty(items=[('FLOAT', '', ''), ('FLOAT4', '', '')])
-    data_float: FloatProperty()
-    data_float_min: FloatProperty()
-    data_float_max: FloatProperty()
+    type: EnumProperty(items=[('FLOAT1', '', ''), ('FLOAT2', '', ''), ('FLOAT3', '', ''), ('FLOAT4', '', '')])
+    data_float_1: FloatProperty()
+    data_float_2: FloatVectorProperty(size=2)
+    data_float_3: FloatVectorProperty(size=3)
     data_float_4: FloatVectorProperty(size=4)
-    data_float_4_min: FloatVectorProperty(size=4)
-    data_float_4_max: FloatVectorProperty(size=4)
 
 
 @register
@@ -50,7 +49,7 @@ class I3DShaderTexture(bpy.types.PropertyGroup):
 
 @register
 class I3DShaderVariation(bpy.types.PropertyGroup):
-    name: StringProperty()
+    name: StringProperty(default='Error')
 
 # @register
 # class I3DShaderProperties(bpy.types.PropertyGroup):
@@ -101,8 +100,8 @@ class I3DLoadCustomShader(bpy.types.Operator):
 
     def execute(self, context):
 
-        properties = bpy.context.active_object.active_material.i3d_attributes.shader_properties
-        textures = bpy.context.active_object.active_material.i3d_attributes.shader_textures
+        # properties = bpy.context.active_object.active_material.i3d_attributes.shader_properties
+        # textures = bpy.context.active_object.active_material.i3d_attributes.shader_textures
 
         # for attribute_name in properties.__annotations__.keys():
         #     attribute = getattr(properties, attribute_name)
@@ -115,6 +114,29 @@ class I3DLoadCustomShader(bpy.types.Operator):
         #     texture.enabled = bool(random.getrandbits(1))
         #     texture.name = ''.join(random.choice(string.ascii_letters) for i in range(8))
 
+        attributes = context.object.active_material.i3d_attributes
+
+        try:
+            tree = ET.parse(bpy.path.abspath(attributes.source))
+        except ET.ParseError as e:
+            print(f"Shader file is not correct xml, failed with error: {e}")
+            attributes.source = shader_unselected_default_text
+        else:
+            root = tree.getroot()
+            if root.tag != 'CustomShader':
+                print(f"File is xml, but not a properly formatted shader file! Aborting")
+                attributes.source = shader_unselected_default_text
+                return {'FINISHED'}
+
+            attributes.variations.clear()
+
+            variations = root.find('Variations')
+
+            if variations is not None:
+                for variation in variations:
+                    new_variation = attributes.variations.add()
+                    new_variation.name = variation.attrib['name']
+
         print('Ran the operator')
 
         return {'FINISHED'}
@@ -126,15 +148,22 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     def source_setter(self, value):
         #if self['source'] != value:
         self['source'] = value
-        bpy.ops.i3dio.load_custom_shader()
+        if self['source'] != shader_unselected_default_text:
+            bpy.ops.i3dio.load_custom_shader()
         print(f"Set shader source to '{value}'")
 
     def source_getter(self):
         return self.get('source', shader_unselected_default_text)
 
     def variation_items_update(self, context):
-        #print("Updated shader variation")
-        return (('VAR1', 'Variation1', 'First variation'),('VAR2', 'Variation2', 'Second variation'))
+        items = []
+        if self.variations:
+            for variation in self.variations:
+                items.append((f'{variation.name}', f'{variation.name}', f"The shader variation '{variation.name}'"))
+        else:
+            items.append((shader_no_variations, 'No Variations', 'There are no variations defined in the shader'))
+
+        return items
 
     source: StringProperty(name='Shader Source',
                            description='Path to the shader',
@@ -181,7 +210,7 @@ class I3D_IO_PT_shader(Panel):
         material = bpy.context.active_object.active_material
 
         layout.prop(material.i3d_attributes, 'source')
-        if material.i3d_attributes.source != shader_unselected_default_text:
+        if material.i3d_attributes.variations:
             layout.prop(material.i3d_attributes, 'variation')
 
 
@@ -195,8 +224,7 @@ class I3D_IO_PT_shader_attributes(Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.object is not None \
-               and context.object.active_material.i3d_attributes.source != shader_unselected_default_text
+        return context.object is not None and context.object.active_material.i3d_attributes.shader_properties
 
     def draw(self, context):
         layout = self.layout
@@ -236,8 +264,7 @@ class I3D_IO_PT_shader_textures(Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.object is not None \
-               and context.object.active_material.i3d_attributes.source != shader_unselected_default_text
+        return context.object is not None and context.object.active_material.i3d_attributes.shader_textures
 
 
 def register():
