@@ -57,23 +57,9 @@ class I3DLoadCustomShader(bpy.types.Operator):
     bl_idname = 'i3dio.load_custom_shader'
     bl_label = 'Load custom shader'
     bl_description = ''
-    bl_options = set()
+    bl_options = {'INTERNAL'}
 
     def execute(self, context):
-
-        # properties = bpy.context.active_object.active_material.i3d_attributes.shader_properties
-        # textures = bpy.context.active_object.active_material.i3d_attributes.shader_textures
-
-        # for attribute_name in properties.__annotations__.keys():
-        #     attribute = getattr(properties, attribute_name)
-        #     attribute.enabled = bool(random.getrandbits(1))
-        #     attribute.name = ''.join(random.choice(string.ascii_letters) for i in range(8))
-        #     attribute.type = random.choice(['FLOAT', 'FLOAT4'])
-        #
-        # for texture_name in textures.__annotations__.keys():
-        #     texture = getattr(textures, texture_name)
-        #     texture.enabled = bool(random.getrandbits(1))
-        #     texture.name = ''.join(random.choice(string.ascii_letters) for i in range(8))
 
         attributes = context.object.active_material.i3d_attributes
 
@@ -108,7 +94,39 @@ class I3DLoadCustomShader(bpy.types.Operator):
                 else:
                     attributes.variation = shader_no_variations
 
-        print('Ran the operator')
+        return {'FINISHED'}
+
+
+@register
+class I3DLoadCustomShaderVariation(bpy.types.Operator):
+    """This function can load the parameters for a given shader variation, assumes that the source is valid,
+       such that this operation will never fail"""
+    bl_idname = 'i3dio.load_custom_shader_variation'
+    bl_label = 'Load custom shader variation'
+    bl_description = ''
+    bl_options = {'INTERNAL'}
+
+    def execute(self, context):
+
+        shader = context.object.active_material.i3d_attributes
+
+        try:
+            tree = ET.parse(bpy.path.abspath(shader.source))
+        except ET.ParseError as e:
+            print(f"Shader file is no longer valid: {e}")
+            shader.source = shader_unselected_default_text
+            shader.variations.clear()
+            shader.shader_parameters.clear()
+            shader.shader_textures.clear()
+            shader.variation = shader_no_variations
+        else:
+            shader.shader_parameters.clear()
+            shader.shader_textures.clear()
+            root = tree.getroot()
+            variations = root.find('Variations')
+            variation = variations.find(f"./Variation[@name='{shader.variation}']")
+            if variation is not None:
+                pass
 
         return {'FINISHED'}
 
@@ -147,7 +165,9 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     def variation_setter(self, value):
         self['variation'] = value
-        print(f"set the variation to '{value}'")
+        print(f"set the variation to '{value}', which is {self.variation}")
+        if self.variation != shader_no_variations:
+            bpy.ops.i3dio.load_custom_shader_variation()
 
     def variation_getter(self):
         return self.get('variation', shader_no_variations)
@@ -163,11 +183,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
                             )
 
     variations: CollectionProperty(type=I3DShaderVariation)
-
-    #shader_properties: PointerProperty(type=I3DShaderProperties)
     shader_parameters: CollectionProperty(type=I3DShaderParameter)
-
-    #shader_textures: PointerProperty(type=I3DShaderTextures)
     shader_textures: CollectionProperty(type=I3DShaderTexture)
 
 
