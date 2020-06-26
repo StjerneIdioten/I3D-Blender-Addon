@@ -42,6 +42,7 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.prop(obj.i3d_attributes, 'clip_distance')
         layout.prop(obj.i3d_attributes, 'min_clip_distance')
 
+
 @register
 class I3D_IO_PT_rigid_body_attributes(Panel):
     bl_space_type = 'PROPERTIES'
