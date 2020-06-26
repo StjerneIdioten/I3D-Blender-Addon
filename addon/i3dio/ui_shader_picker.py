@@ -9,10 +9,14 @@ from bpy.props import (
     EnumProperty,
     BoolProperty,
     FloatVectorProperty,
-    FloatProperty
+    FloatProperty,
+    CollectionProperty
 )
 
 classes = []
+
+# A module value to represent what the field shows when a shader is not selected
+shader_unselected_default_text = ''
 
 
 def register(cls):
@@ -45,42 +49,46 @@ class I3DShaderTexture(bpy.types.PropertyGroup):
 
 
 @register
-class I3DShaderProperties(bpy.types.PropertyGroup):
-    attribute_0: PointerProperty(type=I3DShaderParameter)
-    attribute_1: PointerProperty(type=I3DShaderParameter)
-    attribute_2: PointerProperty(type=I3DShaderParameter)
-    attribute_3: PointerProperty(type=I3DShaderParameter)
-    attribute_4: PointerProperty(type=I3DShaderParameter)
-    attribute_5: PointerProperty(type=I3DShaderParameter)
-    attribute_6: PointerProperty(type=I3DShaderParameter)
-    attribute_7: PointerProperty(type=I3DShaderParameter)
-    attribute_8: PointerProperty(type=I3DShaderParameter)
-    attribute_9: PointerProperty(type=I3DShaderParameter)
-    attribute_10: PointerProperty(type=I3DShaderParameter)
-    attribute_11: PointerProperty(type=I3DShaderParameter)
-    attribute_12: PointerProperty(type=I3DShaderParameter)
-    attribute_13: PointerProperty(type=I3DShaderParameter)
-    attribute_14: PointerProperty(type=I3DShaderParameter)
-    attribute_15: PointerProperty(type=I3DShaderParameter)
-    attribute_16: PointerProperty(type=I3DShaderParameter)
-    attribute_17: PointerProperty(type=I3DShaderParameter)
-    attribute_18: PointerProperty(type=I3DShaderParameter)
+class I3DShaderVariation(bpy.types.PropertyGroup):
+    name: StringProperty()
+
+# @register
+# class I3DShaderProperties(bpy.types.PropertyGroup):
+#     attribute_0: PointerProperty(type=I3DShaderParameter)
+#     attribute_1: PointerProperty(type=I3DShaderParameter)
+#     attribute_2: PointerProperty(type=I3DShaderParameter)
+#     attribute_3: PointerProperty(type=I3DShaderParameter)
+#     attribute_4: PointerProperty(type=I3DShaderParameter)
+#     attribute_5: PointerProperty(type=I3DShaderParameter)
+#     attribute_6: PointerProperty(type=I3DShaderParameter)
+#     attribute_7: PointerProperty(type=I3DShaderParameter)
+#     attribute_8: PointerProperty(type=I3DShaderParameter)
+#     attribute_9: PointerProperty(type=I3DShaderParameter)
+#     attribute_10: PointerProperty(type=I3DShaderParameter)
+#     attribute_11: PointerProperty(type=I3DShaderParameter)
+#     attribute_12: PointerProperty(type=I3DShaderParameter)
+#     attribute_13: PointerProperty(type=I3DShaderParameter)
+#     attribute_14: PointerProperty(type=I3DShaderParameter)
+#     attribute_15: PointerProperty(type=I3DShaderParameter)
+#     attribute_16: PointerProperty(type=I3DShaderParameter)
+#     attribute_17: PointerProperty(type=I3DShaderParameter)
+#     attribute_18: PointerProperty(type=I3DShaderParameter)
 
 
-@register
-class I3DShaderTextures(bpy.types.PropertyGroup):
-    texture_0: PointerProperty(type=I3DShaderTexture)
-    texture_1: PointerProperty(type=I3DShaderTexture)
-    texture_2: PointerProperty(type=I3DShaderTexture)
-    texture_3: PointerProperty(type=I3DShaderTexture)
-    texture_4: PointerProperty(type=I3DShaderTexture)
-    texture_5: PointerProperty(type=I3DShaderTexture)
-    texture_6: PointerProperty(type=I3DShaderTexture)
-    texture_7: PointerProperty(type=I3DShaderTexture)
-    texture_8: PointerProperty(type=I3DShaderTexture)
-    texture_9: PointerProperty(type=I3DShaderTexture)
-    texture_10: PointerProperty(type=I3DShaderTexture)
-    texture_11: PointerProperty(type=I3DShaderTexture)
+# @register
+# class I3DShaderTextures(bpy.types.PropertyGroup):
+#     texture_0: PointerProperty(type=I3DShaderTexture)
+#     texture_1: PointerProperty(type=I3DShaderTexture)
+#     texture_2: PointerProperty(type=I3DShaderTexture)
+#     texture_3: PointerProperty(type=I3DShaderTexture)
+#     texture_4: PointerProperty(type=I3DShaderTexture)
+#     texture_5: PointerProperty(type=I3DShaderTexture)
+#     texture_6: PointerProperty(type=I3DShaderTexture)
+#     texture_7: PointerProperty(type=I3DShaderTexture)
+#     texture_8: PointerProperty(type=I3DShaderTexture)
+#     texture_9: PointerProperty(type=I3DShaderTexture)
+#     texture_10: PointerProperty(type=I3DShaderTexture)
+#     texture_11: PointerProperty(type=I3DShaderTexture)
 
 
 @register
@@ -96,16 +104,16 @@ class I3DLoadCustomShader(bpy.types.Operator):
         properties = bpy.context.active_object.active_material.i3d_attributes.shader_properties
         textures = bpy.context.active_object.active_material.i3d_attributes.shader_textures
 
-        for attribute_name in properties.__annotations__.keys():
-            attribute = getattr(properties, attribute_name)
-            attribute.enabled = bool(random.getrandbits(1))
-            attribute.name = ''.join(random.choice(string.ascii_letters) for i in range(8))
-            attribute.type = random.choice(['FLOAT', 'FLOAT4'])
-
-        for texture_name in textures.__annotations__.keys():
-            texture = getattr(textures, texture_name)
-            texture.enabled = bool(random.getrandbits(1))
-            texture.name = ''.join(random.choice(string.ascii_letters) for i in range(8))
+        # for attribute_name in properties.__annotations__.keys():
+        #     attribute = getattr(properties, attribute_name)
+        #     attribute.enabled = bool(random.getrandbits(1))
+        #     attribute.name = ''.join(random.choice(string.ascii_letters) for i in range(8))
+        #     attribute.type = random.choice(['FLOAT', 'FLOAT4'])
+        #
+        # for texture_name in textures.__annotations__.keys():
+        #     texture = getattr(textures, texture_name)
+        #     texture.enabled = bool(random.getrandbits(1))
+        #     texture.name = ''.join(random.choice(string.ascii_letters) for i in range(8))
 
         print('Ran the operator')
 
@@ -118,19 +126,11 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     def source_setter(self, value):
         #if self['source'] != value:
         self['source'] = value
-        print(f"Set shader source to '{value}'")
-        #bpy.context.object.active_material.i3d_attributes.shader_properties.bl_rna.properties['attribute_0'].description = 'Hård penis'
-        #bpy.context.object.active_material.i3d_attributes.shader_properties.attribute_1 = bpy.props.FloatVectorProperty(name='miav', default='kat')
-        #print(bpy.context.object.active_material.i3d_attributes.shader_properties.bl_rna.properties['attribute_0'].description)
-        #stuff = bpy.context.object.active_material.i3d_attributes.bl_rna.properties
-        #for s in stuff:
-        #   print(s)
-        #for prop_key in prop_group.__annotations__.keys():
-            #print(prop_key)
         bpy.ops.i3dio.load_custom_shader()
+        print(f"Set shader source to '{value}'")
 
     def source_getter(self):
-        return self.get('source', '')
+        return self.get('source', shader_unselected_default_text)
 
     def variation_items_update(self, context):
         #print("Updated shader variation")
@@ -139,7 +139,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     source: StringProperty(name='Shader Source',
                            description='Path to the shader',
                            subtype='FILE_PATH',
-                           default='',
+                           default=shader_unselected_default_text,
                            set=source_setter,
                            get=source_getter
                            )
@@ -154,9 +154,13 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
                             set=None
                             )
 
-    shader_properties: PointerProperty(type=I3DShaderProperties)
+    variations: CollectionProperty(type=I3DShaderVariation)
 
-    shader_textures: PointerProperty(type=I3DShaderTextures)
+    #shader_properties: PointerProperty(type=I3DShaderProperties)
+    shader_properties: CollectionProperty(type=I3DShaderParameter)
+
+    #shader_textures: PointerProperty(type=I3DShaderTextures)
+    shader_textures: CollectionProperty(type=I3DShaderTexture)
 
 
 @register
@@ -177,7 +181,8 @@ class I3D_IO_PT_shader(Panel):
         material = bpy.context.active_object.active_material
 
         layout.prop(material.i3d_attributes, 'source')
-        layout.prop(material.i3d_attributes, 'variation')
+        if material.i3d_attributes.source != shader_unselected_default_text:
+            layout.prop(material.i3d_attributes, 'variation')
 
 
 @register
@@ -190,23 +195,24 @@ class I3D_IO_PT_shader_attributes(Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.object is not None
+        return context.object is not None \
+               and context.object.active_material.i3d_attributes.source != shader_unselected_default_text
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        properties = bpy.context.active_object.active_material.i3d_attributes.shader_properties
-        for attribute_name in properties.__annotations__.keys():
-            attribute = getattr(properties, attribute_name)
-            if attribute.enabled:
-                if attribute.type == 'FLOAT4':
-                    attribute_type = 'data_float_4'
-                else:
-                    attribute_type = 'data_float'
-
-                layout.prop(attribute, attribute_type, text=attribute.name)
+        # properties = bpy.context.active_object.active_material.i3d_attributes.shader_properties
+        # for attribute_name in properties.__annotations__.keys():
+        #     attribute = getattr(properties, attribute_name)
+        #     if attribute.enabled:
+        #         if attribute.type == 'FLOAT4':
+        #             attribute_type = 'data_float_4'
+        #         else:
+        #             attribute_type = 'data_float'
+        #
+        #         layout.prop(attribute, attribute_type, text=attribute.name)
 
 
 @register
@@ -222,15 +228,17 @@ class I3D_IO_PT_shader_textures(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
 
-        properties = bpy.context.active_object.active_material.i3d_attributes.shader_textures
-        for texture_name in properties.__annotations__.keys():
-            texture = getattr(properties, texture_name)
-            if texture.enabled:
-                layout.prop(texture, 'source', text=texture.name)
+        # properties = bpy.context.active_object.active_material.i3d_attributes.shader_textures
+        # for texture_name in properties.__annotations__.keys():
+        #     texture = getattr(properties, texture_name)
+        #     if texture.enabled:
+        #         layout.prop(texture, 'source', text=texture.name)
 
     @classmethod
     def poll(cls, context):
-        return context.object is not None
+        return context.object is not None \
+               and context.object.active_material.i3d_attributes.source != shader_unselected_default_text
+
 
 def register():
     for cls in classes:
