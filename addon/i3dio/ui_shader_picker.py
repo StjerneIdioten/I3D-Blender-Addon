@@ -151,7 +151,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                             param.type = parameter['type']
                             data = tuple(map(float, parameter['default_values']))
                             if param.type == 'float':
-                                param.data_float_1 = data
+                                param.data_float_1 = data[0]
                             elif param.type == 'float2':
                                 param.data_float_2 = data
                             elif param.type == 'float3':
