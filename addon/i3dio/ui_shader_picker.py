@@ -241,10 +241,10 @@ class I3D_IO_PT_shader(Panel):
 
 
 @register
-class I3D_IO_PT_shader_attributes(Panel):
+class I3D_IO_PT_shader_parameters(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
-    bl_label = "Attributes"
+    bl_label = "Parameters"
     bl_context = 'material'
     bl_parent_id = 'I3D_IO_PT_shader'
 
@@ -254,7 +254,7 @@ class I3D_IO_PT_shader_attributes(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
+        layout.use_property_split = False
         layout.use_property_decorate = False
 
         parameters = bpy.context.active_object.active_material.i3d_attributes.shader_parameters
@@ -268,7 +268,7 @@ class I3D_IO_PT_shader_attributes(Panel):
             else:
                 property_type = 'data_float_4'
 
-            layout.prop(parameter, property_type, text=parameter.name)
+            layout.row().prop(parameter, property_type, text=parameter.name)
 
 
 @register
