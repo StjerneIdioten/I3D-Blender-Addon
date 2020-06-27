@@ -36,7 +36,6 @@ class I3DShaderParameter(bpy.types.PropertyGroup):
 @register
 class I3DShaderTexture(bpy.types.PropertyGroup):
     name: StringProperty(default='Unnamed Attribute')
-    enabled: BoolProperty(default=False)
     source: StringProperty(name='Texture source',
                            description='Path to the texture',
                            subtype='FILE_PATH',
@@ -103,6 +102,13 @@ def parameter_element_as_dict(parameter):
     return parameter_dictionary
 
 
+def texture_element_as_dict(texture):
+    texture_dictionary = {'name': texture.attrib['name'],
+                            'default_file': texture.attrib.get('defaultFilename', '')
+                            }
+    return texture_dictionary
+
+
 @register
 class I3DLoadCustomShaderVariation(bpy.types.Operator):
     """This function can load the parameters for a given shader variation, assumes that the source is valid,
@@ -138,6 +144,13 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                 group = grouped_parameters.setdefault(group_name, [])
                 group.append(parameter_element_as_dict(parameter))
 
+            textures = root.find('Textures')
+            grouped_textures = {}
+            for texture in textures:
+                group_name = texture.attrib['group']
+                group = grouped_textures.setdefault(group_name, [])
+                group.append(texture_element_as_dict(texture))
+
             variations = root.find('Variations')
             variation = variations.find(f"./Variation[@name='{shader.variation}']")
             if variation is not None:
@@ -156,8 +169,13 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                                 param.data_float_2 = data
                             elif param.type == 'float3':
                                 param.data_float_3 = data
-                            else:
+                            elif param.type == 'float4':
                                 param.data_float_4 = data
+
+                        for texture in grouped_textures[group]:
+                            tex = shader.shader_textures.add()
+                            tex.name = texture['name']
+                            tex.source = texture['default_file']
 
         return {'FINISHED'}
 
@@ -256,7 +274,7 @@ class I3D_IO_PT_shader_parameters(Panel):
         layout = self.layout
         layout.use_property_split = False
         layout.use_property_decorate = False
-
+        column = layout.column(align=True)
         parameters = bpy.context.active_object.active_material.i3d_attributes.shader_parameters
         for parameter in parameters:
             if parameter.type == 'float':
@@ -268,7 +286,7 @@ class I3D_IO_PT_shader_parameters(Panel):
             else:
                 property_type = 'data_float_4'
 
-            layout.row().prop(parameter, property_type, text=parameter.name)
+            column.row(align=True).prop(parameter, property_type, text=parameter.name)
 
 
 @register
@@ -281,15 +299,13 @@ class I3D_IO_PT_shader_textures(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
+        layout.use_property_split = False
         layout.use_property_decorate = False
-
-        # properties = bpy.context.active_object.active_material.i3d_attributes.shader_textures
-        # for texture_name in properties.__annotations__.keys():
-        #     texture = getattr(properties, texture_name)
-        #     if texture.enabled:
-        #         layout.prop(texture, 'source', text=texture.name)
-
+        column = layout.column(align=True)
+        textures = bpy.context.active_object.active_material.i3d_attributes.shader_textures
+        for texture in textures:
+            column.row(align=True).prop(texture, 'source', text=texture.name)
+        
     @classmethod
     def poll(cls, context):
         return context.object is not None and context.object.active_material.i3d_attributes.shader_textures
