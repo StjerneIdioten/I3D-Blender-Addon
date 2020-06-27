@@ -139,17 +139,19 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
             # TODO: This should not be run every time the variation is changed, but instead stored somewhere
             parameters = root.find('Parameters')
             grouped_parameters = {}
-            for parameter in parameters:
-                group_name = parameter.attrib['group']
-                group = grouped_parameters.setdefault(group_name, [])
-                group.append(parameter_element_as_dict(parameter))
+            if parameters is not None:
+                for parameter in parameters:
+                    group_name = parameter.attrib['group']
+                    group = grouped_parameters.setdefault(group_name, [])
+                    group.append(parameter_element_as_dict(parameter))
 
             textures = root.find('Textures')
             grouped_textures = {}
-            for texture in textures:
-                group_name = texture.attrib['group']
-                group = grouped_textures.setdefault(group_name, [])
-                group.append(texture_element_as_dict(texture))
+            if textures is not None:
+                for texture in textures:
+                    group_name = texture.attrib['group']
+                    group = grouped_textures.setdefault(group_name, [])
+                    group.append(texture_element_as_dict(texture))
 
             variations = root.find('Variations')
             variation = variations.find(f"./Variation[@name='{shader.variation}']")
@@ -172,7 +174,10 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                             elif param.type == 'float4':
                                 param.data_float_4 = data
 
+                    texture_group = grouped_textures.get(group)
+                    if texture_group is not None:
                         for texture in grouped_textures[group]:
+                            print("add texture")
                             tex = shader.shader_textures.add()
                             tex.name = texture['name']
                             tex.source = texture['default_file']
@@ -305,7 +310,7 @@ class I3D_IO_PT_shader_textures(Panel):
         textures = bpy.context.active_object.active_material.i3d_attributes.shader_textures
         for texture in textures:
             column.row(align=True).prop(texture, 'source', text=texture.name)
-        
+
     @classmethod
     def poll(cls, context):
         return context.object is not None and context.object.active_material.i3d_attributes.shader_textures
