@@ -290,6 +290,7 @@ class IndexedTriangleSet(Node):
             self._write_attribute('singleblendweights', True, 'vertices')
 
         # Write vertices to xml
+        vertices_has_colors = False
         for vertex in list(self.vertices.keys())[offset:]:
             vertex_attributes = {'p': vertex.position_for_xml(),
                                  'n': vertex.normal_for_xml()
@@ -300,12 +301,16 @@ class IndexedTriangleSet(Node):
 
             vertex_color = vertex.vertex_color_for_xml()
             if vertex_color != '':
+                vertices_has_colors = True
                 vertex_attributes['c'] = vertex_color
 
             if self.is_merge_group:
                 vertex_attributes['bi'] = str(self.bind_index)
 
             ET.SubElement(self.xml_elements['vertices'], 'v', vertex_attributes)
+
+        if vertices_has_colors:
+            self._write_attribute('color', True, 'vertices')
 
     def write_triangles(self, offset=0):
         self._write_attribute('count', len(self.triangles), 'triangles')
