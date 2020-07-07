@@ -190,10 +190,17 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
 class I3DMaterialShader(bpy.types.PropertyGroup):
 
     def source_setter(self, value):
-        if self['source'] != value:
+        try:
+            self['source']
+        except KeyError:
             self['source'] = value
             if self['source'] != shader_unselected_default_text:
                 bpy.ops.i3dio.load_custom_shader()
+        else:
+            if self['source'] != value:
+                self['source'] = value
+                if self['source'] != shader_unselected_default_text:
+                    bpy.ops.i3dio.load_custom_shader()
 
     def source_getter(self):
         return self.get('source', shader_unselected_default_text)
