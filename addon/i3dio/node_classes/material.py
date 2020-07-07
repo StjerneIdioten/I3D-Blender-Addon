@@ -137,3 +137,12 @@ class Material(Node):
                     parameter_dict['value'] = value
 
                     ET.SubElement(self.element, 'CustomParameter', parameter_dict)
+
+                for texture in shader_settings.shader_textures:
+                    self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")
+                    if '' != texture.source != texture.default_source:
+                        texture_dict = {'name': texture.name}
+                        texture_id = self.i3d.add_file_image(texture.source)
+                        texture_dict['fileId'] = str(texture_id)
+
+                        ET.SubElement(self.element, 'Custommap', texture_dict)
