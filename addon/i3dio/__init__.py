@@ -34,7 +34,7 @@ if "bpy" in locals():
             if tmp.__package__ in ['i3dio']:
                 importlib.reload(tmp)
 else:
-    from . import ui_export, ui_attributes, ui_shader_picker, properties
+    from . import ui_export, ui_attributes, ui_shader_picker, properties, i3d
 
 import bpy
 
