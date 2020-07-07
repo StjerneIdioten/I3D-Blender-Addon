@@ -3,6 +3,7 @@ import xml.etree.ElementTree as ET
 from .node import Node
 from ..i3d import I3D
 from .. import utility
+from i3dio import ui_shader_picker
 
 
 class Material(Node):
@@ -31,6 +32,7 @@ class Material(Node):
             self._resolve_with_nodes()
         else:
             self._resolve_without_nodes()
+        self._export_shader_settings()
 
     def _resolve_with_nodes(self):
         main_node = self.blender_material.node_tree.nodes.get('Principled BSDF')
@@ -110,3 +112,28 @@ class Material(Node):
 
     def _write_specular(self, specular_color):
         self._write_attribute('specularColor', "{0:.6f} {1:.6f} {2:.6f}".format(*specular_color))
+
+    def _export_shader_settings(self):
+        shader_settings = self.blender_material.i3d_attributes
+        if shader_settings.source != ui_shader_picker.shader_unselected_default_text:
+            if shader_settings.variation != ui_shader_picker.shader_no_variations:
+                shader_file_id = self.i3d.add_file_shader(shader_settings.source)
+                self._write_attribute('customShaderId', shader_file_id)
+                self._write_attribute('customShaderVariation', shader_settings.variation)
+                for parameter in shader_settings.shader_parameters:
+                    parameter_dict = {'name': parameter.name}
+                    if parameter.type == 'float':
+                        value = parameter.data_float_1
+                    elif parameter.type == 'float2':
+                        value = parameter.data_float_2
+                    elif parameter.type == 'float3':
+                        value = parameter.data_float_3
+                    elif parameter.type == 'float4':
+                        value = parameter.data_float_4
+                    else:
+                        value = []
+
+                    value = ' '.join(map('{0:.6f}'.format, value))
+                    parameter_dict['value'] = value
+
+                    ET.SubElement(self.element, 'CustomParameter', parameter_dict)
