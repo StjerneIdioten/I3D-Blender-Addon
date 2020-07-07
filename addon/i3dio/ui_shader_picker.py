@@ -178,7 +178,6 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                     texture_group = grouped_textures.get(group)
                     if texture_group is not None:
                         for texture in grouped_textures[group]:
-                            print("add texture")
                             tex = shader.shader_textures.add()
                             tex.name = texture['name']
                             tex.source = texture['default_file']
@@ -191,12 +190,10 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
 class I3DMaterialShader(bpy.types.PropertyGroup):
 
     def source_setter(self, value):
-        #if self['source'] != value:
-        self['source'] = value
-        if self['source'] != shader_unselected_default_text:
-            bpy.ops.i3dio.load_custom_shader()
-        print(f"Set shader source to '{value}'")
-        print(f"Variation: {self.variation}")
+        if self['source'] != value:
+            self['source'] = value
+            if self['source'] != shader_unselected_default_text:
+                bpy.ops.i3dio.load_custom_shader()
 
     def source_getter(self):
         return self.get('source', shader_unselected_default_text)
@@ -221,7 +218,6 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     def variation_setter(self, value):
         self['variation'] = value
-        print(f"set the variation to '{value}', which is {self.variation}")
         if self.variation != shader_no_variations:
             bpy.ops.i3dio.load_custom_shader_variation()
 
