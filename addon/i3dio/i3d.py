@@ -172,6 +172,9 @@ class I3D:
     def add_file_image(self, path_to_file: str) -> int:
         return self.add_file(Image, path_to_file)
 
+    def add_file_shader(self, path_to_file: str) -> int:
+        return self.add_file(Shader, path_to_file)
+
     def get_setting(self, setting: str):
         return self.settings[setting]
 
