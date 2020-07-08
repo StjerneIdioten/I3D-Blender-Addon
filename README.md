@@ -53,6 +53,9 @@ If you wish to fork the repository and play around with the code, then you need 
 
 It is probably also worth mentioning that this addon is NOT linux/mac compatible. It could become it, but I have not given that any thought since the Giants Engine is not running on anything but windows anyway.
 
+## Documentation
+As the exporter addon is currently in a pre-release stage, many of the features aren't really that well-documented apart from some internal documentation shared between testers. The [wiki](https://github.com/StjerneIdioten/I3D-Blender-Addon/wiki) is currently the best 'public' place to get information. It doesn't have everything yet, but the plan is that in time it is gonna be the only place you need to visit to get started with using this addon to create your fs-mods in blender.
+
 ## Access
 
 This has mostly been a solo project so far, but any help is appreciated.
