@@ -16,6 +16,7 @@ classes = []
 # A module value to represent what the field shows when a shader is not selected
 shader_unselected_default_text = ''
 shader_no_variations = 'NONE'
+shader_parameter_max_decimals = 3  # 0-6 per blender properties documentation
 
 
 def register(cls):
@@ -27,10 +28,10 @@ def register(cls):
 class I3DShaderParameter(bpy.types.PropertyGroup):
     name: StringProperty(default='Unnamed Attribute')
     type: EnumProperty(items=[('float', '', ''), ('float2', '', ''), ('float3', '', ''), ('float4', '', '')])
-    data_float_1: FloatProperty()
-    data_float_2: FloatVectorProperty(size=2)
-    data_float_3: FloatVectorProperty(size=3)
-    data_float_4: FloatVectorProperty(size=4)
+    data_float_1: FloatProperty(precision=shader_parameter_max_decimals)
+    data_float_2: FloatVectorProperty(size=2, precision=shader_parameter_max_decimals)
+    data_float_3: FloatVectorProperty(size=3, precision=shader_parameter_max_decimals)
+    data_float_4: FloatVectorProperty(size=4, precision=shader_parameter_max_decimals)
 
 
 @register
