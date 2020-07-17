@@ -3,16 +3,6 @@ from bpy.types import (
     Panel
 )
 
-from bpy.props import (
-    PointerProperty
-)
-
-from bpy_extras.io_utils import ImportHelper
-from bpy.types import Operator
-
-from . import properties
-
-
 classes = []
 
 

@@ -3,9 +3,15 @@ import logging
 import os
 import shutil
 import bpy
+
 from .node import Node
+
+from .. import (
+            debugging,
+            utility,
+)
+
 from ..i3d import I3D
-from .. import (debugging, utility)
 
 
 class File(Node):

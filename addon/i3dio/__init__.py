@@ -13,28 +13,19 @@
                 ##### END GPL LICENSE BLOCK #####
 """
 
-
-# Reimport modules when refreshing blender to show changes
+# This fixes reloading, by deleting the module references and thus forcing a reload
 if "bpy" in locals():
-    import importlib
-    import types
     import sys
+    for module in list(sys.modules):
+        if __name__ in module:
+            del sys.modules[module]
 
-    # This should probably be 'automated' in some sense, by just supplying the module folder
-    importlib.reload(sys.modules['i3dio.node_classes.node'])
-    importlib.reload(sys.modules['i3dio.node_classes.shape'])
-    importlib.reload(sys.modules['i3dio.node_classes.merge_group'])
-    importlib.reload(sys.modules['i3dio.node_classes.material'])
-    importlib.reload(sys.modules['i3dio.node_classes.file'])
-
-    locals_copy = dict(locals())
-    for var in locals_copy:
-        tmp = locals_copy[var]
-        if isinstance(tmp, types.ModuleType):
-            if tmp.__package__ in ['i3dio']:
-                importlib.reload(tmp)
-else:
-    from . import ui_export, ui_attributes, ui_shader_picker, properties, i3d
+from . import (
+    properties,
+    ui_attributes,
+    ui_export,
+    ui_shader_picker
+)
 
 import bpy
 

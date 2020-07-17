@@ -9,13 +9,17 @@ from bpy_extras.io_utils import (
     axis_conversion
 )
 
+from . import (
+    debugging,
+    xml_i3d
+)
+
+from .utility import BlenderObject
 from .i3d import I3D
 from .node_classes.node import SceneGraphNode
-from .utility import BlenderObject
-from . import xml_i3d
-from . import debugging
 
 logger = logging.getLogger(__name__)
+logger.debug(f"Loading: {__name__}")
 
 
 def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
@@ -120,6 +124,9 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 i3d.add_merge_group_node(obj, parent)
             else:
                 node = i3d.add_shape_node(obj, parent)
+        elif obj.type == 'ARMATURE':
+            logger.debug("This is an armature")
+            node = i3d.add_skinned_mesh()
         elif obj.type == 'EMPTY':
             node = i3d.add_transformgroup_node(obj, parent)
             if obj.instance_collection is not None:

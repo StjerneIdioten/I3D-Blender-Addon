@@ -1,14 +1,7 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import (Union, Dict, List, Type, OrderedDict, Optional)
-import xml.etree.ElementTree as ET
 import logging
-import mathutils
-
-import bpy
-
-from . import debugging
-from . import xml_i3d
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +40,7 @@ class I3D:
         self.materials: Dict[Union[str, int], Material] = {}
         self.files: Dict[Union[str, int], File] = {}
         self.merge_groups: Dict[str, MergeGroup] = {}
+        self.skinned_meshes: Dict[str, SkinnedMesh] = {}
 
         # Save all settings for the current run unto the I3D to abstract it from the nodes themselves
         self.settings = {}
@@ -101,6 +95,9 @@ class I3D:
                 node_to_return = self._add_node(MergeGroupChild, merge_group_object, parent)
                 merge_group.add_child(node_to_return)
         return node_to_return
+
+    def add_skinned_mesh(self):
+        return None
 
     def add_transformgroup_node(self, empty_object: [bpy.types.Object, bpy.types.Collection],
                                 parent: SceneGraphNode = None) -> SceneGraphNode:
@@ -207,8 +204,10 @@ class I3D:
 
 
 # To avoid a circular import, since all nodes rely on the I3D class, but i3d itself contains all the different nodes.
+
 from i3dio.node_classes.node import *
 from i3dio.node_classes.shape import *
 from i3dio.node_classes.merge_group import *
 from i3dio.node_classes.material import *
 from i3dio.node_classes.file import *
+from i3dio.node_classes.skinned_mesh import *

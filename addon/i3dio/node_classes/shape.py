@@ -1,12 +1,14 @@
-import bpy
 import xml.etree.ElementTree as ET
 import mathutils
 import collections
 import logging
 from typing import (OrderedDict, Optional, List)
-from .node import (SceneGraphNode, Node)
-from ..i3d import I3D
+import bpy
+
+from .node import (Node, SceneGraphNode)
+
 from .. import debugging
+from ..i3d import I3D
 
 
 class SubSet:

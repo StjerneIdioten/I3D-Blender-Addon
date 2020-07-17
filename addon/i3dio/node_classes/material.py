@@ -1,9 +1,14 @@
-import bpy
 import xml.etree.ElementTree as ET
+import bpy
+
 from .node import Node
+
+from .. import (
+            utility,
+            ui_shader_picker,
+)
+
 from ..i3d import I3D
-from .. import utility
-from i3dio import ui_shader_picker
 
 
 class Material(Node):

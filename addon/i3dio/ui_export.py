@@ -13,7 +13,10 @@ from bpy.types import (
     Panel
 )
 
-from . import exporter, xml_i3d, properties
+from . import (
+        exporter,
+        xml_i3d
+)
 
 
 @orientation_helper(axis_forward='-Z', axis_up='Y')

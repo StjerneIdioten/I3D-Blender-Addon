@@ -6,8 +6,14 @@ from typing import (Union, Dict)
 import math
 import mathutils
 import bpy
-from i3dio.i3d import I3D
-from .. import (debugging, utility, xml_i3d)
+
+from .. import (
+            debugging,
+            utility,
+            xml_i3d
+)
+
+from ..i3d import I3D
 
 
 class Node(ABC):
@@ -182,6 +188,7 @@ class SceneGraphNode(Node):
 
     def add_child(self, node: SceneGraphNode):
         self.children.append(node)
+
 
 class TransformGroupNode(SceneGraphNode):
     ELEMENT_TAG = 'TransformGroup'

@@ -1,11 +1,16 @@
-import bpy
 import logging
 from typing import (OrderedDict, Optional, List)
-from .node import (SceneGraphNode, Node)
-from ..i3d import I3D
-from .. import (debugging, xml_i3d)
+import bpy
+
+from .node import (SceneGraphNode, TransformGroupNode)
 from .shape import (ShapeNode, EvaluatedMesh)
-from .node import TransformGroupNode
+
+from .. import (
+            debugging,
+            xml_i3d
+)
+
+from ..i3d import I3D
 
 
 class MergeGroupChild(TransformGroupNode):
