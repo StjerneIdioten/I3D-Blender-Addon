@@ -121,7 +121,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         elif obj.type == 'MESH':
             # Currently the check for a mergegroup relies solely on whether or not a name is set for it
             if obj.i3d_merge_group.group_id != "":
-                i3d.add_merge_group_node(obj, parent)
+                node = i3d.add_merge_group_node(obj, parent)
             else:
                 node = i3d.add_shape_node(obj, parent)
         elif obj.type == 'ARMATURE':
