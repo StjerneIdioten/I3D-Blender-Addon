@@ -232,7 +232,9 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'receive_shadows': {'name': 'receiveShadows', 'default': False},
         'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
-        'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'}
+        'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
+        'fill_volume': {'name': 'name', 'default': False, 'placement': 'IndexedTriangleSet',
+                        'type': 'OVERRIDE', 'override': 'fillVolumeShape'}
     }
 
     casts_shadows: BoolProperty(
@@ -267,6 +269,13 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
             ('256', 'On', "Turns on CPU Mesh")
         ],
         default=i3d_map['cpu_mesh']['default']
+    )
+
+    fill_volume: BoolProperty(
+        name="Fill Volume",
+        description="Check this if the object is meant to be a fill volume, since this requires some special naming of "
+                    "the IndexedTriangleSet in the i3d file.",
+        default=i3d_map['fill_volume']['default']
     )
 
 

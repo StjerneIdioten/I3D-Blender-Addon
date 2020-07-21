@@ -89,6 +89,8 @@ def write_property_group(property_group, elements: Dict[str, Union[ET.Element, N
                         logger.warning(f"Supplied value '{value}' for '{prop_name}' is out of bounds."
                                        f" It should be within range [0, ffffffff] (32-bit unsigned)")
                         continue
+            elif field_type == 'OVERRIDE':
+                value_to_write = property_group.i3d_map[prop_key].get('override')
 
         logger.debug(f"Property '{prop_name}' with value '{value}'. Default is '{default}'")
         write_attribute(elements[i3d_placement], i3d_name, value_to_write)
