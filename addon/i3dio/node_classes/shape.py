@@ -356,6 +356,7 @@ class ShapeNode(SceneGraphNode):
 
     def add_shape(self):
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object))
+        self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):
         self.add_shape()
