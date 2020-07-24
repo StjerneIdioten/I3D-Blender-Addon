@@ -208,5 +208,6 @@ class I3D:
 from i3dio.node_classes.node import *
 from i3dio.node_classes.shape import *
 from i3dio.node_classes.merge_group import *
+from i3dio.node_classes.skinned_mesh import *
 from i3dio.node_classes.material import *
 from i3dio.node_classes.file import *

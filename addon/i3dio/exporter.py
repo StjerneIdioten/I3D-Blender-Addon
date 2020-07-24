@@ -115,7 +115,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         return
     else:
         logger.debug(f"[{obj.name}] is of type {obj.type!r}")
-        if obj.type not in bpy.context.scene.i3dio.object_types_to_export:
+        if obj.type not in i3d.settings['object_types_to_export']:
             logger.debug(f"[{obj.name}] has type {obj.type!r} which is not a type selected for exporting")
             return
         elif obj.type == 'MESH':

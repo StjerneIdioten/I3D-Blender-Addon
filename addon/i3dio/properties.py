@@ -88,7 +88,7 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
             ('ARMATURE', "Armatures", "Export armatures, used for skinned meshes")
         ),
         options={'ENUM_FLAG'},
-        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH'},
+        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'ARMATURE'},
     )
 
     features_to_export: EnumProperty(
@@ -96,9 +96,12 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         description="Select which features should be enabled for the export",
         items=(
             ('MERGE_GROUPS', "Merge Groups", "Export merge groups"),
+            ('SKINNED_MESHES', "Skinned Meshes", "Bind meshes to the bones of an armature in i3d. If disabled, "
+                                                 "the armature and bone structure will still be exported, "
+                                                 "but the meshes wont be bound to it")
         ),
         options={'ENUM_FLAG'},
-        default={'MERGE_GROUPS'},
+        default={'MERGE_GROUPS', 'SKINNED_MESHES'},
     )
 
     copy_files: BoolProperty(
