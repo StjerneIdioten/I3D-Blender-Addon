@@ -40,7 +40,7 @@ class I3D:
         self.materials: Dict[Union[str, int], Material] = {}
         self.files: Dict[Union[str, int], File] = {}
         self.merge_groups: Dict[str, MergeGroup] = {}
-        self.skinned_meshes: Dict[str, SkinnedMesh] = {}
+        self.skinned_meshes: Dict[str, SkinnedMeshRootNode] = {}
 
         # Save all settings for the current run unto the I3D to abstract it from the nodes themselves
         self.settings = {}
@@ -53,8 +53,8 @@ class I3D:
         self._ids[id_type] += 1
         return next_id
 
-    def _add_node(self, node_type: Type[SceneGraphNode], object_: bpy.types.Object, parent: SceneGraphNode = None) \
-            -> SceneGraphNode:
+    def _add_node(self, node_type: Type[SceneGraphNode], object_: Type[bpy.types.bpy_struct],
+                  parent: Type[SceneGraphNode] = None) -> SceneGraphNode:
         node = node_type(self._next_available_id('node'), object_, self, parent)
         if parent is None:
             self.scene_root_nodes.append(node)
@@ -96,8 +96,22 @@ class I3D:
                 merge_group.add_child(node_to_return)
         return node_to_return
 
-    def add_skinned_mesh(self):
-        return None
+    def add_bone(self, bone_object: bpy.types.Bone, parent: Type[Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]],
+                 skinned_mesh: Type[SkinnedMeshRootNode]):
+        """Recursive function for adding a bone along with all of its children"""
+        self.logger.debug(f"Exporting Bone: '{bone_object.name}', head: {bone_object.head}, tail: {bone_object.tail}")
+        bone_node = self._add_node(SkinnedMeshBoneNode, bone_object, parent)
+        skinned_mesh.add_bone(bone_node)
+        for child_bone in bone_object.children:
+            self.add_bone(child_bone, bone_node, skinned_mesh)
+
+    def add_armature(self, armature_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
+        skinned_mesh_root_node = self._add_node(SkinnedMeshRootNode, armature_object, parent)
+        self.skinned_meshes[armature_object.name] = skinned_mesh_root_node
+        for bone in armature_object.data.bones:
+            if bone.parent is None:
+                self.add_bone(bone, skinned_mesh_root_node, skinned_mesh_root_node)
+        return skinned_mesh_root_node
 
     def add_transformgroup_node(self, empty_object: [bpy.types.Object, bpy.types.Collection],
                                 parent: SceneGraphNode = None) -> SceneGraphNode:

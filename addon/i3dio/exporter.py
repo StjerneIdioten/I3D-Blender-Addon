@@ -126,7 +126,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 node = i3d.add_shape_node(obj, parent)
         elif obj.type == 'ARMATURE':
             logger.debug("This is an armature")
-            node = i3d.add_skinned_mesh()
+            node = i3d.add_armature(obj, parent)
         elif obj.type == 'EMPTY':
             node = i3d.add_transformgroup_node(obj, parent)
             if obj.instance_collection is not None:
