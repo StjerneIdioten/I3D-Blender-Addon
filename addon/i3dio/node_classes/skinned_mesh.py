@@ -22,8 +22,13 @@ class SkinnedMeshBoneNode(TransformGroupNode):
     def _transform_for_conversion(self) -> mathutils.Matrix:
 
         if self.blender_object.parent is None:
+            # The bone is parented to the armature directly, and therefor should just use the matrix_local which is in
+            # relation to the armature anyway.
             bone_transform = self.blender_object.matrix_local
         else:
+            # To find the transform of the bone, we take the inverse of its parents transform in armature space and
+            # multiply that with the bones transform in armature space. The new 4x4 matrix gives the position and
+            # rotation in relation to the parent bone (of the head, that is)
             bone_transform = self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
 
         conversion_matrix = self.i3d.conversion_matrix @ bone_transform @ self.i3d.conversion_matrix.inverted()
@@ -36,9 +41,17 @@ class SkinnedMeshRootNode(TransformGroupNode):
                  i3d: I3D, parent: SceneGraphNode):
         self.bones: Dict[str, SkinnedMeshBoneNode] = {}
         super().__init__(id_=id_, empty_object=armature_object, i3d=i3d, parent=parent)
+        for bone in armature_object.data.bones:
+            if bone.parent is None:
+                self._add_bone(bone, self)
 
-    def add_bone(self, bone_node: SkinnedMeshBoneNode):
-        self.bones[bone_node.name] = bone_node
+    def _add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]):
+        """Recursive function for adding a bone along with all of its children"""
+        self.logger.debug(f"Exporting Bone: '{bone_object.name}', head: {bone_object.head}, tail: {bone_object.tail}")
+        bone_node = self.i3d.add_bone(bone_object, parent)
+        self.bones[bone_object.name] = bone_node
+        for child_bone in bone_object.children:
+            self._add_bone(child_bone, bone_node)
 
 
 class SkinnedMeshShapeNode(ShapeNode):
