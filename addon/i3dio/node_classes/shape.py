@@ -37,12 +37,14 @@ class SubSet:
 
 
 class Vertex:
-    def __init__(self, material_name, position, normal, vertex_color, uvs):
+    def __init__(self, material_name, position, normal, vertex_color, uvs, blend_ids=None, blend_weights=None):
         self._material_name = material_name
         self._position = position
         self._normal = normal
         self._vertex_color = vertex_color
         self._uvs = uvs
+        self._blend_ids = blend_ids
+        self._blend_weights = blend_weights
         self._str = ''
         self._make_hash_string()
 
@@ -78,6 +80,12 @@ class Vertex:
         for uv in self._uvs:
             uvs.append("{0:.6f} {1:.6f}".format(*uv))
         return uvs
+
+    def blend_ids_for_xml(self):
+        return "{0:d} {1:d} {2:d} {3:d}".format(*self._blend_ids)
+
+    def blend_weights_for_xml(self):
+        return "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*self._blend_weights)
 
 
 class EvaluatedMesh:
@@ -210,11 +218,27 @@ class IndexedTriangleSet(Node):
                     if count < 4:
                         uvs.append(uv.data[loop_index].uv)
 
+                blend_weights = []
+                blend_ids = []
+                if self.bone_mapping is not None:
+                    for vertex_group in blender_vertex.groups:
+                        bone_name = self.evaluated_mesh.object.vertex_groups[vertex_group.group].name
+                        blend_ids.append(self.bone_mapping[bone_name])
+                        blend_weights.append(vertex_group.weight)
+                        self.logger.debug(f"Vertex group: '{bone_name}', weight: '{vertex_group.weight}'")
+
+                    if len(blend_ids) < 4:
+                        padding = [0]*(4-len(blend_ids))
+                        blend_ids += padding
+                        blend_weights += padding
+
                 vertex = Vertex(material_name,
                                 blender_vertex.co.xyz,
                                 mesh.loops[loop_index].normal,
                                 vertex_color,
-                                uvs)
+                                uvs,
+                                blend_ids,
+                                blend_weights)
 
                 if vertex not in self.vertices:
                     vertex_index = len(self.vertices)
@@ -291,6 +315,8 @@ class IndexedTriangleSet(Node):
 
         if self.is_merge_group:
             self._write_attribute('singleblendweights', True, 'vertices')
+        elif self.bone_mapping is not None:
+            self._write_attribute('blendweights', True, 'vertices')
 
         # Write vertices to xml
         vertices_has_colors = False
@@ -309,6 +335,9 @@ class IndexedTriangleSet(Node):
 
             if self.is_merge_group:
                 vertex_attributes['bi'] = str(self.bind_index)
+            elif self.bone_mapping is not None:
+                vertex_attributes['bw'] = vertex.blend_weights_for_xml()
+                vertex_attributes['bi'] = vertex.blend_ids_for_xml()
 
             ET.SubElement(self.xml_elements['vertices'], 'v', vertex_attributes)
 
