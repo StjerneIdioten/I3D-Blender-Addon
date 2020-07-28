@@ -100,10 +100,30 @@ class I3D:
             -> SceneGraphNode:
         return self._add_node(SkinnedMeshBoneNode, bone_object, parent)
 
-    def add_armature(self, armature_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
-        skinned_mesh_root_node = self._add_node(SkinnedMeshRootNode, armature_object, parent)
-        self.skinned_meshes[armature_object.name] = skinned_mesh_root_node
-        return skinned_mesh_root_node
+    # TODO: Rethink this to not include an extra argument for when the node is actually discovered.
+    #  Maybe two separate functions instead? This is just hack'n'slash code at this point!
+    def add_armature(self, armature_object: bpy.types.Armature, parent: SceneGraphNode = None,
+                     is_located: bool = False) -> SceneGraphNode:
+        if armature_object.name not in self.skinned_meshes:
+            if is_located:
+                skinned_mesh_root_node = self._add_node(SkinnedMeshRootNode, armature_object, parent)
+            else:
+                skinned_mesh_root_node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self,
+                                                             None)
+            skinned_mesh_root_node.is_located = is_located
+            self.skinned_meshes[armature_object.name] = skinned_mesh_root_node
+        elif is_located:
+            if parent is not None:
+                parent.element.append(self.skinned_meshes[armature_object.name].element)
+            else:
+                self.scene_root_nodes.append(self.skinned_meshes[armature_object.name])
+                self.xml_elements['Scene'].append(self.skinned_meshes[armature_object.name].element)
+            self.skinned_meshes[armature_object.name].is_located = is_located
+
+        return self.skinned_meshes[armature_object.name]
+
+    def add_skinned_mesh_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
+        return self._add_node(SkinnedMeshShapeNode, mesh_object, parent)
 
     def add_transformgroup_node(self, empty_object: [bpy.types.Object, bpy.types.Collection],
                                 parent: SceneGraphNode = None) -> SceneGraphNode:
@@ -117,7 +137,8 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(CameraNode, camera_object, parent)
 
-    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None) -> int:
+    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None,
+                  bone_mapping: Dict = None) -> int:
         if shape_name is None:
             name = evaluated_mesh.name
         else:
@@ -125,7 +146,8 @@ class I3D:
 
         if name not in self.shapes:
             shape_id = self._next_available_id('shape')
-            indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name, is_merge_group)
+            indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name, is_merge_group,
+                                                      bone_mapping)
             # Store a reference to the shape from both it's name and its shape id
             self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)

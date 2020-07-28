@@ -2,7 +2,7 @@ import xml.etree.ElementTree as ET
 import mathutils
 import collections
 import logging
-from typing import (OrderedDict, Optional, List)
+from typing import (OrderedDict, Optional, List, Dict)
 import bpy
 
 from .node import (Node, SceneGraphNode)
@@ -140,7 +140,7 @@ class IndexedTriangleSet(Node):
     ID_FIELD_NAME = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None,
-                 is_merge_group: bool = False):
+                 is_merge_group: bool = False, bone_mapping: Dict = None):
         self.id: int = id_
         self.i3d: I3D = i3d
         self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
@@ -149,6 +149,7 @@ class IndexedTriangleSet(Node):
         self.subsets: OrderedDict[str, SubSet] = collections.OrderedDict()
         self.material_indexes: str = ''
         self.is_merge_group = is_merge_group
+        self.bone_mapping = bone_mapping
         self.bind_index = 0
         if shape_name is None:
             self.shape_name = self.evaluated_mesh.name

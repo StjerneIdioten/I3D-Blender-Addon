@@ -119,14 +119,23 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
             logger.debug(f"[{obj.name}] has type {obj.type!r} which is not a type selected for exporting")
             return
         elif obj.type == 'MESH':
-            # Currently the check for a mergegroup relies solely on whether or not a name is set for it
-            if obj.i3d_merge_group.group_id != "":
-                node = i3d.add_merge_group_node(obj, parent)
-            else:
-                node = i3d.add_shape_node(obj, parent)
+            node = None
+            for modifier in obj.modifiers:
+                # Grabs the first armature if multiple are present, since only one is supported for i3d anyway.
+                if modifier.type == 'ARMATURE':
+                    node = i3d.add_skinned_mesh_node(obj, parent)
+                    break
+
+            # Skinned meshes takes precedence over merge groups. They can't co-exist on the same object, for export.
+            if node is None:
+                # Currently the check for a mergegroup relies solely on whether or not a name is set for it
+                if obj.i3d_merge_group.group_id != "":
+                    node = i3d.add_merge_group_node(obj, parent)
+                else:
+                    node = i3d.add_shape_node(obj, parent)
         elif obj.type == 'ARMATURE':
             logger.debug("This is an armature")
-            node = i3d.add_armature(obj, parent)
+            node = i3d.add_armature(obj, parent, is_located=True)
         elif obj.type == 'EMPTY':
             node = i3d.add_transformgroup_node(obj, parent)
             if obj.instance_collection is not None:
