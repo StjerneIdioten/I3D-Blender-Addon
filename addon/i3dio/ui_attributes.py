@@ -53,7 +53,7 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
         row = layout.row()
         row.prop(obj.i3d_attributes, 'rigid_body_type')
 
-        if obj.i3d_attributes.rigid_body_type != 'disabled':
+        if obj.i3d_attributes.rigid_body_type != 'none':
             row_compound = layout.row()
             row_compound.prop(obj.i3d_attributes, 'compound')
 
