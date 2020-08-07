@@ -149,11 +149,10 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
         'object_mask': {'name': 'objectMask', 'default': 0},
-        'rigid_body_type': {'default': 'disabled'},
+        'rigid_body_type': {'default': 'none'},
         'collision': {'name': 'collision', 'default': True},
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
         'compound': {'name': 'compound', 'default': False},
-        'compound_child': {'name': 'compoundChild', 'default': False},
         'trigger': {'name': 'trigger', 'default': False},
     }
 
@@ -189,10 +188,11 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Rigid Body Type",
         description="Select rigid body type",
         items=[
-            ('disabled', 'Disabled', "Disable rigidbody for this object"),
+            ('none', 'None', "No rigidbody for this object"),
             ('static', 'Static', "Inanimate object with infinite mass"),
             ('dynamic', 'Dynamic', "Object moves with physics"),
-            ('kinematic', 'Kinematic', "Object moves without physics")
+            ('kinematic', 'Kinematic', "Object moves without physics"),
+            ('compoundChild', 'Compound Child', "Uses the collision of the object higher in the hierarchy marked with the 'compound' option")
         ],
         default=i3d_map['rigid_body_type']['default']
     )
@@ -213,12 +213,6 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Compound",
         description="Compound",
         default=i3d_map['compound']['default']
-    )
-
-    compound_child: BoolProperty(
-        name="Compound Child",
-        description="Compound Child",
-        default=i3d_map['compound_child']['default']
     )
 
     trigger: BoolProperty(

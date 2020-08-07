@@ -53,23 +53,13 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
         row = layout.row()
         row.prop(obj.i3d_attributes, 'rigid_body_type')
 
-        if obj.i3d_attributes.rigid_body_type != 'disabled':
+        if obj.i3d_attributes.rigid_body_type != 'none':
             row_compound = layout.row()
             row_compound.prop(obj.i3d_attributes, 'compound')
 
-            row_compound_child = layout.row()
-            row_compound_child.prop(obj.i3d_attributes, 'compound_child')
-
-            if obj.i3d_attributes.rigid_body_type == 'static':
+            if obj.i3d_attributes.rigid_body_type in ('static', 'compoundChild'):
                 row_compound.enabled = False
-                row_compound_child.enabled = False
                 obj.i3d_attributes.property_unset('compound')
-                obj.i3d_attributes.property_unset('compound_child')
-            else:
-                if obj.i3d_attributes.compound:
-                    row_compound_child.enabled = False
-                elif obj.i3d_attributes.compound_child:
-                    row_compound.enabled = False
 
             row = layout.row()
             row.prop(obj.i3d_attributes, 'collision')
@@ -83,7 +73,6 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
             # Reset all properties if rigidbody is disabled (This is easier than doing conditional export for now.
             # Since properties that are defaulted, wont get exported)
             obj.i3d_attributes.property_unset('compound')
-            obj.i3d_attributes.property_unset('compound_child')
             obj.i3d_attributes.property_unset('collision')
             obj.i3d_attributes.property_unset('collision_mask')
             obj.i3d_attributes.property_unset('trigger')
