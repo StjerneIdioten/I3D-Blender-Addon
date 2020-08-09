@@ -51,6 +51,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
                 self._add_bone(bone, self)
 
         self.skin_bind_ids = ""
+        self.skin_bind_ids += f"{self.id:d} "
         for bone in self.bones:
             self.skin_bind_ids += f"{bone.id:d} "
         self.skin_bind_ids = self.skin_bind_ids[:-1]
@@ -59,7 +60,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
         """Recursive function for adding a bone along with all of its children"""
         self.logger.debug(f"Exporting Bone: '{bone_object.name}', head: {bone_object.head}, tail: {bone_object.tail}")
         self.bones.append(self.i3d.add_bone(bone_object, parent))
-        self.bone_mapping[bone_object.name] = len(self.bones) - 1
+        self.bone_mapping[bone_object.name] = len(self.bones)
 
         for child_bone in bone_object.children:
             self._add_bone(child_bone, self.bones[-1])

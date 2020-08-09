@@ -1,4 +1,5 @@
 import xml.etree.ElementTree as ET
+import math
 import mathutils
 import collections
 import logging
@@ -222,10 +223,21 @@ class IndexedTriangleSet(Node):
                 blend_ids = []
                 if self.bone_mapping is not None:
                     for vertex_group in blender_vertex.groups:
-                        bone_name = self.evaluated_mesh.object.vertex_groups[vertex_group.group].name
-                        blend_ids.append(self.bone_mapping[bone_name])
-                        blend_weights.append(vertex_group.weight)
-                        self.logger.debug(f"Vertex group: '{bone_name}', weight: '{vertex_group.weight}'")
+                        if len(blend_ids) < 4:
+                            # TODO: Better implementation of skin bind ids and weights
+                            if not math.isclose(vertex_group.weight, 0, abs_tol=0.000001):
+                                bone_name = self.evaluated_mesh.object.vertex_groups[vertex_group.group].name
+                                blend_ids.append(self.bone_mapping[bone_name])
+                                blend_weights.append(vertex_group.weight)
+                                self.logger.debug(f"Vertex group: '{bone_name}', weight: '{vertex_group.weight}'")
+                        else:
+                            self.logger.warning(f"Vertex has weights from more than 4 bones!")
+
+                    # If there are no weights assigned, then bind the vertex to follow the armature root. Necessary or
+                    # else GE will get confused because of a lack of weights
+                    if len(blend_ids) == 0:
+                        blend_ids.append(0)
+                        blend_weights.append(1.0)
 
                     if len(blend_ids) < 4:
                         padding = [0]*(4-len(blend_ids))
