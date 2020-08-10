@@ -3,7 +3,7 @@ import math
 import mathutils
 import collections
 import logging
-from typing import (OrderedDict, Optional, List, Dict)
+from typing import (OrderedDict, Optional, List, Dict, ChainMap)
 import bpy
 
 from .node import (Node, SceneGraphNode)
@@ -149,7 +149,7 @@ class IndexedTriangleSet(Node):
     ID_FIELD_NAME = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None,
-                 is_merge_group: bool = False, bone_mapping: Dict = None):
+                 is_merge_group: bool = False, bone_mapping: ChainMap = None):
         self.id: int = id_
         self.i3d: I3D = i3d
         self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
@@ -158,8 +158,10 @@ class IndexedTriangleSet(Node):
         self.subsets: OrderedDict[str, SubSet] = collections.OrderedDict()
         self.material_indexes: str = ''
         self.is_merge_group = is_merge_group
-        self.bone_mapping = bone_mapping
+        self.bone_mapping: ChainMap = bone_mapping
         self.bind_index = 0
+        self.bones_used = {}
+        self.skin_bind_id = ""
         if shape_name is None:
             self.shape_name = self.evaluated_mesh.name
         else:
@@ -227,9 +229,12 @@ class IndexedTriangleSet(Node):
                             # TODO: Better implementation of skin bind ids and weights
                             if not math.isclose(vertex_group.weight, 0, abs_tol=0.000001):
                                 bone_name = self.evaluated_mesh.object.vertex_groups[vertex_group.group].name
-                                blend_ids.append(self.bone_mapping[bone_name])
-                                blend_weights.append(vertex_group.weight)
                                 self.logger.debug(f"Vertex group: '{bone_name}', weight: '{vertex_group.weight}'")
+                                if bone_name not in self.bones_used:
+                                    self.bones_used[bone_name] = len(self.bones_used)
+                                    self.skin_bind_id += f"{str(self.bone_mapping[bone_name])} "
+                                blend_ids.append(self.bones_used[bone_name])
+                                blend_weights.append(vertex_group.weight)
                         else:
                             self.logger.warning(f"Vertex has weights from more than 4 bones!")
 
@@ -263,7 +268,12 @@ class IndexedTriangleSet(Node):
 
             subset.number_of_indices += 3
 
+        # Remove last whitespace from skindBindId, if there is values in it.
+        if self.skin_bind_id != "":
+            self.skin_bind_id = self.skin_bind_id[:-1]
+
         self.logger.debug(f"Has subset '{material_name}' with '{len(subset.triangles)}' triangles and {subset}")
+
 
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh

@@ -4,6 +4,7 @@ but it helps with debugging big trees and seeing the structure.
 """
 from __future__ import annotations
 from typing import (Union, Dict, List, Type, OrderedDict, Optional)
+from collections import ChainMap
 import mathutils
 import bpy
 
@@ -50,17 +51,11 @@ class SkinnedMeshRootNode(TransformGroupNode):
             if bone.parent is None:
                 self._add_bone(bone, self)
 
-        self.skin_bind_ids = ""
-        self.skin_bind_ids += f"{self.id:d} "
-        for bone in self.bones:
-            self.skin_bind_ids += f"{bone.id:d} "
-        self.skin_bind_ids = self.skin_bind_ids[:-1]
-
     def _add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]):
         """Recursive function for adding a bone along with all of its children"""
         self.logger.debug(f"Exporting Bone: '{bone_object.name}', head: {bone_object.head}, tail: {bone_object.tail}")
         self.bones.append(self.i3d.add_bone(bone_object, parent))
-        self.bone_mapping[bone_object.name] = len(self.bones)
+        self.bone_mapping[bone_object.name] = self.bones[-1].id
 
         for child_bone in bone_object.children:
             self._add_bone(child_bone, self.bones[-1])
@@ -69,16 +64,20 @@ class SkinnedMeshRootNode(TransformGroupNode):
 class SkinnedMeshShapeNode(ShapeNode):
     def __init__(self, id_: int, skinned_mesh_object: [bpy.types.Object, None], i3d: I3D,
                  parent: [SceneGraphNode or None] = None):
+        self.armature_nodes = []
         for modifier in skinned_mesh_object.modifiers:
             if modifier.type == 'ARMATURE':
-                self.armature_node = i3d.add_armature(modifier.object)
+                self.armature_nodes.append(i3d.add_armature(modifier.object))
         super().__init__(id_=id_, mesh_object=skinned_mesh_object, i3d=i3d, parent=parent)
 
     def add_shape(self):
+        # Use a ChainMap to easily combine multiple bone mappings and get around any problems with multiple bones
+        # named the same as a ChainMap just gets the bone from the first armature added
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object),
-                                           bone_mapping=self.armature_node.bone_mapping)
+                                           bone_mapping=ChainMap(
+                                               *[armature.bone_mapping for armature in self.armature_nodes]))
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):
         super().populate_xml_element()
-        self._write_attribute('skinBindNodeIds', self.armature_node.skin_bind_ids)
+        self._write_attribute('skinBindNodeIds', self.i3d.shapes[self.shape_id].skin_bind_id)
