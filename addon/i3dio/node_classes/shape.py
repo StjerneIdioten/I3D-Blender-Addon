@@ -226,23 +226,23 @@ class IndexedTriangleSet(Node):
                 if self.bone_mapping is not None:
                     for vertex_group in blender_vertex.groups:
                         if len(blend_ids) < 4:
-                            # TODO: Better implementation of skin bind ids and weights
+                            # Filters out weightings that are less than the decimal precision of i3d anyway
                             if not math.isclose(vertex_group.weight, 0, abs_tol=0.000001):
                                 bone_name = self.evaluated_mesh.object.vertex_groups[vertex_group.group].name
-                                self.logger.debug(f"Vertex group: '{bone_name}', weight: '{vertex_group.weight}'")
                                 if bone_name not in self.bones_used:
                                     self.bones_used[bone_name] = len(self.bones_used)
                                     self.skin_bind_id += f"{str(self.bone_mapping[bone_name])} "
                                 blend_ids.append(self.bones_used[bone_name])
                                 blend_weights.append(vertex_group.weight)
                         else:
-                            self.logger.warning(f"Vertex has weights from more than 4 bones!")
+                            self.logger.warning(f"Vertex has weights from more than 4 bones! Rest of bones will be"
+                                                f"ignored for export!")
+                            break
 
-                    # If there are no weights assigned, then bind the vertex to follow the armature root. Necessary or
-                    # else GE will get confused because of a lack of weights
                     if len(blend_ids) == 0:
-                        blend_ids.append(0)
-                        blend_weights.append(1.0)
+                        self.logger.warning("Has a vertex with 0.0 weight to all bones. "
+                                            "This will confuse GE and results in the mesh showing up as just a "
+                                            "wireframe. Please correct by assigning some weight to all vertices")
 
                     if len(blend_ids) < 4:
                         padding = [0]*(4-len(blend_ids))
