@@ -124,19 +124,22 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
             return
         elif obj.type == 'MESH':
             node = None
-            for modifier in obj.modifiers:
-                # Grabs the first armature if multiple are present, since only one is supported for i3d anyway.
-                if modifier.type == 'ARMATURE':
-                    node = i3d.add_skinned_mesh_node(obj, parent)
-                    break
-
             # Skinned meshes takes precedence over merge groups. They can't co-exist on the same object, for export.
-            if node is None:
+            logger.debug(i3d.settings['features_to_export'])
+            if 'SKINNED_MESHES' in i3d.settings['features_to_export'] \
+                    and 'ARMATURE' in i3d.settings['object_types_to_export']:
+                # Armatures need to be exported and skinned meshes enabled to create a skinned mesh node
+                for modifier in obj.modifiers:
+                    # We only need to find one armature to know it should be an armature node
+                    if modifier.type == 'ARMATURE':
+                        node = i3d.add_skinned_mesh_node(obj, parent)
+                        break
+            elif 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group.group_id != "":
                 # Currently the check for a mergegroup relies solely on whether or not a name is set for it
-                if obj.i3d_merge_group.group_id != "":
-                    node = i3d.add_merge_group_node(obj, parent)
-                else:
-                    node = i3d.add_shape_node(obj, parent)
+                node = i3d.add_merge_group_node(obj, parent)
+            else:
+                # Default to a regular shape node
+                node = i3d.add_shape_node(obj, parent)
         elif obj.type == 'ARMATURE':
             logger.debug("This is an armature")
             node = i3d.add_armature(obj, parent, is_located=True)
