@@ -137,8 +137,9 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
             elif 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group.group_id != "":
                 # Currently the check for a mergegroup relies solely on whether or not a name is set for it
                 node = i3d.add_merge_group_node(obj, parent)
-            else:
-                # Default to a regular shape node
+
+            # Default to a regular shape node
+            if node is None:
                 node = i3d.add_shape_node(obj, parent)
         elif obj.type == 'ARMATURE':
             logger.debug("This is an armature")
