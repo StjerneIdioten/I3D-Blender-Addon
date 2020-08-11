@@ -125,7 +125,6 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         elif obj.type == 'MESH':
             node = None
             # Skinned meshes takes precedence over merge groups. They can't co-exist on the same object, for export.
-            logger.debug(i3d.settings['features_to_export'])
             if 'SKINNED_MESHES' in i3d.settings['features_to_export'] \
                     and 'ARMATURE' in i3d.settings['object_types_to_export']:
                 # Armatures need to be exported and skinned meshes enabled to create a skinned mesh node
@@ -142,7 +141,6 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
             if node is None:
                 node = i3d.add_shape_node(obj, parent)
         elif obj.type == 'ARMATURE':
-            logger.debug("This is an armature")
             node = i3d.add_armature(obj, parent, is_located=True)
         elif obj.type == 'EMPTY':
             node = i3d.add_transformgroup_node(obj, parent)
