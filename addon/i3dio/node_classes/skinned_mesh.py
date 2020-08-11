@@ -46,10 +46,15 @@ class SkinnedMeshRootNode(TransformGroupNode):
         self.bone_mapping: Dict[str, int] = {}
         # To determine if we just added the armature through a modifier lookup or knows its position in the scenegraph
         self.is_located = False
+
         super().__init__(id_=id_, empty_object=armature_object, i3d=i3d, parent=parent)
+
         for bone in armature_object.data.bones:
             if bone.parent is None:
-                self._add_bone(bone, self)
+                if self.i3d.settings['armature_as_root']:
+                    self._add_bone(bone, self)
+                else:
+                    self._add_bone(bone, parent)
 
     def _add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]):
         """Recursive function for adding a bone along with all of its children"""

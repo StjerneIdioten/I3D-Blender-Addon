@@ -104,6 +104,14 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default={'MERGE_GROUPS', 'SKINNED_MESHES'},
     )
 
+    armature_as_root: BoolProperty(
+        name="Use Armatures as root for bones",
+        description="If enabled the armature itself will get exported as a transformgroup, "
+                    "where all its bones are organized as children. "
+                    "If not then the bones will use the armature's parent",
+        default=True
+    )
+
     copy_files: BoolProperty(
         name="Copy Files",
         description="Copies the files to have them together with the i3d file. Structure is determined by 'File "

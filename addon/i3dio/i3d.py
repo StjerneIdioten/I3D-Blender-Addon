@@ -105,7 +105,7 @@ class I3D:
     def add_armature(self, armature_object: bpy.types.Armature, parent: SceneGraphNode = None,
                      is_located: bool = False) -> SceneGraphNode:
         if armature_object.name not in self.skinned_meshes:
-            if is_located:
+            if is_located and self.settings['armature_as_root']:
                 skinned_mesh_root_node = self._add_node(SkinnedMeshRootNode, armature_object, parent)
             else:
                 skinned_mesh_root_node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self,
@@ -113,11 +113,13 @@ class I3D:
             skinned_mesh_root_node.is_located = is_located
             self.skinned_meshes[armature_object.name] = skinned_mesh_root_node
         elif is_located:
-            if parent is not None:
-                parent.element.append(self.skinned_meshes[armature_object.name].element)
-            else:
-                self.scene_root_nodes.append(self.skinned_meshes[armature_object.name])
-                self.xml_elements['Scene'].append(self.skinned_meshes[armature_object.name].element)
+            if self.settings['armature_as_root']:
+                if parent is not None:
+                    parent.element.append(self.skinned_meshes[armature_object.name].element)
+                else:
+                    self.scene_root_nodes.append(self.skinned_meshes[armature_object.name])
+                    self.xml_elements['Scene'].append(self.skinned_meshes[armature_object.name].element)
+
             self.skinned_meshes[armature_object.name].is_located = is_located
 
         return self.skinned_meshes[armature_object.name]
