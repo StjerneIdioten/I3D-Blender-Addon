@@ -51,10 +51,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
         for bone in armature_object.data.bones:
             if bone.parent is None:
-                if self.i3d.settings['armature_as_root']:
-                    self._add_bone(bone, self)
-                else:
-                    self._add_bone(bone, parent)
+                self._add_bone(bone, self)
 
     def _add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]):
         """Recursive function for adding a bone along with all of its children"""
@@ -63,6 +60,17 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
         for child_bone in bone_object.children:
             self._add_bone(child_bone, self.bones[-1])
+
+    def update_bone_parent(self, parent):
+        for bone in self.bones:
+            if bone.parent == self:
+                self.element.remove(bone.element)
+                if parent is not None:
+                    parent.children.append(bone)
+                    parent.element.append(bone.element)
+                else:
+                    self.i3d.scene_root_nodes.append(bone)
+                    self.i3d.xml_elements['Scene'].append(bone.element)
 
 
 class SkinnedMeshShapeNode(ShapeNode):

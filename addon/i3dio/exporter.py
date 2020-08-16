@@ -17,6 +17,7 @@ from . import (
 from .utility import BlenderObject
 from .i3d import I3D
 from .node_classes.node import SceneGraphNode
+from .node_classes.skinned_mesh import SkinnedMeshRootNode
 
 logger = logging.getLogger(__name__)
 logger.debug(f"Loading: {__name__}")
@@ -111,10 +112,19 @@ def _export(i3d: I3D, objects: List[BlenderObject]):
 
 
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
+    # Special handling of armature nodes, since they are sort of "extra" compared to how other programs like Maya
+    # handles bones. So the option for turning them off is provided.
+    _parent = parent
+    if not i3d.settings['armature_as_root'] and isinstance(parent, SkinnedMeshRootNode):
+        try:
+            _parent = parent.parent
+        except AttributeError:
+            pass
+
     # Collections are checked first since these are always exported in some form
     if isinstance(obj, bpy.types.Collection):
         logger.debug(f"[{obj.name}] is a 'Collection'")
-        node = i3d.add_transformgroup_node(obj, parent)
+        node = i3d.add_transformgroup_node(obj, _parent)
         _process_collection_objects(i3d, obj, node)
         return
     else:
@@ -131,19 +141,19 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 for modifier in obj.modifiers:
                     # We only need to find one armature to know it should be an armature node
                     if modifier.type == 'ARMATURE':
-                        node = i3d.add_skinned_mesh_node(obj, parent)
+                        node = i3d.add_skinned_mesh_node(obj, _parent)
                         break
             elif 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group.group_id != "":
                 # Currently the check for a mergegroup relies solely on whether or not a name is set for it
-                node = i3d.add_merge_group_node(obj, parent)
+                node = i3d.add_merge_group_node(obj, _parent)
 
             # Default to a regular shape node
             if node is None:
-                node = i3d.add_shape_node(obj, parent)
+                node = i3d.add_shape_node(obj, _parent)
         elif obj.type == 'ARMATURE':
-            node = i3d.add_armature(obj, parent, is_located=True)
+            node = i3d.add_armature(obj, _parent, is_located=True)
         elif obj.type == 'EMPTY':
-            node = i3d.add_transformgroup_node(obj, parent)
+            node = i3d.add_transformgroup_node(obj, _parent)
             if obj.instance_collection is not None:
                 logger.debug(f"[{obj.name}] is a collection instance and will be instanced into the 'Empty' object")
                 # This is a collection instance so the children needs to be fetched from the referenced collection and
@@ -151,9 +161,9 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 _process_collection_objects(i3d, obj.instance_collection, node)
                 return
         elif obj.type == 'LIGHT':
-            node = i3d.add_light_node(obj, parent)
+            node = i3d.add_light_node(obj, _parent)
         elif obj.type == 'CAMERA':
-            node = i3d.add_camera_node(obj, parent)
+            node = i3d.add_camera_node(obj, _parent)
         else:
             raise NotImplementedError(f"Object type: {obj.type!r} is not supported yet")
 

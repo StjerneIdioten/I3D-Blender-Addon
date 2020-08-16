@@ -105,10 +105,10 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
     )
 
     armature_as_root: BoolProperty(
-        name="Use Armatures as root for bones",
+        name="Collapse Armatures",
         description="If enabled the armature itself will get exported as a transformgroup, "
                     "where all its bones are organized as children. "
-                    "If not then the bones will use the armature's parent",
+                    "If not then the armatures parent will be used",
         default=True
     )
 
