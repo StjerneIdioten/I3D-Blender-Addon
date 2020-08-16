@@ -149,6 +149,24 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=True
     )
 
+    i3d_mapping_file_path: StringProperty(
+        name="XML File",
+        description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
+                    "contain an '<i3dMapping> somewhere in the file",
+        subtype='FILE_PATH',
+        default=''
+    )
+
+    i3d_mapping_overwrite_mode: EnumProperty(
+        name="Overwrite Mode",
+        description="Determine how the i3d mapping is updated",
+        items=(
+            ('CLEAN', "Clean", "Deletes any existing i3d mappings"),
+            ('OVERWRITE', "Overwrite", "Keeps existing mappings, but overrides similar names")
+        ),
+        default='CLEAN'
+    )
+
 
 @register
 class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
@@ -321,6 +339,20 @@ class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
                              default=''
                              )
 
+@register
+class I3DMappingData(bpy.types.PropertyGroup):
+    is_mapped: BoolProperty(
+        name="Add to mapping",
+        description="If checked this object will be mapped to the i3d mapping of the xml file",
+        default=False
+    )
+
+    mapping_name: StringProperty(
+        name="Alternative Name",
+        description="If this is left empty the name of the object itself will be used",
+        default=''
+    )
+
 
 def register():
     for cls in classes:
@@ -328,6 +360,7 @@ def register():
     bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeObjectAttributes)
     bpy.types.Object.i3d_merge_group = PointerProperty(type=I3DMergeGroupObjectData)
+    bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
     bpy.types.Light.i3d_attributes = PointerProperty(type=I3DNodeLightAttributes)
 

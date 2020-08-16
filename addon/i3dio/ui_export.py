@@ -113,6 +113,7 @@ class I3D_IO_PT_export_options(Panel):
         layout.prop(operator, "axis_up")
 
 
+
 class I3D_IO_PT_export_files(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -142,6 +143,12 @@ class I3D_IO_PT_export_files(Panel):
         row.enabled = bpy.context.scene.i3dio.copy_files
         row.alignment = 'RIGHT'
         row.prop(bpy.context.scene.i3dio, 'file_structure', )
+
+        box = layout.box()
+        row = box.row()
+        row.label(text='I3D Mapping Mode')
+        column = box.column()
+        column.props_enum(bpy.context.scene.i3dio, 'i3d_mapping_overwrite_mode')
 
 
 class I3D_IO_PT_export_shape(Panel):

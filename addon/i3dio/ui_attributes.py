@@ -12,6 +12,22 @@ def register(cls):
 
 
 @register
+class I3D_IO_PT_i3d_mapping_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Mapping Options"
+    bl_context = 'scene'
+
+    @classmethod
+    def poll(cls, context):
+        return True
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(bpy.context.scene.i3dio, 'i3d_mapping_file_path')
+
+
+@register
 class I3D_IO_PT_object_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -103,6 +119,30 @@ class I3D_IO_PT_merge_group_attributes(Panel):
 
         row = layout.row()
         row.prop(obj.i3d_merge_group, 'group_id')
+
+
+@register
+class I3D_IO_PT_mapping_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Mapping"
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
+
+        row = layout.row()
+        row.prop(obj.i3d_mapping, 'is_mapped')
+        row = layout.row()
+        row.prop(obj.i3d_mapping, 'mapping_name')
 
 
 @register
