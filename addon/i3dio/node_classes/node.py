@@ -96,12 +96,12 @@ class SceneGraphNode(Node):
         self.children = []
         self.blender_object = blender_object
         self.xml_elements: Dict[str, Union[ET.Element, None]] = {'Node': None}
+        super().__init__(id_, i3d, parent)
+
         try:
             self.parent.add_child(self)
         except AttributeError:
             pass
-
-        super().__init__(id_, i3d, parent)
         self.logger.debug(f"Initialized as a '{self.__class__.__name__}'")
 
     @property
@@ -117,7 +117,7 @@ class SceneGraphNode(Node):
         self.xml_elements['Node'] = value
 
     def __str__(self):
-        return f"{self.id}"
+        return f"{self.name}"
 
     def _write_properties(self):
         # Write general node properties (Transform properties in Giants Engine)
