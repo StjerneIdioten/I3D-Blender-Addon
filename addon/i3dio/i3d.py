@@ -224,10 +224,11 @@ class I3D:
             line = f"|{indent}{node}\n"
             longest_string = len(line) if len(line) > longest_string else longest_string
             tree_string += line
-            for child in node.children.values():
+            for child in node.children:
                 traverse(child, indents + 1)
 
-        traverse(self.scene_root_nodes[0])
+        for root_node in self.scene_root_nodes:
+            traverse(root_node)
 
         tree_string += f"{longest_string * '-'}\n"
 
