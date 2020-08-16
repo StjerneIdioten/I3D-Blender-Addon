@@ -121,6 +121,7 @@ class I3D:
         elif is_located:
             if self.settings['armature_as_root']:
                 if parent is not None:
+                    parent.add_child(self.skinned_meshes[armature_object.name])
                     parent.element.append(self.skinned_meshes[armature_object.name].element)
                 else:
                     self.scene_root_nodes.append(self.skinned_meshes[armature_object.name])
