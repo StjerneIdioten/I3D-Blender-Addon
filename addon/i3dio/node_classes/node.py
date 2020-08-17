@@ -102,6 +102,13 @@ class SceneGraphNode(Node):
             self.parent.add_child(self)
         except AttributeError:
             pass
+
+        try:
+            if getattr(self.blender_object.i3d_mapping, 'is_mapped'):
+                self.i3d.i3d_mapping.append(self)
+        except AttributeError:
+            pass
+
         self.logger.debug(f"Initialized as a '{self.__class__.__name__}'")
 
     @property

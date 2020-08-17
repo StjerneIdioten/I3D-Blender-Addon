@@ -64,7 +64,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
 
         logger.info(f"Export took {time.time() - time_start:.3f} seconds")
 
-        print(i3d.get_scene_as_formatted_string())
+        #print(i3d.get_scene_as_formatted_string())
 
         # EAFP
         try:

@@ -2,6 +2,10 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import (Union, Dict, List, Type, OrderedDict, Optional)
 import logging
+import xml.etree.ElementTree as ET
+from . import xml_i3d
+
+ET._escape_attrib = xml_i3d.escape_attrib
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +45,8 @@ class I3D:
         self.files: Dict[Union[str, int], File] = {}
         self.merge_groups: Dict[str, MergeGroup] = {}
         self.skinned_meshes: Dict[str, SkinnedMeshRootNode] = {}
+
+        self.i3d_mapping: List[SceneGraphNode] = []
 
         # Save all settings for the current run unto the I3D to abstract it from the nodes themselves
         self.settings = {}
@@ -242,9 +248,50 @@ class I3D:
                                                         encoding='iso-8859-1',
                                                         method='xml')
 
+        if self.settings['i3d_mapping_file_path'] != '':
+            self.export_i3d_mapping()
+
+    def export_i3d_mapping(self) -> None:
+        try:
+            tree = ET.parse(bpy.path.abspath(self.settings['i3d_mapping_file_path']))
+        except ET.ParseError as e:
+            self.logger.warning(f"Supplied mapping file is not correct xml, failed with error: {e}")
+        else:
+            root = tree.getroot()
+            i3d_mappings_element = root.find('i3dMappings')
+            if i3d_mappings_element is not None:
+                if self.settings['i3d_mapping_overwrite_mode'] == 'CLEAN':
+                    i3d_mappings_element.clear()
+                elif self.settings['i3d_mapping_overwrite_mode'] == 'OVERWRITE':
+                    pass
+
+                def build_index_string(node_to_index):
+                    if node_to_index.parent is None:
+                        index = f"{self.scene_root_nodes.index(node_to_index):d}>"
+                    else:
+                        index = build_index_string(node_to_index.parent)
+                        index += f"|{node_to_index.parent.children.index(node_to_index):d}"
+                    return index
+
+                for mapping_node in self.i3d_mapping:
+                    if getattr(mapping_node.blender_object.i3d_mapping, 'mapping_name') != '':
+                        name = getattr(mapping_node.blender_object.i3d_mapping, 'mapping_name')
+                    else:
+                        name = mapping_node.name
+
+                    attributes = {'id': name, 'node': build_index_string(mapping_node)}
+                    ET.SubElement(i3d_mappings_element, 'i3dMapping', attributes)
+
+                xml_i3d.add_indentations(i3d_mappings_element)
+                tree.write(bpy.path.abspath(self.settings['i3d_mapping_file_path']),
+                           xml_declaration=True,
+                           encoding='utf-8')
+            else:
+                self.logger.warning(f"Supplied mapping file does not contain an <i3dMappings> tag anywhere! Cannot"
+                                    f"export mappings.")
+
 
 # To avoid a circular import, since all nodes rely on the I3D class, but i3d itself contains all the different nodes.
-
 from i3dio.node_classes.node import *
 from i3dio.node_classes.shape import *
 from i3dio.node_classes.merge_group import *

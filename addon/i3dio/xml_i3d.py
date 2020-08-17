@@ -127,3 +127,34 @@ def add_indentations(element: ET.Element, level: int = 0) -> None:
     else:
         if level and (not element.tail or not element.tail.strip()):
             element.tail = indents
+
+
+def escape_attrib(text):
+    # escape attribute value
+    try:
+        if "&" in text:
+            text = text.replace("&", "&amp;")
+        if "<" in text:
+            text = text.replace("<", "&lt;")
+        if ">" in text:
+            # Needed for the i3d format
+            pass
+            #text = text.replace(">", "&gt;")
+        if "\"" in text:
+            text = text.replace("\"", "&quot;")
+        # The following business with carriage returns is to satisfy
+        # Section 2.11 of the XML specification, stating that
+        # CR or CR LN should be replaced with just LN
+        # http://www.w3.org/TR/REC-xml/#sec-line-ends
+        if "\r\n" in text:
+            text = text.replace("\r\n", "\n")
+        if "\r" in text:
+            text = text.replace("\r", "\n")
+        #The following four lines are issue 17582
+        if "\n" in text:
+            text = text.replace("\n", "&#10;")
+        if "\t" in text:
+            text = text.replace("\t", "&#09;")
+        return text
+    except (TypeError, AttributeError):
+        ET._raise_serialization_error(text)

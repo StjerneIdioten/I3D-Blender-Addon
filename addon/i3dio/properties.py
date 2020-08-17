@@ -370,6 +370,8 @@ def unregister():
         bpy.utils.unregister_class(cls)
     del bpy.types.Scene.i3dio
     del bpy.types.Object.i3d_attributes
+    del bpy.types.Object.i3d_merge_group
+    del bpy.types.Object.i3d_mapping
     del bpy.types.Mesh.i3d_attributes
     del bpy.types.Light.i3d_attributes
 
