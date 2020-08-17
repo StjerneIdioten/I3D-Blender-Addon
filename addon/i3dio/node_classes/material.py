@@ -128,7 +128,7 @@ class Material(Node):
                 for parameter in shader_settings.shader_parameters:
                     parameter_dict = {'name': parameter.name}
                     if parameter.type == 'float':
-                        value = parameter.data_float_1
+                        value = [parameter.data_float_1]
                     elif parameter.type == 'float2':
                         value = parameter.data_float_2
                     elif parameter.type == 'float3':
