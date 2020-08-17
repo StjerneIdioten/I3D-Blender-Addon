@@ -162,7 +162,6 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         description="Determine how the i3d mapping is updated",
         items=(
             ('CLEAN', "Clean", "Deletes any existing i3d mappings"),
-            ('OVERWRITE', "Overwrite", "Keeps existing mappings, but overrides similar names")
         ),
         default='CLEAN'
     )
