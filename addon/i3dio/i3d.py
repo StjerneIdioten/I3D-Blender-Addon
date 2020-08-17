@@ -270,7 +270,9 @@ class I3D:
                         index = f"{self.scene_root_nodes.index(node_to_index):d}>"
                     else:
                         index = build_index_string(node_to_index.parent)
-                        index += f"|{node_to_index.parent.children.index(node_to_index):d}"
+                        if index[-1] != '>':
+                            index += '|'
+                        index += str(node_to_index.parent.children.index(node_to_index))
                     return index
 
                 for mapping_node in self.i3d_mapping:
