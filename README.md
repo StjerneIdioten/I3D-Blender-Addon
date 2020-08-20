@@ -1,6 +1,6 @@
 # Blender 2.8. Addon for i3D-Giants Game Engine
-[![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/ellerbrock/open-source-badges/)
-[![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.svg?v=103)](https://opensource.org/licenses/GPL-3.0/)
+[![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.png?v=103)](https://github.com/ellerbrock/open-source-badges/)
+[![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.png?v=103)](https://opensource.org/licenses/GPL-3.0/)
 
 As I am currently an university student, any amount will be greatly appreciated *(and will most likely be used for beer fueled coding binges, which translates into more features for the exporter)*
 
@@ -15,8 +15,9 @@ As I am currently an university student, any amount will be greatly appreciated 
 * [Technologies](#technologies)
 * [Status](#status)
 * [Access](#access)
+* [Help](#help)
 * [Sources](#sources)
-* [Licence](#licence)
+* [License](#license)
 
 ## Description
 
@@ -38,16 +39,16 @@ Current Priorities listed in order
 
 ## Technologies
 * Python 3.7
-* PEP8-80 compliant (althought this may not always be possible
-* Blender 2.82
+* PEP8-80 compliant (to the extent that it is possible)
+* Blender 2.83
 
 ## Status
 
-* Working towards first feature-complete stable release
+* Almost ready for the first release. Ironing out stability issues.
 
 ## Installation
 The [Releases](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases) page will always contain a release with the latest features tagged "latest". This might not be stable, so use with care. The page also holds other releases that I add once I deem them to have been tested properly, but keep in mind that at this point this is all pre-release stuff, so make sure to keep a backup of your blend files as I cannot guarantee that the exporter will keep them in a usable state.
-All of these releases are packaged as blender expects them and should be installed just like any other addon for blender.
+All of these releases are packaged as blender expects them and should be installed just like any other [addon for blender](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html#rd-party-add-ons). 
 
 If you wish to fork the repository and play around with the code, then you need to put the git repository somewhere and symlink the "addon/i3dio" folder into your version of blenders addon folder.
 
@@ -63,6 +64,16 @@ In case of wanting to join, the following knowledge is required:
 * Git version control
 * Knowledge of Python 3
 * Knowledge of Blender 2.8
+
+## Help
+
+If you need help with the addon in any way, the following channels are available:
+* [Issue Tracker](https://github.com/StjerneIdioten/I3D-Blender-Addon/issues): If you come across any bugs or have a suggestion for a new feature, please post them here.
+* [Wiki](https://github.com/StjerneIdioten/I3D-Blender-Addon/wiki): The wiki will eventually contain information on all the features of the exporter
+* [VertexDezign Discord](https://discord.gg/GVfNFpM): There is an official support channel available for the exporter. For general questions etc. 
+* At some point an official walkthrough video will be available. Showing all features of the exporter.
+
+I can also be reached several other places, I am not hard to find through my nickname. But please keep exporter related support to the official channels listed here. So it might come in handy for anyone else with the same problem.
 
 ## Sources
 
