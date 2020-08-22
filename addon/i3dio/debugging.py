@@ -11,7 +11,7 @@ addon_logger.handlers = []  # Reset upon reload, since reloading the addon does 
 addon_console_handler = logging.StreamHandler()
 addon_console_formatter = logging.Formatter('%(name)s:%(funcName)s:%(levelname)s: %(message)s')
 addon_console_handler.setFormatter(addon_console_formatter)
-addon_console_handler_default_level = logging.INFO
+addon_console_handler_default_level = logging.WARNING
 addon_console_handler.setLevel(addon_console_handler_default_level)
 addon_logger.addHandler(addon_console_handler)
 
