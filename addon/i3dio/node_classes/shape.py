@@ -104,18 +104,14 @@ class EvaluatedMesh:
         self.generate_evaluated_mesh(mesh_object, reference_frame)
 
     def generate_evaluated_mesh(self, mesh_object: bpy.types.Object, reference_frame: mathutils.Matrix = None):
-        # Evaluate the dependency graph to make sure that all data is evaluated. As long as nothing changes, this
-        # should only be 'heavy' to call the first time a mesh is exported.
-        # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
-        depsgraph = bpy.context.evaluated_depsgraph_get()
         if self.i3d.get_setting('apply_modifiers'):
-            self.object = mesh_object.evaluated_get(depsgraph)
+            self.object = mesh_object.evaluated_get(self.i3d.depsgraph)
             self.logger.debug(f"is exported with modifiers applied")
         else:
             self.object = mesh_object
             self.logger.debug(f"is exported without modifiers applied")
 
-        self.mesh = self.object.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
+        self.mesh = self.object.to_mesh(preserve_all_data_layers=True, depsgraph=self.i3d.depsgraph)
 
         # If a reference is given transform the generated mesh by that frame to place it somewhere else than center of
         # the mesh origo
@@ -138,8 +134,11 @@ class EvaluatedMesh:
         # Recalculates normals after the scaling has messed with them
         self.mesh.calc_normals_split()
 
+    # On hold for the moment, it seems to be triggered at random times in the middle of an export which messes with
+    # everything. Further investigation is needed.
     def __del__(self):
-        self.object.to_mesh_clear()
+        pass
+        #self.object.to_mesh_clear()
 
 
 class IndexedTriangleSet(Node):

@@ -47,9 +47,13 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
 
     # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
     try:
+
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+
         i3d = I3D(name=bpy.path.display_name_from_filepath(filepath),
                   i3d_file_path=filepath,
-                  conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up,).to_4x4())
+                  conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up,).to_4x4(),
+                  depsgraph=depsgraph)
 
         export_selection = bpy.context.scene.i3dio.selection
         if export_selection == 'ALL':
