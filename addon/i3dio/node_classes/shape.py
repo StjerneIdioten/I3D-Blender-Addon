@@ -109,10 +109,10 @@ class EvaluatedMesh:
         # https://docs.blender.org/api/current/bpy.types.Depsgraph.html
         depsgraph = bpy.context.evaluated_depsgraph_get()
         if self.i3d.get_setting('apply_modifiers'):
-            self.object = mesh_object.evaluated_get(depsgraph).copy()
+            self.object = mesh_object.evaluated_get(depsgraph)
             self.logger.debug(f"is exported with modifiers applied")
         else:
-            self.object = mesh_object.copy()
+            self.object = mesh_object
             self.logger.debug(f"is exported without modifiers applied")
 
         self.mesh = self.object.to_mesh(preserve_all_data_layers=True, depsgraph=depsgraph)
@@ -140,7 +140,6 @@ class EvaluatedMesh:
 
     def __del__(self):
         self.object.to_mesh_clear()
-        bpy.data.objects.remove(self.object, do_unlink=True)
 
 
 class IndexedTriangleSet(Node):
@@ -273,7 +272,6 @@ class IndexedTriangleSet(Node):
             self.skin_bind_id = self.skin_bind_id[:-1]
 
         self.logger.debug(f"Has subset '{material_name}' with '{len(subset.triangles)}' triangles and {subset}")
-
 
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh
