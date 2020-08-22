@@ -35,7 +35,11 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     # Add remaining properties from original addon as they get implemented
 
     def execute(self, context):
-        exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
+        status = exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
+        if status:
+            self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
+        else:
+            self.report({'ERROR'}, "I3D Export Failed! Check console/log for error(s)")
         return {'FINISHED'}
 
     def draw(self, context):

@@ -23,7 +23,10 @@ logger = logging.getLogger(__name__)
 logger.debug(f"Loading: {__name__}")
 
 
-def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
+def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
+
+    export_data = {}
+
     if bpy.context.scene.i3dio.verbose_output:
         debugging.addon_console_handler.setLevel(logging.DEBUG)
     else:
@@ -68,8 +71,13 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
         # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
     except Exception:
         logger.exception("Exception that stopped the exporter")
+        export_data['success'] = False
+    else:
+        export_data['success'] = True
 
-    print(f"Export took {time.time() - time_start:.3f} seconds")
+    export_data['time'] = time.time() - time_start
+
+    print(f"Export took {export_data['time']:.3f} seconds")
 
     # EAFP
     try:
@@ -79,6 +87,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> None:
 
     debugging.addon_logger.removeHandler(log_file_handler)
     debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
+    return export_data
 
 
 def _export_active_scene_master_collection(i3d: I3D):
