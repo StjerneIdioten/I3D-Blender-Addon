@@ -37,7 +37,7 @@ class Material(Node):
             self._resolve_with_nodes()
         else:
             self._resolve_without_nodes()
-        #self._export_shader_settings()
+        self._export_shader_settings()
 
     def _resolve_with_nodes(self):
         main_node = self.blender_material.node_tree.nodes.get('Principled BSDF')
