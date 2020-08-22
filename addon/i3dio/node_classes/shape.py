@@ -111,7 +111,7 @@ class EvaluatedMesh:
             self.object = mesh_object
             self.logger.debug(f"is exported without modifiers applied")
 
-        self.mesh = self.object.to_mesh(preserve_all_data_layers=True, depsgraph=self.i3d.depsgraph)
+        self.mesh = self.object.to_mesh(preserve_all_data_layers=False, depsgraph=self.i3d.depsgraph)
 
         # If a reference is given transform the generated mesh by that frame to place it somewhere else than center of
         # the mesh origo
