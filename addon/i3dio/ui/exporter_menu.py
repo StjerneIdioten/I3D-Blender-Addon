@@ -13,12 +13,21 @@ from bpy.types import (
     Panel
 )
 
-from . import (
+from .. import (
         exporter,
         xml_i3d
 )
 
 
+classes = []
+
+
+def register(cls):
+    classes.append(cls)
+    return cls
+
+
+@register
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class I3D_IO_OT_export(Operator, ExportHelper):
     """Save i3d file"""
@@ -41,11 +50,12 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         else:
             self.report({'ERROR'}, "I3D Export Failed! Check console/log for error(s)")
         return {'FINISHED'}
-
+    
     def draw(self, context):
         pass
 
 
+@register
 class I3D_IO_PT_export_main(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -71,6 +81,7 @@ class I3D_IO_PT_export_main(Panel):
         layout.prop(bpy.context.scene.i3dio, 'selection')
 
 
+@register
 class I3D_IO_PT_export_options(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -117,7 +128,7 @@ class I3D_IO_PT_export_options(Panel):
         layout.prop(operator, "axis_up")
 
 
-
+@register
 class I3D_IO_PT_export_files(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -155,6 +166,7 @@ class I3D_IO_PT_export_files(Panel):
         column.props_enum(bpy.context.scene.i3dio, 'i3d_mapping_overwrite_mode')
 
 
+@register
 class I3D_IO_PT_export_shape(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -177,6 +189,7 @@ class I3D_IO_PT_export_shape(Panel):
         row = layout.row()
 
 
+@register
 class I3D_IO_PT_export_misc(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -199,6 +212,7 @@ class I3D_IO_PT_export_misc(Panel):
         row = layout.row()
 
 
+@register
 class I3D_IO_PT_export_debug(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -223,19 +237,11 @@ class I3D_IO_PT_export_debug(Panel):
         layout.prop(bpy.context.scene.i3dio, 'log_to_file')
 
 
-classes = (I3D_IO_OT_export,
-           I3D_IO_PT_export_main,
-           I3D_IO_PT_export_options,
-           I3D_IO_PT_export_files,
-           I3D_IO_PT_export_debug
-           )
-
-
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
 
 def unregister():
-    for cls in classes:
+    for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
