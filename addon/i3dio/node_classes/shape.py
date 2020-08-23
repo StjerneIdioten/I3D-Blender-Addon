@@ -281,9 +281,13 @@ class IndexedTriangleSet(Node):
 
         for triangle in mesh.loop_triangles:
             triangle_material = mesh.materials[triangle.material_index]
+
             if triangle_material.name not in self.subsets:
                 self.logger.info(f"Has material {triangle_material.name!r}")
-                material_id = self.i3d.add_material(triangle_material)
+                # TODO: Figure out why we have to supply the original material instead of the one on the evaluated
+                #  object. The evaluated one still contains references to deleted nodes from the node_tree
+                #  of the material. Although I thought it would be updated?
+                material_id = self.i3d.add_material(triangle_material.original)
                 self.subsets[triangle_material.name] = SubSet(material_id)
 
             # Add triangle to subset
