@@ -71,7 +71,7 @@ If you need help with the addon in any way, the following channels are available
 * [Issue Tracker](https://github.com/StjerneIdioten/I3D-Blender-Addon/issues): If you come across any bugs or have a suggestion for a new feature, please post them here.
 * [Wiki](https://github.com/StjerneIdioten/I3D-Blender-Addon/wiki): The wiki will eventually contain information on all the features of the exporter
 * [VertexDezign Discord](https://discord.gg/GVfNFpM): There is an official support channel available for the exporter. For general questions etc. 
-* At some point an official walkthrough video will be available. Showing all features of the exporter.
+* [Redphoenix Youtube Showcase](https://www.youtube.com/watch?v=lRDPuKh9gow): Redphoenix has been to kind to create a youtube video showing all of the most important features
 
 I can also be reached several other places, I am not hard to find through my nickname. But please keep exporter related support to the official channels listed here. So it might come in handy for anyone else with the same problem.
 
