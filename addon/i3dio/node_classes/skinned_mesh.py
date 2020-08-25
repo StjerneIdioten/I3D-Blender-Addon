@@ -12,6 +12,7 @@ from . import node
 from .node import (TransformGroupNode, SceneGraphNode)
 from .shape import (ShapeNode, EvaluatedMesh)
 from ..i3d import I3D
+from .. import xml_i3d
 
 
 class SkinnedMeshBoneNode(TransformGroupNode):
@@ -76,9 +77,10 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
 
 class SkinnedMeshShapeNode(ShapeNode):
-    def __init__(self, id_: int, skinned_mesh_object: [bpy.types.Object, None], i3d: I3D,
+    def __init__(self, id_: int, skinned_mesh_object: bpy.types.Object, i3d: I3D,
                  parent: [SceneGraphNode or None] = None):
         self.armature_nodes = []
+        self.skinned_mesh_name = xml_i3d.skinned_mesh_prefix + skinned_mesh_object.data.name
         for modifier in skinned_mesh_object.modifiers:
             if modifier.type == 'ARMATURE':
                 self.armature_nodes.append(i3d.add_armature(modifier.object))
@@ -87,7 +89,7 @@ class SkinnedMeshShapeNode(ShapeNode):
     def add_shape(self):
         # Use a ChainMap to easily combine multiple bone mappings and get around any problems with multiple bones
         # named the same as a ChainMap just gets the bone from the first armature added
-        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object),
+        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.skinned_mesh_name,
                                            bone_mapping=ChainMap(
                                                *[armature.bone_mapping for armature in self.armature_nodes]))
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element

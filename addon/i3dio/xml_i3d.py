@@ -15,6 +15,7 @@ root_attributes = {'version': '1.6',
 file_ending = '.i3d'
 
 merge_group_prefix = 'MergedMesh_'
+skinned_mesh_prefix = 'SkinnedMesh_'
 
 
 def write_int(element: ET.Element, attribute: str, value: int) -> None:
