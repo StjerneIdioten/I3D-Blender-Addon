@@ -158,7 +158,7 @@ class I3D:
         return self._add_node(CameraNode, camera_object, parent)
 
     def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None,
-                  bone_mapping: Dict = None) -> int:
+                  bone_mapping: ChainMap = None) -> int:
         if shape_name is None:
             name = evaluated_mesh.name
         else:

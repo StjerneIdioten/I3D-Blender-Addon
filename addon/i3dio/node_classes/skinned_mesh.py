@@ -56,10 +56,11 @@ class SkinnedMeshRootNode(TransformGroupNode):
     def _add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]):
         """Recursive function for adding a bone along with all of its children"""
         self.bones.append(self.i3d.add_bone(bone_object, parent))
-        self.bone_mapping[bone_object.name] = self.bones[-1].id
+        current_bone = self.bones[-1]
+        self.bone_mapping[bone_object.name] = current_bone.id
 
         for child_bone in bone_object.children:
-            self._add_bone(child_bone, self.bones[-1])
+            self._add_bone(child_bone, current_bone)
 
     def update_bone_parent(self, parent):
         for bone in self.bones:
