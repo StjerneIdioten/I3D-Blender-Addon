@@ -392,7 +392,7 @@ class IndexedTriangleSet(Node):
 
         # Write subsets
         for _, subset in self.subsets.items():
-            self.material_indexes += f"{subset.material_id}"
+            self.material_indexes += f"{subset.material_id} "
             ET.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
 
         # Removes the last whitespace from the string, since an extra will always be added
