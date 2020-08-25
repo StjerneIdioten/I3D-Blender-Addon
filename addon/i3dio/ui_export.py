@@ -36,7 +36,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
 
     def execute(self, context):
         status = exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
-        if status:
+        if status['success']:
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
         else:
             self.report({'ERROR'}, "I3D Export Failed! Check console/log for error(s)")
