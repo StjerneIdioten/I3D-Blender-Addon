@@ -274,6 +274,7 @@ class IndexedTriangleSet(Node):
 
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh
+
         if len(mesh.materials) == 0:
             self.logger.info(f"has no material assigned, assigning default material")
             mesh.materials.append(self.i3d.get_default_material().blender_material)
@@ -375,6 +376,9 @@ class IndexedTriangleSet(Node):
             ET.SubElement(self.xml_elements['triangles'], 't', {'vi': "{0} {1} {2}".format(*triangle)})
 
     def populate_xml_element(self):
+        if len(self.evaluated_mesh.mesh.vertices) == 0:
+            self.logger.warning(f"has no vertices! Export of this mesh is aborted.")
+            return
         self.populate_from_evaluated_mesh()
         self.logger.debug(f"Has '{len(self.subsets)}' subsets, "
                           f"'{len(self.triangles)}' triangles and "
