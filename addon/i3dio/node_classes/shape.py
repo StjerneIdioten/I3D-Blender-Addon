@@ -158,8 +158,7 @@ class IndexedTriangleSet(Node):
         self.is_merge_group = is_merge_group
         self.bone_mapping: ChainMap = bone_mapping
         self.bind_index = 0
-        self.bones_used = {}
-        self.skin_bind_id = ""
+        self.vertex_group_ids = {}
         if shape_name is None:
             self.shape_name = self.evaluated_mesh.name
         else:
@@ -223,19 +222,19 @@ class IndexedTriangleSet(Node):
                 blend_ids = []
                 if self.bone_mapping is not None:
                     for vertex_group in blender_vertex.groups:
-                        if len(blend_ids) < 4:
-                            # Filters out weightings that are less than the decimal precision of i3d anyway
-                            if not math.isclose(vertex_group.weight, 0, abs_tol=0.000001):
-                                bone_name = self.evaluated_mesh.object.vertex_groups[vertex_group.group].name
-                                if bone_name not in self.bones_used:
-                                    self.bones_used[bone_name] = len(self.bones_used)
-                                    self.skin_bind_id += f"{str(self.bone_mapping[bone_name])} "
-                                blend_ids.append(self.bones_used[bone_name])
-                                blend_weights.append(vertex_group.weight)
-                        else:
-                            self.logger.warning(f"Vertex has weights from more than 4 bones! Rest of bones will be"
-                                                f"ignored for export!")
-                            break
+                        # Filter out any potential vertex groups that aren't related to armatures
+                        if self.evaluated_mesh.object.vertex_groups[vertex_group.group].name in self.bone_mapping:
+                            if len(blend_ids) < 4:
+                                # Filters out weightings that are less than the decimal precision of i3d anyway
+                                if not math.isclose(vertex_group.weight, 0, abs_tol=0.000001):
+                                    if vertex_group.group not in self.vertex_group_ids:
+                                        self.vertex_group_ids[vertex_group.group] = len(self.vertex_group_ids)
+                                    blend_ids.append(self.vertex_group_ids[vertex_group.group])
+                                    blend_weights.append(vertex_group.weight)
+                            else:
+                                self.logger.warning(f"Vertex has weights from more than 4 bones! Rest of bones will be"
+                                                    f"ignored for export!")
+                                break
 
                     if len(blend_ids) == 0:
                         self.logger.warning("Has a vertex with 0.0 weight to all bones. "
@@ -265,10 +264,6 @@ class IndexedTriangleSet(Node):
                 self.triangles[-1].append(vertex_index)
 
             subset.number_of_indices += 3
-
-        # Remove last whitespace from skindBindId, if there is values in it.
-        if self.skin_bind_id != "":
-            self.skin_bind_id = self.skin_bind_id[:-1]
 
         self.logger.debug(f"Has subset '{material_name}' with '{len(subset.triangles)}' triangles and {subset}")
 

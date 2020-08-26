@@ -84,16 +84,25 @@ class SkinnedMeshShapeNode(ShapeNode):
         for modifier in skinned_mesh_object.modifiers:
             if modifier.type == 'ARMATURE':
                 self.armature_nodes.append(i3d.add_armature(modifier.object))
+        self.bone_mapping = ChainMap(*[armature.bone_mapping for armature in self.armature_nodes])
         super().__init__(id_=id_, mesh_object=skinned_mesh_object, i3d=i3d, parent=parent)
+
 
     def add_shape(self):
         # Use a ChainMap to easily combine multiple bone mappings and get around any problems with multiple bones
         # named the same as a ChainMap just gets the bone from the first armature added
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.skinned_mesh_name,
-                                           bone_mapping=ChainMap(
-                                               *[armature.bone_mapping for armature in self.armature_nodes]))
+                                           bone_mapping=self.bone_mapping)
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):
         super().populate_xml_element()
-        self._write_attribute('skinBindNodeIds', self.i3d.shapes[self.shape_id].skin_bind_id)
+        vertex_group_binding = self.i3d.shapes[self.shape_id].vertex_group_ids
+        self.logger.debug(f"Skinned groups: {vertex_group_binding}")
+
+        skin_bind_id = ''
+        for vertex_group_id in sorted(vertex_group_binding, key=vertex_group_binding.get):
+            skin_bind_id += f"{self.bone_mapping[self.blender_object.vertex_groups[vertex_group_id].name]} "
+        skin_bind_id = skin_bind_id[:-1]
+
+        self._write_attribute('skinBindNodeIds', skin_bind_id)
