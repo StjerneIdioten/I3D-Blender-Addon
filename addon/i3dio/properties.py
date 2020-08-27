@@ -104,7 +104,7 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default={'MERGE_GROUPS', 'SKINNED_MESHES'},
     )
 
-    armature_as_root: BoolProperty(
+    collapse_armatures: BoolProperty(
         name="Collapse Armatures",
         description="If enabled the armature itself will get exported as a transformgroup, "
                     "where all its bones are organized as children. "

@@ -87,7 +87,6 @@ class SkinnedMeshShapeNode(ShapeNode):
         self.bone_mapping = ChainMap(*[armature.bone_mapping for armature in self.armature_nodes])
         super().__init__(id_=id_, mesh_object=skinned_mesh_object, i3d=i3d, parent=parent)
 
-
     def add_shape(self):
         # Use a ChainMap to easily combine multiple bone mappings and get around any problems with multiple bones
         # named the same as a ChainMap just gets the bone from the first armature added

@@ -131,7 +131,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
     # Special handling of armature nodes, since they are sort of "extra" compared to how other programs like Maya
     # handles bones. So the option for turning them off is provided.
     _parent = parent
-    if not i3d.settings['armature_as_root'] and isinstance(parent, SkinnedMeshRootNode):
+    if not i3d.settings['collapse_armatures'] and isinstance(parent, SkinnedMeshRootNode):
         try:
             _parent = parent.parent
         except AttributeError:

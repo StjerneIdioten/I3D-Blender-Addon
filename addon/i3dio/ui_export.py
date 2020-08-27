@@ -111,7 +111,7 @@ class I3D_IO_PT_export_options(Panel):
         column = box.column()
         column.props_enum(bpy.context.scene.i3dio, 'features_to_export')
         row = box.row()
-        row.prop(bpy.context.scene.i3dio, 'armature_as_root')
+        row.prop(bpy.context.scene.i3dio, 'collapse_armatures')
 
         layout.prop(operator, "axis_forward")
         layout.prop(operator, "axis_up")
