@@ -40,6 +40,13 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
         else:
             self.report({'ERROR'}, "I3D Export Failed! Check console/log for error(s)")
+
+        # Since it is single threaded, this warning wouldn't be sent before the exported starts exporting.
+        # So it can't come before the export and it drowns if the export time comes after it.
+        if bpy.context.preferences.addons[__package__].preferences.fs_data_path == '':
+            self.report({'WARNING'}, "FS Data folder path is not set in addon preferences! "
+                                     "Files were exported as if using absolute paths")
+
         return {'FINISHED'}
 
     def draw(self, context):
