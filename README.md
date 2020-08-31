@@ -1,6 +1,7 @@
 # Blender 2.8. Addon for i3D-Giants Game Engine
 [![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.png?v=103)](https://github.com/ellerbrock/open-source-badges/)
 [![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.png?v=103)](https://opensource.org/licenses/GPL-3.0/)
+[![semantic-release](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg)](https://github.com/semantic-release/semantic-release)
 
 As I am currently an university student, any amount will be greatly appreciated *(and will most likely be used for beer fueled coding binges, which translates into more features for the exporter)*
 
@@ -14,7 +15,7 @@ As I am currently an university student, any amount will be greatly appreciated 
 * [Objectives](#objectives)
 * [Technologies](#technologies)
 * [Status](#status)
-* [Access](#access)
+* [For Developers](#for-developers)
 * [Help](#help)
 * [Sources](#sources)
 * [License](#license)
@@ -47,7 +48,7 @@ Current Priorities listed in order
 * Almost ready for the first release. Ironing out stability issues.
 
 ## Installation
-The [Releases](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases) page will always contain a release with the latest features tagged "latest". This might not be stable, so use with care. The page also holds other releases that I add once I deem them to have been tested properly, but keep in mind that at this point this is all pre-release stuff, so make sure to keep a backup of your blend files as I cannot guarantee that the exporter will keep them in a usable state.
+The [Releases](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases) page contains all releases starting from v0.10.0, which is the first properly tagged release. If a release starts targetting a higher blender version, then the prior version will be 'frozen' as the version for the previous version of blender. Features will not be backported, upgrade your blender instead.
 All of these releases are packaged as blender expects them and should be installed just like any other [addon for blender](https://docs.blender.org/manual/en/latest/editors/preferences/addons.html#rd-party-add-ons). 
 
 If you wish to fork the repository and play around with the code, then you need to put the git repository somewhere and symlink the "addon/i3dio" folder into your version of blenders addon folder.
@@ -57,13 +58,16 @@ It is probably also worth mentioning that this addon is NOT linux/mac compatible
 ## Documentation
 As the exporter addon is currently in a pre-release stage, many of the features aren't really that well-documented apart from some internal documentation shared between testers. The [wiki](https://github.com/StjerneIdioten/I3D-Blender-Addon/wiki) is currently the best 'public' place to get information. It doesn't have everything yet, but the plan is that in time it is gonna be the only place you need to visit to get started with using this addon to create your fs-mods in blender.
 
-## Access
+## For Developers
 
 This has mostly been a solo project so far, but any help is appreciated.
 In case of wanting to join, the following knowledge is required:
 * Git version control
 * Knowledge of Python 3
 * Knowledge of Blender 2.8
+* [Angular Commit Guidelines](https://github.com/angular/angular.js/blob/master/DEVELOPERS.md#-git-commit-guidelines)
+
+The repository is running CI using Github Actions. The current release process is that anything pushed into the master will generate a new release using semantic-release, which determines the next build version from the commit history (presuming that people follow angular style of commits) It will then change the build version in the `__init__.py` and upload a tagged release of this build.
 
 ## Help
 
@@ -72,8 +76,9 @@ If you need help with the addon in any way, the following channels are available
 * [Wiki](https://github.com/StjerneIdioten/I3D-Blender-Addon/wiki): The wiki will eventually contain information on all the features of the exporter
 * [VertexDezign Discord](https://discord.gg/GVfNFpM): There is an official support channel available for the exporter. For general questions etc. 
 * [Redphoenix Youtube Showcase](https://www.youtube.com/watch?v=lRDPuKh9gow): Redphoenix has been to kind to create a youtube video showing all of the most important features
+* [Redphoenix Youtube Full Tutorial](https://www.youtube.com/watch?v=O1jBP9EVauU&t=4s): Redphoenix has also created a complete walkthrough of exporting a model through the addon
 
-I can also be reached several other places, I am not hard to find through my nickname. But please keep exporter related support to the official channels listed here. So it might come in handy for anyone else with the same problem.
+I can also be reached in several other places, I am not hard to find through my nickname. But please keep exporter related support to the official channels listed here. So it might come in handy for anyone else with the same problem.
 
 ## Sources
 
