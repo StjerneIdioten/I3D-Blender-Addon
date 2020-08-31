@@ -35,7 +35,7 @@ bl_info = {
     "author": "StjerneIdioten, original by GIANTS Software, Jason Oppermann",
     "description": "Exports blender projects into GIANTS I3D format for use in Giants Engine based games such as "
                    "Farming Simulator",
-    "version": (1, 0, 0),
+    "version": (0, 0, 0),  # Always (0, 0, 0) since versioning is controlled by the CI
     "blender": (2, 83, 0),
     "location": "File > Import-Export",
     "warning": "First Unofficial Alpha Version",

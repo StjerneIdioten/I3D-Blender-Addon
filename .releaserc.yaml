@@ -1,0 +1,17 @@
+{
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    ["@semantic-release/exec", {
+        "prepareCmd": "./prepare_release.sh ${nextRelease.version}",
+        "shell": "/bin/bash"
+      }
+    ],
+    ["@semantic-release/github", {
+      "assets": [{"path": "./addon/i3d_exporter.zip", "label": "I3D Exporter"}],
+      "failTitle": false
+      }
+    ],
+  ],
+  "preset": "angular"
+}
