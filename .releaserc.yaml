@@ -6,7 +6,7 @@
         {"type": "refactor", "release": "patch"},
         {"type": "style", "release": false},
         {"type": "docs", "release": "patch"},
-        {"type": "feat-small, "release": "patch"},
+        {"type": "feat-small", "release": "patch"},
         {"scope": "no-release", "release": false},
         {type": "ci", "release": false}
       ]
