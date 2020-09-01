@@ -70,6 +70,23 @@ In case of wanting to join, the following knowledge is required:
 
 The repository is running CI using Github Actions. The current release process is that anything pushed into the master will generate a new release using semantic-release, which determines the next build version from the commit history (presuming that people follow angular style of commits) It will then change the build version in the `__init__.py` and upload a tagged release of this build.
 
+The following is which commit types the build system reacts to:
+
+|Type|Scope|Version|Usage|
+|:---|:---:|:---:|:---:|
+|feat| * |minor|New feature|
+|perf| * |patch|Performance Enhancement|
+|fix| * |patch|Bug fix in existing code|
+|refactor| * |patch|Rewrites existing code|
+|style| * |false|A fix of comments, indentation, whitespaces etc.|
+|docs| * |patch|Updates to the documentation that is bundled with the code (so not the README.md)|
+|feat-small| * |patch|Smaller features that doesn't warrant a minor version update|
+| * |no-release|false|Anything else where it shouldn't update the version|
+|ci| * |false|Changes relating to the Continous Integration|
+
+For triggering a major version upgrade, the footer of the commit should contain `BREAKING CHANGE:` followed by a description of what breaks.
+The build system also automatically generates changelogs from the commit messages and bundles them together by first `Type` and then `scope`. The changelog will be in the description of the release on the release page.
+
 ## Help
 
 If you need help with the addon in any way, the following channels are available:
