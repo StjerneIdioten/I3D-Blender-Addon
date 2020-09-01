@@ -2,6 +2,7 @@
 [![Open Source Love](https://badges.frapsoft.com/os/v1/open-source.png?v=103)](https://github.com/ellerbrock/open-source-badges/)
 [![GPL Licence](https://badges.frapsoft.com/os/gpl/gpl.png?v=103)](https://opensource.org/licenses/GPL-3.0/)
 [![semantic-release](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg)](https://github.com/semantic-release/semantic-release)
+![Workflow status](https://github.com/StjerneIdioten/I3D-Blender-Addon/workflows/Release/badge.svg)
 
 As I am currently an university student, any amount will be greatly appreciated *(and will most likely be used for beer fueled coding binges, which translates into more features for the exporter)*
 
