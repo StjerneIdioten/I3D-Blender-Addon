@@ -255,6 +255,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
         'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
+        'decal_layer': {'name': 'decalLayer', 'default': 0},
         'fill_volume': {'name': 'name', 'default': False, 'placement': 'IndexedTriangleSet',
                         'type': 'OVERRIDE', 'override': 'fillVolumeShape'}
     }
@@ -291,6 +292,13 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
             ('256', 'On', "Turns on CPU Mesh")
         ],
         default=i3d_map['cpu_mesh']['default']
+    )
+
+    decal_layer: FloatProperty(
+        name="Decal Layer",
+        description="Decal",
+        default=i3d_map['decal_layer']['default'],
+        min=0.0
     )
 
     fill_volume: BoolProperty(
