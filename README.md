@@ -70,6 +70,13 @@ In case of wanting to join, the following knowledge is required:
 
 The repository is running CI using Github Actions. The current release process is that anything pushed into the master will generate a new release using semantic-release, which determines the next build version from the commit history (presuming that people follow angular style of commits) It will then change the build version in the `__init__.py` and upload a tagged release of this build.
 
+Commit format:
+> type(scope): Briefly describe change
+>
+> Further elaborate the motivation behind the change
+>
+> Close issues here
+
 The following is which commit types the build system reacts to:
 
 |Type|Scope|Version|Usage|
@@ -86,6 +93,26 @@ The following is which commit types the build system reacts to:
 
 For triggering a major version upgrade, the footer of the commit should contain `BREAKING CHANGE:` followed by a description of what breaks.
 The build system also automatically generates changelogs from the commit messages and bundles them together by first `Type` and then `scope`. The changelog will be in the description of the release on the release page.
+
+Examples:
+* Refactoring a piece of code in the main exporter module and close the related issue: 
+> refactor(core-exporter): Refactor blender object type check
+>
+> Change the order of checks performed for object type to increase speed of execution
+>
+> Close #51
+
+* Add a smaller feature such as an extra export attribute:
+> feat-small(shader-picker): Add option for something
+>
+> Add option 'something' to material ui to enable automatic setting of 'something' in GE
+
+* The major vesion is upgraded for non backwards compatible features such as a change of blender version used for development
+> feat(blender): Upgrade blender version to 2.9
+> 
+> Update to further support new features
+>
+> BREAKING CHANGE: This breaks backwards compatability with older blender version. Use older builds if you have to stay at 2.83
 
 ## Help
 
