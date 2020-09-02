@@ -294,11 +294,12 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         default=i3d_map['cpu_mesh']['default']
     )
 
-    decal_layer: FloatProperty(
+    decal_layer: IntProperty(
         name="Decal Layer",
         description="Decal",
         default=i3d_map['decal_layer']['default'],
         min=0.0
+        max=3.0
     )
 
     fill_volume: BoolProperty(
