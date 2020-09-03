@@ -24,10 +24,13 @@ def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon=0.0000001) 
 def as_fs_relative_path(filepath: str):
     """If the filepath is relative to the fs dir, then return it with $ referring to the fs data dir
     else return the path"""
+    logger.debug(f"Original path: {filepath}")
     fs_data_path = bpy.context.preferences.addons[__package__].preferences.fs_data_path
     try:
         if fs_data_path != '':
-            return '$data' + filepath[filepath.index(fs_data_path) + len(fs_data_path) - 1:]
+            path_to_return = '$data' + filepath[filepath.index(fs_data_path) + len(fs_data_path) - 1:]
+            logger.debug(f"Fs relative path: {path_to_return}")
+            return path_to_return
         else:
             raise ValueError
     except ValueError:
