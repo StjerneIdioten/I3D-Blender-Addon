@@ -26,7 +26,7 @@ class File(Node):
 
     def __init__(self, id_: int, i3d: I3D, filepath: str):
         self.blender_path = filepath  # This should be supplied as the normal blender relative path
-        self.resolved_path = bpy.path.abspath(self.blender_path)  # Initialize as blender path as default if no changes are made
+        self.resolved_path = None
         self.file_name = bpy.path.display_name_from_filepath(self.blender_path)
         self.file_extension = self.blender_path[self.blender_path.rfind('.'):len(self.blender_path)]
         self._xml_element = None
@@ -56,15 +56,14 @@ class File(Node):
         super()._create_xml_element()
 
     def _resolve_filepath(self):
-        filepath_absolute = bpy.path.abspath(self.blender_path)
-        filepath_relative_to_fs = utility.as_fs_relative_path(filepath_absolute)
+        filepath_relative_to_fs = utility.as_fs_relative_path(self.blender_path)
 
         if filepath_relative_to_fs[0] == '$':
             self.resolved_path = filepath_relative_to_fs
         elif bpy.context.scene.i3dio.copy_files:
             self._copy_file()
         else:
-            self.resolved_path = filepath_absolute
+            self.resolved_path = filepath_relative_to_fs
 
         self.logger.info(f"Resolved filepath: {self.resolved_path}")
 
