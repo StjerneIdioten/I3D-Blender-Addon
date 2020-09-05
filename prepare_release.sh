@@ -1,6 +1,6 @@
 #!/bin/bash
 # Replace version number with new version number. Can contain dev version.
-sed -i "/^__version/c\__version__ = \"$1\"" $GITHUB_WORKSPACE/addon/test/__init__.py
+sed -i "/^__version/c\__version__ = \"$1\"" $GITHUB_WORKSPACE/addon/i3dio/__init__.py
 # Split the version tag into separate numbers
 IFS='.-' read -ra VERSION <<< "$1"
 # Replace bl_info version number with new version number (This one can't contain a development tag if present)
