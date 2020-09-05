@@ -155,7 +155,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
             if shader.variation != shader_no_variation:
                 variations = root.find('Variations')
                 variation = variations.find(f"./Variation[@name='{shader.variation}']")
-                parameter_groups = variation.attrib['groups'].split()
+                parameter_groups = variation.attrib.get('groups', '').split()
             else:
                 parameter_groups = ['base']
 
