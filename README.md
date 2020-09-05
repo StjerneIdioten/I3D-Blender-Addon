@@ -87,7 +87,7 @@ The following is which commit types the build system reacts to:
 |refactor| * |patch|Rewrites existing code|
 |style| * |false|A fix of comments, indentation, whitespaces etc.|
 |docs| * |patch|Updates to the documentation that is bundled with the code (so not the README.md)|
-|feat-small| * |patch|Smaller features that doesn't warrant a minor version update|
+|featsmall| * |patch|Smaller features that doesn't warrant a minor version update|
 | * |no-release|false|Anything else where it shouldn't update the version|
 |ci| * |false|Changes relating to the Continous Integration|
 

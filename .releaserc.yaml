@@ -10,7 +10,7 @@
         {"type": "refactor", "release": "patch"},
         {"type": "style", "release": false},
         {"type": "docs", "release": "patch"},
-        {"type": "feat-small", "release": "patch"},
+        {"type": "featsmall", "release": "patch"},
         {"scope": "no-release", "release": false},
         {type": "ci", "release": false}
       ]
@@ -26,7 +26,7 @@
           {"type": "docs", "section": "Documentation", "hidden": true},
           {"type": "refactor", "section": "Code Refactoring", "hidden": true},
           {"type": "ci", "section": "Continuous Integration", "hidden": true},
-          {"type": "feat-small", "section": "Features"}
+          {"type": "featsmall", "section": "Features"}
         ]
       }
     }],
