@@ -44,7 +44,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
         log_file_handler = None
 
     print(f"Blender version is: {bpy.app.version_string}")
-    print(f"I3D Exporter version is: {sys.modules['i3dio'].bl_info.get('version')}")
+    print(f"I3D Exporter version is: {sys.modules['i3dio'].__version__}")
     print(f"Exporting to {filepath}")
     time_start = time.time()
 

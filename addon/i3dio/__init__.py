@@ -30,6 +30,8 @@ from . import (
 
 import bpy
 
+__version__ = "0.0.0"  # This version number is used internally, since the bl_info one can't handle dev versions...
+
 bl_info = {
     "name": "Unofficial GIANTS I3D Exporter Tools",
     "author": "StjerneIdioten, original by GIANTS Software, Jason Oppermann",
