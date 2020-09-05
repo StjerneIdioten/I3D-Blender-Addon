@@ -15,7 +15,7 @@ classes = []
 
 # A module value to represent what the field shows when a shader is not selected
 shader_unselected_default_text = ''
-shader_no_variations = 'NONE'
+shader_no_variation = 'None'
 shader_parameter_max_decimals = 3  # 0-6 per blender properties documentation
 
 
@@ -36,7 +36,7 @@ class I3DShaderParameter(bpy.types.PropertyGroup):
 
 @register
 class I3DShaderTexture(bpy.types.PropertyGroup):
-    name: StringProperty(default='Unnamed Attribute')
+    name: StringProperty(default='Unnamed Texture')
     source: StringProperty(name='Texture source',
                            description='Path to the texture',
                            subtype='FILE_PATH',
@@ -48,6 +48,15 @@ class I3DShaderTexture(bpy.types.PropertyGroup):
 @register
 class I3DShaderVariation(bpy.types.PropertyGroup):
     name: StringProperty(default='Error')
+
+
+def clear_shader(context):
+    attributes = context.object.active_material.i3d_attributes
+    attributes.source = shader_unselected_default_text
+    attributes.variations.clear()
+    attributes.shader_parameters.clear()
+    attributes.shader_textures.clear()
+    attributes.variation = shader_no_variation
 
 
 @register
@@ -66,32 +75,24 @@ class I3DLoadCustomShader(bpy.types.Operator):
             tree = ET.parse(bpy.path.abspath(attributes.source))
         except ET.ParseError as e:
             print(f"Shader file is not correct xml, failed with error: {e}")
-            attributes.source = shader_unselected_default_text
-            attributes.variations.clear()
-            attributes.shader_parameters.clear()
-            attributes.shader_textures.clear()
-            attributes.variation = shader_no_variations
+            clear_shader(context)
         else:
             root = tree.getroot()
             if root.tag != 'CustomShader':
                 print(f"File is xml, but not a properly formatted shader file! Aborting")
-                attributes.source = shader_unselected_default_text
-                attributes.variations.clear()
-                attributes.shader_parameters.clear()
-                attributes.shader_textures.clear()
-                attributes.variation = shader_no_variations
+                clear_shader(context)
             else:
                 attributes.variations.clear()
+                base_variation = attributes.variations.add()
+                base_variation.name = shader_no_variation
+                attributes.variation = base_variation.name
+
                 variations = root.find('Variations')
 
                 if variations is not None:
                     for variation in variations:
                         new_variation = attributes.variations.add()
                         new_variation.name = variation.attrib['name']
-
-                    attributes.variation = variations[0].attrib['name']
-                else:
-                    attributes.variation = shader_no_variations
 
         return {'FINISHED'}
 
@@ -128,11 +129,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
             tree = ET.parse(bpy.path.abspath(shader.source))
         except (ET.ParseError, FileNotFoundError) as e:
             print(f"Shader file is no longer valid: {e}")
-            shader.source = shader_unselected_default_text
-            shader.variations.clear()
-            shader.shader_parameters.clear()
-            shader.shader_textures.clear()
-            shader.variation = shader_no_variations
+            clear_shader(context)
         else:
             shader.shader_parameters.clear()
             shader.shader_textures.clear()
@@ -155,34 +152,37 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                     group = grouped_textures.setdefault(group_name, [])
                     group.append(texture_element_as_dict(texture))
 
-            variations = root.find('Variations')
-            variation = variations.find(f"./Variation[@name='{shader.variation}']")
-            if variation is not None:
+            if shader.variation != shader_no_variation:
+                variations = root.find('Variations')
+                variation = variations.find(f"./Variation[@name='{shader.variation}']")
                 parameter_groups = variation.attrib['groups'].split()
-                for group in parameter_groups:
-                    parameter_group = grouped_parameters.get(group)
-                    if parameter_group is not None:
-                        for parameter in grouped_parameters[group]:
-                            param = shader.shader_parameters.add()
-                            param.name = parameter['name']
-                            param.type = parameter['type']
-                            data = tuple(map(float, parameter['default_values']))
-                            if param.type == 'float':
-                                param.data_float_1 = data[0]
-                            elif param.type == 'float2':
-                                param.data_float_2 = data
-                            elif param.type == 'float3':
-                                param.data_float_3 = data
-                            elif param.type == 'float4':
-                                param.data_float_4 = data
+            else:
+                parameter_groups = ['base']
 
-                    texture_group = grouped_textures.get(group)
-                    if texture_group is not None:
-                        for texture in grouped_textures[group]:
-                            tex = shader.shader_textures.add()
-                            tex.name = texture['name']
-                            tex.source = texture['default_file']
-                            tex.default_source = texture['default_file']
+            for group in parameter_groups:
+                parameter_group = grouped_parameters.get(group)
+                if parameter_group is not None:
+                    for parameter in grouped_parameters[group]:
+                        param = shader.shader_parameters.add()
+                        param.name = parameter['name']
+                        param.type = parameter['type']
+                        data = tuple(map(float, parameter['default_values']))
+                        if param.type == 'float':
+                            param.data_float_1 = data[0]
+                        elif param.type == 'float2':
+                            param.data_float_2 = data
+                        elif param.type == 'float3':
+                            param.data_float_3 = data
+                        elif param.type == 'float4':
+                            param.data_float_4 = data
+
+                texture_group = grouped_textures.get(group)
+                if texture_group is not None:
+                    for texture in grouped_textures[group]:
+                        tex = shader.shader_textures.add()
+                        tex.name = texture['name']
+                        tex.source = texture['default_file']
+                        tex.default_source = texture['default_file']
 
         return {'FINISHED'}
 
@@ -211,8 +211,6 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         if self.variations:
             for variation in self.variations:
                 items.append((f'{variation.name}', f'{variation.name}', f"The shader variation '{variation.name}'"))
-        else:
-            items.append((shader_no_variations, 'No Variations', 'There are no variations defined in the shader'))
 
         return items
 
@@ -226,11 +224,10 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     def variation_setter(self, value):
         self['variation'] = value
-        if self.variation != shader_no_variations:
-            bpy.ops.i3dio.load_custom_shader_variation()
+        bpy.ops.i3dio.load_custom_shader_variation()
 
     def variation_getter(self):
-        return self.get('variation', shader_no_variations)
+        return self.get('variation', shader_no_variation)
 
     variation: EnumProperty(name='Variation',
                             description='The shader variation',
