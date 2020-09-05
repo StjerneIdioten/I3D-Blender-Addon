@@ -298,8 +298,8 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         name="Decal Layer",
         description="Decal",
         default=i3d_map['decal_layer']['default'],
-        hard_min=0
-        hard_max=3
+        max=3,
+        min=0,
     )
 
     fill_volume: BoolProperty(
