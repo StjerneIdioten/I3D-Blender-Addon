@@ -99,9 +99,34 @@ class I3DLoadCustomShader(bpy.types.Operator):
 
 def parameter_element_as_dict(parameter):
     parameter_dictionary = {'name': parameter.attrib['name'],
-                            'default_values': parameter.attrib['defaultValue'].split(),
-                            'type': parameter.attrib['type']
-                            }
+                            'type': parameter.attrib['type']}
+
+    if parameter_dictionary['type'] == 'float':
+        type_length = 1
+    elif parameter_dictionary['type'] == 'float2':
+        type_length = 2
+    elif parameter_dictionary['type'] == 'float3':
+        type_length = 3
+    elif parameter_dictionary['type'] == 'float4':
+        type_length = 4
+    else:
+        print(f"Shader Parameter type is unknown!")
+
+    default_value = parameter.attrib.get('defaultValue')
+
+    if default_value is not None:
+        default_value = default_value.split()
+        # For some reason, Giants shaders has to specify their default values in terms of float4... Where the extra
+        # parts compared with what the actual type length is, aren't in any way relevant.
+        if len(default_value) > type_length:
+            default_value = default_value[:type_length-1]
+    else:
+        default_value = []
+
+    default_value += ['0']*(type_length-len(default_value))
+
+    parameter_dictionary['default_value'] = default_value
+
     return parameter_dictionary
 
 
@@ -140,7 +165,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
             grouped_parameters = {}
             if parameters is not None:
                 for parameter in parameters:
-                    group_name = parameter.attrib['group']
+                    group_name = parameter.attrib.get('group', 'mandatory')
                     group = grouped_parameters.setdefault(group_name, [])
                     group.append(parameter_element_as_dict(parameter))
 
@@ -148,16 +173,17 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
             grouped_textures = {}
             if textures is not None:
                 for texture in textures:
-                    group_name = texture.attrib['group']
-                    group = grouped_textures.setdefault(group_name, [])
-                    group.append(texture_element_as_dict(texture))
+                    if texture.attrib.get('defaultColorProfile') is not None:
+                        group_name = texture.attrib.get('group', 'mandatory')
+                        group = grouped_textures.setdefault(group_name, [])
+                        group.append(texture_element_as_dict(texture))
 
             if shader.variation != shader_no_variation:
                 variations = root.find('Variations')
                 variation = variations.find(f"./Variation[@name='{shader.variation}']")
-                parameter_groups = variation.attrib.get('groups', '').split()
+                parameter_groups = ['mandatory'] + variation.attrib.get('groups', '').split()
             else:
-                parameter_groups = ['base']
+                parameter_groups = ['mandatory', 'base']
 
             for group in parameter_groups:
                 parameter_group = grouped_parameters.get(group)
@@ -166,7 +192,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                         param = shader.shader_parameters.add()
                         param.name = parameter['name']
                         param.type = parameter['type']
-                        data = tuple(map(float, parameter['default_values']))
+                        data = tuple(map(float, parameter['default_value']))
                         if param.type == 'float':
                             param.data_float_1 = data[0]
                         elif param.type == 'float2':
