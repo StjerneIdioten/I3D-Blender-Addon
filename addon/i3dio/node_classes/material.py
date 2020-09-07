@@ -38,6 +38,7 @@ class Material(Node):
         else:
             self._resolve_without_nodes()
         self._export_shader_settings()
+        self._write_properties()
 
     def _resolve_with_nodes(self):
         main_node = self.blender_material.node_tree.nodes.get('Principled BSDF')
@@ -117,6 +118,11 @@ class Material(Node):
 
     def _write_specular(self, specular_color):
         self._write_attribute('specularColor', "{0:.6f} {1:.6f} {2:.6f}".format(*specular_color))
+
+    def _write_properties(self):
+        # Alpha blending
+        if self.blender_material.blend_method in ['CLIP', 'HASHED', 'BLEND']:
+            self._write_attribute('alphaBlending', True)
 
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes
