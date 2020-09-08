@@ -1,6 +1,7 @@
 if "bpy" in locals():
     import importlib
     reloadable_modules = [
+        'addon_preferences',
         'exporter',
         'object',
         'mesh',
@@ -11,4 +12,4 @@ if "bpy" in locals():
         if module_name in locals():
             importlib.reload(locals()[module_name])
 
-from . import (exporter, object, mesh, light)
+from . import (addon_preferences, exporter, object, mesh, light)

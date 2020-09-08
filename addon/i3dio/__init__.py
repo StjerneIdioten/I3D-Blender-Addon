@@ -21,7 +21,6 @@ if "bpy" in locals():
             del sys.modules[module]
 
 from . import (
-    ui_preferences,
     ui_shader_picker,
     ui
 )
@@ -52,7 +51,7 @@ def menu_func_export(self, context):
 
 
 def register():
-    ui_preferences.register()
+    ui.addon_preferences.register()
     ui_shader_picker.register()
     ui.exporter.register()
     ui.object.register()
@@ -69,5 +68,5 @@ def unregister():
     ui.mesh.unregister()
     ui.light.unregister()
     ui_shader_picker.unregister()
-    ui_preferences.unregister()
+    ui.addon_preferences.unregister()
 
