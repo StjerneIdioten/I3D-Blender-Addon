@@ -44,7 +44,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
         log_file_handler = None
 
     print(f"Blender version is: {bpy.app.version_string}")
-    print(f"I3D Exporter version is: {sys.modules['i3dio'].bl_info.get('version')}")
+    print(f"I3D Exporter version is: {sys.modules['i3dio'].__version__}")
     print(f"Exporting to {filepath}")
     time_start = time.time()
 
@@ -131,7 +131,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
     # Special handling of armature nodes, since they are sort of "extra" compared to how other programs like Maya
     # handles bones. So the option for turning them off is provided.
     _parent = parent
-    if not i3d.settings['armature_as_root'] and isinstance(parent, SkinnedMeshRootNode):
+    if not i3d.settings['collapse_armatures'] and isinstance(parent, SkinnedMeshRootNode):
         try:
             _parent = parent.parent
         except AttributeError:
@@ -159,13 +159,15 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                     if modifier.type == 'ARMATURE':
                         node = i3d.add_skinned_mesh_node(obj, _parent)
                         break
-            elif 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group.group_id != "":
-                # Currently the check for a mergegroup relies solely on whether or not a name is set for it
-                node = i3d.add_merge_group_node(obj, _parent)
 
-            # Default to a regular shape node
             if node is None:
-                node = i3d.add_shape_node(obj, _parent)
+                if 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group.group_id != "":
+                    # Currently the check for a mergegroup relies solely on whether or not a name is set for it
+                    node = i3d.add_merge_group_node(obj, _parent)
+                else:
+                    # Default to a regular shape node
+                    node = i3d.add_shape_node(obj, _parent)
+
         elif obj.type == 'ARMATURE':
             node = i3d.add_armature(obj, _parent, is_located=True)
         elif obj.type == 'EMPTY':

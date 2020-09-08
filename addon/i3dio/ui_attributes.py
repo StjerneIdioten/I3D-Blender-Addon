@@ -168,6 +168,7 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "non_renderable")
         layout.prop(obj.i3d_attributes, "distance_blending")
         layout.prop(obj.i3d_attributes, "cpu_mesh")
+        layout.prop(obj.i3d_attributes, "decal_layer")
         layout.prop(obj.i3d_attributes, 'fill_volume')
 
 

@@ -38,6 +38,7 @@ class Material(Node):
         else:
             self._resolve_without_nodes()
         self._export_shader_settings()
+        self._write_properties()
 
     def _resolve_with_nodes(self):
         main_node = self.blender_material.node_tree.nodes.get('Principled BSDF')
@@ -118,36 +119,41 @@ class Material(Node):
     def _write_specular(self, specular_color):
         self._write_attribute('specularColor', "{0:.6f} {1:.6f} {2:.6f}".format(*specular_color))
 
+    def _write_properties(self):
+        # Alpha blending
+        if self.blender_material.blend_method in ['CLIP', 'HASHED', 'BLEND']:
+            self._write_attribute('alphaBlending', True)
+
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes
         if shader_settings.source != ui_shader_picker.shader_unselected_default_text:
-            if shader_settings.variation != ui_shader_picker.shader_no_variations:
-                shader_file_id = self.i3d.add_file_shader(shader_settings.source)
-                self._write_attribute('customShaderId', shader_file_id)
+            shader_file_id = self.i3d.add_file_shader(shader_settings.source)
+            self._write_attribute('customShaderId', shader_file_id)
+            if shader_settings.variation != ui_shader_picker.shader_no_variation:
                 self._write_attribute('customShaderVariation', shader_settings.variation)
-                for parameter in shader_settings.shader_parameters:
-                    parameter_dict = {'name': parameter.name}
-                    if parameter.type == 'float':
-                        value = [parameter.data_float_1]
-                    elif parameter.type == 'float2':
-                        value = parameter.data_float_2
-                    elif parameter.type == 'float3':
-                        value = parameter.data_float_3
-                    elif parameter.type == 'float4':
-                        value = parameter.data_float_4
-                    else:
-                        value = []
+            for parameter in shader_settings.shader_parameters:
+                parameter_dict = {'name': parameter.name}
+                if parameter.type == 'float':
+                    value = [parameter.data_float_1]
+                elif parameter.type == 'float2':
+                    value = parameter.data_float_2
+                elif parameter.type == 'float3':
+                    value = parameter.data_float_3
+                elif parameter.type == 'float4':
+                    value = parameter.data_float_4
+                else:
+                    value = []
 
-                    value = ' '.join(map('{0:.6f}'.format, value))
-                    parameter_dict['value'] = value
+                value = ' '.join(map('{0:.6f}'.format, value))
+                parameter_dict['value'] = value
 
-                    ET.SubElement(self.element, 'CustomParameter', parameter_dict)
+                ET.SubElement(self.element, 'CustomParameter', parameter_dict)
 
-                for texture in shader_settings.shader_textures:
-                    self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")
-                    if '' != texture.source != texture.default_source:
-                        texture_dict = {'name': texture.name}
-                        texture_id = self.i3d.add_file_image(texture.source)
-                        texture_dict['fileId'] = str(texture_id)
+            for texture in shader_settings.shader_textures:
+                self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")
+                if '' != texture.source != texture.default_source:
+                    texture_dict = {'name': texture.name}
+                    texture_id = self.i3d.add_file_image(texture.source)
+                    texture_dict['fileId'] = str(texture_id)
 
-                        ET.SubElement(self.element, 'Custommap', texture_dict)
+                    ET.SubElement(self.element, 'Custommap', texture_dict)

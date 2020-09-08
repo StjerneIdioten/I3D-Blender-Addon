@@ -45,10 +45,17 @@ class I3D_IO_OT_export(Operator, ExportHelper):
 
     def execute(self, context):
         status = exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
-        if status:
+        if status['success']:
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
         else:
             self.report({'ERROR'}, "I3D Export Failed! Check console/log for error(s)")
+
+        # Since it is single threaded, this warning wouldn't be sent before the exported starts exporting.
+        # So it can't come before the export and it drowns if the export time comes after it.
+        if bpy.context.preferences.addons[__package__].preferences.fs_data_path == '':
+            self.report({'WARNING'}, "FS Data folder path is not set in addon preferences! "
+                                     "Files were exported as if using absolute paths")
+
         return {'FINISHED'}
     
     def draw(self, context):
@@ -122,7 +129,7 @@ class I3D_IO_PT_export_options(Panel):
         column = box.column()
         column.props_enum(bpy.context.scene.i3dio, 'features_to_export')
         row = box.row()
-        row.prop(bpy.context.scene.i3dio, 'armature_as_root')
+        row.prop(bpy.context.scene.i3dio, 'collapse_armatures')
 
         layout.prop(operator, "axis_forward")
         layout.prop(operator, "axis_up")

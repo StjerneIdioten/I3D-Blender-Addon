@@ -1,0 +1,43 @@
+{
+   branches: [
+    {name: 'master'},
+    {name: 'develop', prerelease: 'dev', channel: false},
+  ],
+  "plugins": [
+    ["@semantic-release/commit-analyzer", {
+      "preset": "angular",
+      "releaseRules": [
+        {"type": "refactor", "release": "patch"},
+        {"type": "style", "release": false},
+        {"type": "docs", "release": "patch"},
+        {"type": "featsmall", "release": "patch"},
+        {"scope": "no-release", "release": false},
+        {type": "ci", "release": false}
+      ]
+    }],
+    ["@semantic-release/release-notes-generator", {
+      "preset": "conventionalcommits",
+      "presetConfig": {
+        "types": [
+          {"type": "feat", "section": "Features"},
+          {"type": "fix", "section": "Bug Fixes"},
+          {"type": "perf", "section": "Performance Improvements"},
+          {"type": "revert", "section": "Reverts"},
+          {"type": "docs", "section": "Documentation", "hidden": true},
+          {"type": "refactor", "section": "Code Refactoring", "hidden": true},
+          {"type": "ci", "section": "Continuous Integration", "hidden": true},
+          {"type": "featsmall", "section": "Features"}
+        ]
+      }
+    }],
+    ["@semantic-release/exec", {
+        "prepareCmd": "./prepare_release.sh ${nextRelease.version}",
+        "shell": "/bin/bash"
+    }],
+    ["@semantic-release/github", {
+      "assets": [{"path": "./addon/i3d_exporter.zip", "label": "I3D Exporter"}],
+      "failTitle": false
+      }
+    ],
+  ]
+}

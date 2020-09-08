@@ -21,6 +21,7 @@ if "bpy" in locals():
             del sys.modules[module]
 
 from . import (
+    ui_preferences,
     properties,
     ui_attributes,
     ui_shader_picker
@@ -30,13 +31,15 @@ from .ui import exporter_menu
 
 import bpy
 
+__version__ = "0.0.0"  # This version number is used internally, since the bl_info one can't handle dev versions...
+
 bl_info = {
     "name": "Unofficial GIANTS I3D Exporter Tools",
     "author": "StjerneIdioten, original by GIANTS Software, Jason Oppermann",
     "description": "Exports blender projects into GIANTS I3D format for use in Giants Engine based games such as "
                    "Farming Simulator",
-    "version": (1, 0, 0),
-    "blender": (2, 83, 0),
+    "version": (0, 0, 0),  # Always (0, 0, 0) since versioning is controlled by the CI
+    "blender": (2, 90, 0),
     "location": "File > Import-Export",
     "warning": "First Unofficial Alpha Version",
     "support": "COMMUNITY",
@@ -52,6 +55,7 @@ def menu_func_export(self, context):
 
 
 def register():
+    ui_preferences.register()
     properties.register()
     ui_attributes.register()
     ui_shader_picker.register()
@@ -65,4 +69,5 @@ def unregister():
     ui_shader_picker.unregister()
     ui_attributes.unregister()
     properties.unregister()
+    ui_preferences.unregister()
 

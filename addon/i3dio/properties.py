@@ -104,7 +104,7 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default={'MERGE_GROUPS', 'SKINNED_MESHES'},
     )
 
-    armature_as_root: BoolProperty(
+    collapse_armatures: BoolProperty(
         name="Collapse Armatures",
         description="If enabled the armature itself will get exported as a transformgroup, "
                     "where all its bones are organized as children. "
@@ -255,6 +255,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
         'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
+        'decal_layer': {'name': 'decalLayer', 'default': 0},
         'fill_volume': {'name': 'name', 'default': False, 'placement': 'IndexedTriangleSet',
                         'type': 'OVERRIDE', 'override': 'fillVolumeShape'}
     }
@@ -291,6 +292,14 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
             ('256', 'On', "Turns on CPU Mesh")
         ],
         default=i3d_map['cpu_mesh']['default']
+    )
+
+    decal_layer: IntProperty(
+        name="Decal Layer",
+        description="Decal",
+        default=i3d_map['decal_layer']['default'],
+        max=3,
+        min=0,
     )
 
     fill_volume: BoolProperty(

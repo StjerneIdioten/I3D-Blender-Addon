@@ -114,9 +114,9 @@ class I3D:
     def add_armature(self, armature_object: bpy.types.Armature, parent: SceneGraphNode = None,
                      is_located: bool = False) -> SceneGraphNode:
         if armature_object.name not in self.skinned_meshes:
-            if is_located and self.settings['armature_as_root']:
+            if is_located and not self.settings['collapse_armatures']:
                 skinned_mesh_root_node = self._add_node(SkinnedMeshRootNode, armature_object, parent)
-            elif is_located and not self.settings['armature_as_root']:
+            elif is_located and self.settings['collapse_armatures']:
                 skinned_mesh_root_node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self,
                                                              None)
                 skinned_mesh_root_node.update_bone_parent(parent)
@@ -128,7 +128,7 @@ class I3D:
             skinned_mesh_root_node.is_located = is_located
             self.skinned_meshes[armature_object.name] = skinned_mesh_root_node
         elif is_located:
-            if self.settings['armature_as_root']:
+            if not self.settings['collapse_armatures']:
                 if parent is not None:
                     parent.add_child(self.skinned_meshes[armature_object.name])
                     parent.element.append(self.skinned_meshes[armature_object.name].element)
@@ -158,7 +158,7 @@ class I3D:
         return self._add_node(CameraNode, camera_object, parent)
 
     def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None,
-                  bone_mapping: Dict = None) -> int:
+                  bone_mapping: ChainMap = None) -> int:
         if shape_name is None:
             name = evaluated_mesh.name
         else:
