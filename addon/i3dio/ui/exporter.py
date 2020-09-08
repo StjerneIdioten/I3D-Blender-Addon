@@ -314,6 +314,22 @@ class I3D_IO_PT_export_debug(Panel):
         layout.prop(bpy.context.scene.i3dio, 'log_to_file')
 
 
+@register
+class I3D_IO_PT_i3d_mapping_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Mapping Options"
+    bl_context = 'scene'
+
+    @classmethod
+    def poll(cls, context):
+        return True
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(bpy.context.scene.i3dio, 'i3d_mapping_file_path')
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)

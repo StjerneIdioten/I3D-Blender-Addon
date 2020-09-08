@@ -22,12 +22,9 @@ if "bpy" in locals():
 
 from . import (
     ui_preferences,
-    properties,
-    ui_attributes,
-    ui_shader_picker
+    ui_shader_picker,
+    ui
 )
-
-from .ui import exporter_menu
 
 import bpy
 
@@ -51,23 +48,26 @@ bl_info = {
 
 # File -> Export item
 def menu_func_export(self, context):
-    self.layout.operator(exporter_menu.I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
+    self.layout.operator(ui.exporter.I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
 
 
 def register():
     ui_preferences.register()
-    properties.register()
-    ui_attributes.register()
     ui_shader_picker.register()
-    exporter_menu.register()
+    ui.exporter.register()
+    ui.object.register()
+    ui.mesh.register()
+    ui.light.register()
+
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
 
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
-    exporter_menu.unregister()
+    ui.exporter.unregister()
+    ui.object.unregister()
+    ui.mesh.unregister()
+    ui.light.unregister()
     ui_shader_picker.unregister()
-    ui_attributes.unregister()
-    properties.unregister()
     ui_preferences.unregister()
 

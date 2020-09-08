@@ -1,5 +1,8 @@
-import logging
 import bpy
+from bpy.types import (
+    Panel
+)
+
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -11,8 +14,6 @@ from bpy.props import (
 )
 
 classes = []
-
-logger = logging.getLogger(__name__)
 
 
 def register(cls):
@@ -101,104 +102,112 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
 
 @register
-class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
-    i3d_map = {
-        'casts_shadows': {'name': 'castsShadows', 'default': False},
-        'receive_shadows': {'name': 'receiveShadows', 'default': False},
-        'non_renderable': {'name': 'nonRenderable', 'default': False},
-        'distance_blending': {'name': 'distanceBlending', 'default': True},
-        'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
-        'decal_layer': {'name': 'decalLayer', 'default': 0},
-        'fill_volume': {'name': 'name', 'default': False, 'placement': 'IndexedTriangleSet',
-                        'type': 'OVERRIDE', 'override': 'fillVolumeShape'}
-    }
+class I3D_IO_PT_object_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Object Attributes"
+    bl_context = 'object'
 
-    casts_shadows: BoolProperty(
-        name="Cast Shadowmap",
-        description="Cast Shadowmap",
-        default=i3d_map['casts_shadows']['default']
-    )
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None
 
-    receive_shadows: BoolProperty(
-        name="Receive Shadowmap",
-        description="Receive Shadowmap",
-        default=i3d_map['receive_shadows']['default']
-    )
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
 
-    non_renderable: BoolProperty(
-        name="Non Renderable",
-        description="Don't render the mesh, used for collision boxes etc.",
-        default=i3d_map['non_renderable']['default']
-    )
-
-    distance_blending: BoolProperty(
-        name="Distance Blending",
-        description="Distance Blending",
-        default=i3d_map['distance_blending']['default']
-    )
-
-    cpu_mesh: EnumProperty(
-        name="CPU Mesh",
-        description="CPU Mesh",
-        items=[
-            ('0', 'Off', "Turns off CPU Mesh"),
-            ('256', 'On', "Turns on CPU Mesh")
-        ],
-        default=i3d_map['cpu_mesh']['default']
-    )
-
-    decal_layer: IntProperty(
-        name="Decal Layer",
-        description="Decal",
-        default=i3d_map['decal_layer']['default'],
-        max=3,
-        min=0,
-    )
-
-    fill_volume: BoolProperty(
-        name="Fill Volume",
-        description="Check this if the object is meant to be a fill volume, since this requires some special naming of "
-                    "the IndexedTriangleSet in the i3d file.",
-        default=i3d_map['fill_volume']['default']
-    )
+        layout.prop(obj.i3d_attributes, 'visibility')
+        layout.prop(obj.i3d_attributes, 'clip_distance')
+        layout.prop(obj.i3d_attributes, 'min_clip_distance')
 
 
 @register
-class I3DNodeLightAttributes(bpy.types.PropertyGroup):
-    i3d_map = {
-        'depth_map_bias': {'name': 'depthMapBias', 'default': 0.0012},
-        'depth_map_slope_scale_bias': {'name': 'depthMapSlopeScaleBias', 'default': 2.0},
-    }
+class I3D_IO_PT_rigid_body_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = 'Rigidbody'
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
 
-    depth_map_bias: FloatProperty(
-        name="Shadow Map Bias",
-        description="Shadow Map Bias",
-        default=i3d_map['depth_map_bias']['default'],
-        min=0.0,
-        max=10.0
-    )
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH'
 
-    depth_map_slope_scale_bias: FloatProperty(
-        name="Shadow Map Slope Scale Bias",
-        description="Shadow Map Slope Scale Bias",
-        default=i3d_map['depth_map_slope_scale_bias']['default'],
-        min=-10.0,
-        max=10.0
-    )
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'rigid_body_type')
+
+        if obj.i3d_attributes.rigid_body_type != 'none':
+            row_compound = layout.row()
+            row_compound.prop(obj.i3d_attributes, 'compound')
+
+            if obj.i3d_attributes.rigid_body_type in ('static', 'compoundChild'):
+                row_compound.enabled = False
+                obj.i3d_attributes.property_unset('compound')
+
+            row = layout.row()
+            row.prop(obj.i3d_attributes, 'collision')
+
+            row = layout.row()
+            row.prop(obj.i3d_attributes, 'collision_mask')
+
+            row = layout.row()
+            row.prop(obj.i3d_attributes, 'trigger')
+        else:
+            # Reset all properties if rigidbody is disabled (This is easier than doing conditional export for now.
+            # Since properties that are defaulted, wont get exported)
+            obj.i3d_attributes.property_unset('compound')
+            obj.i3d_attributes.property_unset('collision')
+            obj.i3d_attributes.property_unset('collision_mask')
+            obj.i3d_attributes.property_unset('trigger')
 
 
 @register
 class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
     is_root: BoolProperty(
-            name="Root of merge group",
-            description="Check if this object is gonna be the root object holding the mesh",
-            default=False
-        )
+        name="Root of merge group",
+        description="Check if this object is gonna be the root object holding the mesh",
+        default=False
+    )
 
     group_id: StringProperty(name='Merge Group',
                              description='The merge group this object belongs to',
                              default=''
                              )
+
+
+@register
+class I3D_IO_PT_merge_group_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = 'Merge Group'
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
+
+        row = layout.row()
+        row.prop(obj.i3d_merge_group, 'is_root')
+        if obj.i3d_merge_group.group_id is '':  # Defaults to a default initialized placeholder
+            row.enabled = False
+
+        row = layout.row()
+        row.prop(obj.i3d_merge_group, 'group_id')
+
 
 @register
 class I3DMappingData(bpy.types.PropertyGroup):
@@ -215,26 +224,42 @@ class I3DMappingData(bpy.types.PropertyGroup):
     )
 
 
+@register
+class I3D_IO_PT_mapping_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Mapping"
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
+
+        row = layout.row()
+        row.prop(obj.i3d_mapping, 'is_mapped')
+        row = layout.row()
+        row.prop(obj.i3d_mapping, 'mapping_name')
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeObjectAttributes)
     bpy.types.Object.i3d_merge_group = PointerProperty(type=I3DMergeGroupObjectData)
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
-    bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
-    bpy.types.Light.i3d_attributes = PointerProperty(type=I3DNodeLightAttributes)
 
 
 def unregister():
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
-    del bpy.types.Scene.i3dio
-    del bpy.types.Object.i3d_attributes
-    del bpy.types.Object.i3d_merge_group
     del bpy.types.Object.i3d_mapping
-    del bpy.types.Mesh.i3d_attributes
-    del bpy.types.Light.i3d_attributes
+    del bpy.types.Object.i3d_merge_group
+    del bpy.types.Object.i3d_attributes
 
-
-
-
+    for cls in classes:
+        bpy.utils.unregister_class(cls)
