@@ -4,7 +4,7 @@ from bpy.props import (StringProperty)
 
 
 class I3D_IO_AddonPreferences(AddonPreferences):
-    bl_idname = __package__
+    bl_idname = 'i3dio'
 
     fs_data_path: StringProperty(
         name="FS Data Folder",

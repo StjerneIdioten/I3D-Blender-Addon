@@ -4,9 +4,9 @@ import bpy
 from .node import Node
 
 from .. import (
-            utility,
-            ui_shader_picker,
+    utility,
 )
+from ..ui import shader_picker
 
 from ..i3d import I3D
 
@@ -126,10 +126,10 @@ class Material(Node):
 
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes
-        if shader_settings.source != ui_shader_picker.shader_unselected_default_text:
+        if shader_settings.source != shader_picker.shader_unselected_default_text:
             shader_file_id = self.i3d.add_file_shader(shader_settings.source)
             self._write_attribute('customShaderId', shader_file_id)
-            if shader_settings.variation != ui_shader_picker.shader_no_variation:
+            if shader_settings.variation != shader_picker.shader_no_variation:
                 self._write_attribute('customShaderVariation', shader_settings.variation)
             for parameter in shader_settings.shader_parameters:
                 parameter_dict = {'name': parameter.name}
