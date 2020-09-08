@@ -188,6 +188,11 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         pass
 
 
+# File -> Export item
+def menu_func_export(self, context):
+    self.layout.operator(I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
+
+
 @register
 class I3D_IO_PT_export_main(Panel):
     bl_space_type = 'FILE_BROWSER'

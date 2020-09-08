@@ -42,11 +42,6 @@ bl_info = {
 }
 
 
-# File -> Export item
-def menu_func_export(self, context):
-    self.layout.operator(ui.exporter.I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
-
-
 def register():
     ui.addon_preferences.register()
     ui.shader_picker.register()
@@ -55,11 +50,11 @@ def register():
     ui.mesh.register()
     ui.light.register()
 
-    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
+    bpy.types.TOPBAR_MT_file_export.append(ui.exporter.menu_func_export)
 
 
 def unregister():
-    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
+    bpy.types.TOPBAR_MT_file_export.remove(ui.exporter.menu_func_export)
     ui.exporter.unregister()
     ui.object.unregister()
     ui.mesh.unregister()
