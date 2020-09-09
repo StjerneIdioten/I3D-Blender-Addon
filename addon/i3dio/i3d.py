@@ -177,6 +177,17 @@ class I3D:
     def get_shape_by_id(self, shape_id: int):
         return self.shapes[shape_id]
 
+    def add_user_attributes(self, user_attributes, node_id):
+        node_attribute_element = self.xml_elements['UserAttributes'].find(f"UserAttribute[@nodeId='{node_id:d}']")
+        if node_attribute_element is None:
+            node_attribute_element = ET.SubElement(self.xml_elements['UserAttributes'], 'UserAttribute',
+                                                   attrib={'nodeId': str(node_id)})
+
+        for attribute in user_attributes:
+            attrib = {'name': attribute.name, 'type': attribute.type.replace('data_', '')}
+            attribute_element = ET.SubElement(node_attribute_element, 'Attribute', attrib=attrib)
+            xml_i3d.write_attribute(attribute_element, 'value', getattr(attribute, attribute.type))
+
     def add_material(self, blender_material: bpy.types.Material) -> int:
         name = blender_material.name
         if name not in self.materials:

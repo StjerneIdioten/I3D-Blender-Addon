@@ -47,6 +47,7 @@ def register():
     ui.shader_picker.register()
     ui.exporter.register()
     ui.object.register()
+    ui.user_attributes.register()
     ui.mesh.register()
     ui.light.register()
 
@@ -56,6 +57,7 @@ def register():
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(ui.exporter.menu_func_export)
     ui.exporter.unregister()
+    ui.user_attributes.unregister()
     ui.object.unregister()
     ui.mesh.unregister()
     ui.light.unregister()

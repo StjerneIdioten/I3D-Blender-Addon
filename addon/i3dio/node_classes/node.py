@@ -140,6 +140,9 @@ class SceneGraphNode(Node):
         except AttributeError:
             self.logger.debug('Has no data specific attributes')
 
+    def _write_user_attributes(self):
+        self.i3d.add_user_attributes(self.blender_object.i3d_user_attributes.attribute_list, self.id)
+
     @property
     @abstractmethod
     def _transform_for_conversion(self) -> Union[mathutils.Matrix, None]:
@@ -191,6 +194,7 @@ class SceneGraphNode(Node):
 
     def populate_xml_element(self):
         self._write_properties()
+        self._write_user_attributes()
         self._add_transform_to_xml_element(self._transform_for_conversion)
 
     def add_child(self, node: SceneGraphNode):
