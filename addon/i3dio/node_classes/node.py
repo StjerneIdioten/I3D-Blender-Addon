@@ -141,7 +141,10 @@ class SceneGraphNode(Node):
             self.logger.debug('Has no data specific attributes')
 
     def _write_user_attributes(self):
-        self.i3d.add_user_attributes(self.blender_object.i3d_user_attributes.attribute_list, self.id)
+        try:
+            self.i3d.add_user_attributes(self.blender_object.i3d_user_attributes.attribute_list, self.id)
+        except AttributeError:
+            pass
 
     @property
     @abstractmethod
