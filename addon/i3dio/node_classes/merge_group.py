@@ -30,7 +30,7 @@ class MergeGroupRoot(ShapeNode):
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.merge_group_name, True)
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
-    def add_child(self, child: MergeGroupChild):
+    def add_mergegroup_child(self, child: MergeGroupChild):
         self.logger.debug("Adding Child")
         self.skin_bind_ids += f"{child.id:d} "
         self._write_attribute('skinBindNodeIds', self.skin_bind_ids[:-1])
@@ -57,7 +57,7 @@ class MergeGroup:
         if self.child_nodes:
             self.logger.debug(f"{len(self.child_nodes)} were added before the root node was found")
             for child in self.child_nodes:
-                self.root_node.add_child(child)
+                self.root_node.add_mergegroup_child(child)
         else:
             self.logger.debug("No pre-added children before root was found")
         return self.root_node
@@ -65,5 +65,5 @@ class MergeGroup:
     def add_child(self, child_node: MergeGroupChild):
         self.child_nodes.append(child_node)
         if self.root_node is not None:
-            self.root_node.add_child(self.child_nodes[-1])
+            self.root_node.add_mergegroup_child(self.child_nodes[-1])
         return self.child_nodes[-1]
