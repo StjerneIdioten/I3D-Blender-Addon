@@ -27,11 +27,6 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
 
     export_data = {}
 
-    if bpy.context.scene.i3dio.verbose_output:
-        debugging.addon_console_handler.setLevel(logging.DEBUG)
-    else:
-        debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
-
     if bpy.context.scene.i3dio.log_to_file:
         # Remove the file ending from path and append log specific naming
         filename = filepath[0:len(filepath) - len(xml_i3d.file_ending)] + debugging.export_log_file_ending
@@ -43,9 +38,17 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
     else:
         log_file_handler = None
 
-    print(f"Blender version is: {bpy.app.version_string}")
-    print(f"I3D Exporter version is: {sys.modules['i3dio'].__version__}")
-    print(f"Exporting to {filepath}")
+    # Output info about the addon
+    debugging.addon_console_handler.setLevel(logging.INFO)
+    logger.info(f"Blender version is: {bpy.app.version_string}")
+    logger.info(f"I3D Exporter version is: {sys.modules['i3dio'].__version__}")
+    logger.info(f"Exporting to {filepath}")
+
+    if bpy.context.scene.i3dio.verbose_output:
+        debugging.addon_console_handler.setLevel(logging.DEBUG)
+    else:
+        debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
+
     time_start = time.time()
 
     # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
