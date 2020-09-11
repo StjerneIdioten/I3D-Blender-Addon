@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Union
+from typing import Union, List
 import logging
 import math
 import mathutils
@@ -42,4 +42,12 @@ def as_fs_relative_path(filepath: str):
     except ValueError:
         return filepath_clean
 
+
+def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderObject]:
+    """Sorts the supplied list of blender objects by name (slow) and returns a new sorted list. If used for
+    sorting children of objects, bear in mind that the children themselves are gathered by blender in
+    O(len(data.objects)), since blender doesn't store the list of children but looks it up everytime"""
+    sorted_objects = list(objects)  # Create new list from whatever comes in, whether it is an existing list or a tuple
+    sorted_objects.sort(key=lambda x: x.name)  # Sort by name
+    return sorted_objects
 

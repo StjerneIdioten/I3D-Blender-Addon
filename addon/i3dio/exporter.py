@@ -14,7 +14,7 @@ from . import (
     xml_i3d
 )
 
-from .utility import BlenderObject
+from .utility import (BlenderObject, sort_blender_objects_by_name)
 from .i3d import I3D
 from .node_classes.node import SceneGraphNode
 from .node_classes.skinned_mesh import SkinnedMeshRootNode
@@ -71,6 +71,8 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
         elif export_selection == 'SELECTED_OBJECTS':
             _export_selected_objects(i3d)
 
+        i3d.export_to_i3d_file()
+
         # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
     except Exception:
         logger.exception("Exception that stopped the exporter")
@@ -104,7 +106,11 @@ def _export_active_collection(i3d: I3D):
 
 
 def _export_collection_content(i3d: I3D, collection):
-    _export(i3d, collection.children.values() + [obj for obj in collection.objects if obj.parent is None])
+    # First export child collections. Collections are not sorted alphabetically in the blender outliner
+    _export(i3d, collection.children.values(), sort_alphabetical=False)
+    # Then export objects in the collection.
+    # `objects` contain every object, also children of other objects, so export only root ones.
+    _export(i3d, [obj for obj in collection.objects if obj.parent is None])
 
 
 def _export_active_object(i3d: I3D):
@@ -124,10 +130,12 @@ def _export_selected_objects(i3d: I3D):
         logger.warning("No selected objects, aborting export")
 
 
-def _export(i3d: I3D, objects: List[BlenderObject]):
-    for blender_object in objects:
+def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = True):
+    objects_to_export = objects
+    if sort_alphabetical:
+        objects_to_export = sort_blender_objects_by_name(objects)
+    for blender_object in objects_to_export:
         _add_object_to_i3d(i3d, blender_object)
-    i3d.export_to_i3d_file()
 
 
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
@@ -145,7 +153,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         logger.debug(f"[{obj.name}] is a 'Collection'")
         node = i3d.add_transformgroup_node(obj, _parent)
         _process_collection_objects(i3d, obj, node)
-        return
+        return  # Early return because collections are special
     else:
         logger.debug(f"[{obj.name}] is of type {obj.type!r}")
         if obj.type not in i3d.settings['object_types_to_export']:
@@ -192,7 +200,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         # WARNING: Might be slow due to searching through the entire object list in the blend file:
         # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
         logger.debug(f"[{obj.name}] processing objects children")
-        for child in obj.children:
+        for child in sort_blender_objects_by_name(obj.children):
             _add_object_to_i3d(i3d, child, node)
         logger.debug(f"[{obj.name}] no more children to process in object")
 
@@ -210,7 +218,7 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
 
     # Then iterate over the objects contained in the collection
     logger.debug(f"[{collection.name}] processing collection objects")
-    for child in collection.objects:
+    for child in sort_blender_objects_by_name(collection.objects):
         # If a collection consists of an object, which has it's own children objects. These children will also be a
         # a part of the collections objects. Which means that they would be added twice without this check. One for the
         # object itself and one for the collection.
