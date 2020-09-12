@@ -44,6 +44,7 @@ bl_info = {
 
 def register():
     ui.addon_preferences.register()
+    ui.udim_picker.register()
     ui.shader_picker.register()
     ui.exporter.register()
     ui.object.register()
@@ -62,5 +63,6 @@ def unregister():
     ui.mesh.unregister()
     ui.light.unregister()
     ui.shader_picker.unregister()
+    ui.udim_picker.unregister()
     ui.addon_preferences.unregister()
 

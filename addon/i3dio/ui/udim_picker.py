@@ -1,11 +1,11 @@
 import logging
+import os
 logger = logging.getLogger(__name__)
 
 import bpy
 from bpy.types import (
-    Panel,
-    Operator,
-    Menu
+    Menu,
+    WindowManager
 )
 
 from bpy.props import (
@@ -18,8 +18,29 @@ from bpy.props import (
     CollectionProperty,
 )
 
+# A place to store preview collections, should perhaps be outside in overall package scope
+preview_collections = {}
+# Name of the udim picker collection within the preview collections
+udim_picker_preview_collection = 'udim_picker'
+
 addon_keymaps = []
 classes = []
+
+
+def generate_udim_previews():
+    preview_collection = preview_collections[udim_picker_preview_collection]
+    image_paths = []
+    # Get all icons from folder
+    directory = os.path.join(os.path.dirname(__file__), 'icons')
+    for path in os.listdir(directory):
+        if path.lower().endswith('.png'):
+            image_paths.append(path)
+
+    # Generate icons and build enum
+    for i, name in enumerate(image_paths):
+        filepath = os.path.join(directory, name)
+        thumbnail = preview_collection.load(name, filepath, 'IMAGE')
+        preview_collection.udim_previews.append((name, name, "", thumbnail.icon_id, i))
 
 
 def register(cls):
@@ -33,13 +54,13 @@ class I3D_IO_MT_PIE_UDIM_picker(Menu):
     bl_label = 'UDIM Picker'
 
     def draw(self, context):
-        print("test")
         layout = self.layout
-        prefs = context.preferences
-        inputs = prefs.inputs
+
+        wm = context.window_manager
 
         pie = layout.menu_pie()
-        pie.prop(inputs, "view_rotate_method", expand=True)
+        pie.template_icon_view(wm, "udim_previews", show_labels=True, scale=3.0, scale_popup=3.0)
+        # pie.prop(wm, "udim_previews")
 
 
 def add_hotkey():
@@ -64,12 +85,27 @@ def remove_hotkey():
 
 
 def register():
+    import bpy.utils.previews
+    preview_collection = bpy.utils.previews.new()
+    preview_collection.udim_previews = []
+    preview_collections[udim_picker_preview_collection] = preview_collection
+
+    generate_udim_previews()
+
+    WindowManager.udim_previews = EnumProperty(items=preview_collection.udim_previews)
+
     for cls in classes:
         bpy.utils.register_class(cls)
     add_hotkey()
 
 
 def unregister():
+    remove_hotkey()
     for cls in classes:
         bpy.utils.unregister_class(cls)
-    remove_hotkey()
+
+    for preview_collection in preview_collections.values():
+        bpy.utils.previews.remove(preview_collection)
+        preview_collection.udim_previews.clear()
+    preview_collections.clear()
+
