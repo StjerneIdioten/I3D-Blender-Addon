@@ -7,10 +7,6 @@ on:
       - '**/README.md'
       - 'CONTRIBUTING.md'
       - 'LICENSE'
-      
-    branches:
-      - "master"
-      - "develop"
 
 jobs:
   release:
