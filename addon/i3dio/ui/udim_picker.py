@@ -201,7 +201,7 @@ class I3D_IO_MT_PIE_UDIM_picker(Menu):
 
         # Right
         op = grid.operator('i3dio.udim_mover', text='', icon='TRIA_RIGHT')
-        op.uv_offset = [0, 1]
+        op.uv_offset = [1, 0]
         op.relative_move = True
 
         # Left & Down
