@@ -3,14 +3,14 @@ name: "Release"
 
 on:
   push:
+    branches:
+      - master
+      - develop
+      - test-feature
     paths-ignore:
       - '**/README.md'
       - 'CONTRIBUTING.md'
       - 'LICENSE'
-      
-    branches:
-      - "master"
-      - "develop"
 
 jobs:
   release:
