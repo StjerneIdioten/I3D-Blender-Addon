@@ -12,13 +12,9 @@ from bpy.types import (
 )
 
 from bpy.props import (
-    StringProperty,
-    BoolProperty,
     EnumProperty,
-    PointerProperty,
-    FloatProperty,
-    IntProperty,
-    CollectionProperty,
+    IntVectorProperty,
+    BoolProperty
 )
 
 udim_mapping = {
@@ -108,11 +104,11 @@ def register(cls):
 class I3D_IO_OT_udim_mover(Operator):
     bl_idname = 'i3dio.udim_mover'
     bl_label = "Move UV's"
-    bl_description = "Move UV's to a specific position"
+    bl_description = "Move UV's to a specific position or by an offset if relative is true"
     bl_options = {'INTERNAL'}
 
-    u_offset: IntProperty()
-    v_offset: IntProperty()
+    uv_offset: IntVectorProperty(default=(0, 0), size=2)
+    relative_move: BoolProperty(default=False)
 
     @classmethod
     def poll(cls, context):
@@ -120,31 +116,34 @@ class I3D_IO_OT_udim_mover(Operator):
         return obj and obj.type == 'MESH' and obj.mode == 'EDIT'
 
     def execute(self, context):
-        from random import random
-        wm = context.window_manager
         obj = context.active_object
         mesh = obj.data
         b_mesh = bmesh.from_edit_mesh(mesh)
         uv_layer = b_mesh.loops.layers.uv.verify()
 
-        print(f"Moving to [{self.u_offset, self.v_offset}]")
+        if self.relative_move:
+            for face in b_mesh.faces:
+                for loop in face.loops:
+                    loop_uv = loop[uv_layer]
+                    if loop_uv.select: #or loop.vert.select:
+                        loop_uv.uv += Vector(self.uv_offset)
+        else:
+            cumulative_uv_position = Vector((0.0, 0.0))
+            uvs_to_move = []
 
-        cumulative_uv_position = Vector((0.0, 0.0))
-        uvs_to_move = []
+            for face in b_mesh.faces:
+                for loop in face.loops:
+                    loop_uv = loop[uv_layer]
+                    if loop_uv.select: #or loop.vert.select:
+                        uvs_to_move.append(loop_uv)
+                        cumulative_uv_position += loop_uv.uv
 
-        for face in b_mesh.faces:
-            for loop in face.loops:
-                loop_uv = loop[uv_layer]
-                if loop_uv.select: #or loop.vert.select:
-                    uvs_to_move.append(loop_uv)
-                    cumulative_uv_position += loop_uv.uv
+            if len(uvs_to_move):
+                cumulative_uv_position = Vector([math.floor(x) for x in (cumulative_uv_position / len(uvs_to_move))])
 
-        cumulative_uv_position = Vector([math.floor(x) for x in (cumulative_uv_position / len(uvs_to_move))])
-        #print(f'Position of UV: {cumulative_uv_position}')
-
-        for uv in uvs_to_move:
-            uv.uv -= cumulative_uv_position
-            uv.uv += Vector((self.u_offset, self.v_offset))
+                for uv in uvs_to_move:
+                    uv.uv -= cumulative_uv_position
+                    uv.uv += Vector(self.uv_offset)
 
         bmesh.update_edit_mesh(mesh)
 
@@ -163,7 +162,62 @@ class I3D_IO_MT_PIE_UDIM_picker(Menu):
 
         pie = layout.menu_pie()
         pie.template_icon_view(wm, "udim_previews", show_labels=True, scale=5.0, scale_popup=4.0)
-        pie.prop(wm, "udim_previews")
+
+        # Relative movement operators
+
+        # First Column
+        box = pie.box().box()
+        row = box.row()
+        row.split()
+        row.split()
+        row.label(text="Move Relative")
+
+        grid = box.grid_flow(row_major=True, columns=3, even_columns=True, even_rows=True, align=True)
+
+        # Left & Up
+        op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
+        op.uv_offset = [-1, 1]
+        op.relative_move = True
+
+        # Up
+        op = grid.operator('i3dio.udim_mover', text='', icon='TRIA_UP')
+        op.uv_offset = [0, 1]
+        op.relative_move = True
+
+        # Right & Up
+        op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
+        op.uv_offset = [1, 1]
+        op.relative_move = True
+
+        # Left
+        op = grid.operator('i3dio.udim_mover', text='', icon='TRIA_LEFT')
+        op.uv_offset = [-1, 0]
+        op.relative_move = True
+
+        # Zero
+        op = grid.operator('i3dio.udim_mover', text='', icon='HANDLETYPE_VECTOR_VEC')
+        op.uv_offset = [0, 0]
+        op.relative_move = False
+
+        # Right
+        op = grid.operator('i3dio.udim_mover', text='', icon='TRIA_RIGHT')
+        op.uv_offset = [0, 1]
+        op.relative_move = True
+
+        # Left & Down
+        op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
+        op.uv_offset = [-1, -1]
+        op.relative_move = True
+
+        # Down
+        op = grid.operator('i3dio.udim_mover', text='', icon='TRIA_DOWN')
+        op.uv_offset = [0, -1]
+        op.relative_move = True
+
+        # Right & Down
+        op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
+        op.uv_offset = [1, -1]
+        op.relative_move = True
 
 
 def add_hotkey():
@@ -175,7 +229,7 @@ def add_hotkey():
         return
 
     km = kc.keymaps.new(name='UV Editor', space_type='EMPTY')
-    kmi = km.keymap_items.new('wm.call_menu_pie', 'D', 'PRESS', ctrl=True, shift=False)
+    kmi = km.keymap_items.new('wm.call_menu_pie', 'U', 'PRESS', ctrl=True, shift=False)
     kmi.properties.name = I3D_IO_MT_PIE_UDIM_picker.bl_idname
     addon_keymaps.append((km, kmi))
 
@@ -189,7 +243,7 @@ def remove_hotkey():
 
 def udim_selected(self, context):
     uv_offset = udim_mapping[context.window_manager.udim_previews]['offset']
-    bpy.ops.i3dio.udim_mover(u_offset=uv_offset[0], v_offset=uv_offset[1])
+    bpy.ops.i3dio.udim_mover(uv_offset=uv_offset, relative_move=False)
 
 
 def register():
