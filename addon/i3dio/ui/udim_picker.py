@@ -17,47 +17,9 @@ from bpy.props import (
     BoolProperty
 )
 
+# Stored in UDIM index order, starting from top-left corner (Makes it easy to show index order in ui)
+# Will be valid as long as dictionaries are ordered (Which they are from CPython 3.6 and above)
 udim_mapping = {
-    '0_ColorMaterial.png': {'name': 'Color Material 0',                             'offset': [0, -1]},
-    '1_ColorMaterial.png': {'name': 'Color Material 1',                             'offset': [1, -1]},
-    '2_ColorMaterial.png': {'name': 'Color Material 2',                             'offset': [2, -1]},
-    '3_ColorMaterial.png': {'name': 'Color Material 3',                             'offset': [3, -1]},
-    '4_ColorMaterial.png': {'name': 'Color Material 4',                             'offset': [4, -1]},
-    '5_ColorMaterial.png': {'name': 'Color Material 5',                             'offset': [5, -1]},
-    '6_ColorMaterial.png': {'name': 'Color Material 6',                             'offset': [6, -1]},
-    '7_ColorMaterial.png': {'name': 'Color Material 7',                             'offset': [7, -1]},
-    '00_PaintedMetal.png': {'name': 'Painted Metal',                                'offset': [0, 0]},
-    '01_PaintedPlastic.png': {'name': 'Painted Plastic',                            'offset': [1, 0]},
-    '02_Chrome.png': {'name': 'Chrome',                                             'offset': [2, 0]},
-    '03_Copper.png': {'name': 'Copper',                                             'offset': [3, 0]},
-    '04_GalvanizedMetal.png': {'name': 'Galvanized Metal',                          'offset': [4, 0]},
-    '05_Rubber.png': {'name': 'Rubber',                                             'offset': [5, 0]},
-    '06_PaintedMetalOld.png': {'name': 'Painted Metal Old',                         'offset': [6, 0]},
-    '07_Fabric.png': {'name': 'Fabric',                                             'offset': [7, 0]},
-    '08_SilverScratched.png': {'name': 'Silver Scratched',                          'offset': [0, 1]},
-    '09_SilverBumpy.png': {'name': 'Silver Bumpy',                                  'offset': [1, 1]},
-    '10_Fabric.png': {'name': 'Fabric',                                             'offset': [2, 1]},
-    '11_Fabric.png': {'name': 'Fabric',                                             'offset': [3, 1]},
-    '12_Leather.png': {'name': 'Leather',                                           'offset': [4, 1]},
-    '13_Leather.png': {'name': 'Leather',                                           'offset': [5, 1]},
-    '14_Wood.png': {'name': 'Wood',                                                 'offset': [6, 1]},
-    '15_Dirt.png': {'name': 'Dirt',                                                 'offset': [7, 1]},
-    '16_PaintedMetal.png': {'name': 'Painted Metal',                                'offset': [0, 2]},
-    '17_PaintedPlastic.png': {'name': 'PaintedPlastic',                             'offset': [1, 2]},
-    '18_SilverRough.png': {'name': 'Silver Rough',                                  'offset': [2, 2]},
-    '19_BrassScratched.png': {'name': 'Brass Scratched',                            'offset': [3, 2]},
-    '20_ReflectorWhite.png': {'name': 'Reflector White',                            'offset': [4, 2]},
-    '21_ReflectorRed.png': {'name': 'Reflector Red',                                'offset': [5, 2]},
-    '22_Reflector_Yellow.png': {'name': 'Reflector Yellow',                         'offset': [6, 2]},
-    '23_ReflectorDaylight.png': {'name': 'Reflector Daylight',                      'offset': [7, 2]},
-    '24_GearShiftStickPlastic.png': {'name': 'Gear Shift Stick Plastic',            'offset': [0, 3]},
-    '25_Leather.png': {'name': 'Leather',                                           'offset': [1, 3]},
-    '26_PerforatedPlastic.png': {'name': 'Perforated Synthetic Fabric',             'offset': [2, 3]},
-    '27_GlassClear.png': {'name': 'Glass Clear',                                    'offset': [3, 3]},
-    '28_GlassSquare.png': {'name': 'Glass Square',                                  'offset': [4, 3]},
-    '29_GlassLine.png': {'name': 'Glass Lines',                                     'offset': [5, 3]},
-    '30_Palladium.png': {'name': 'Palladium',                                       'offset': [6, 3]},
-    '31_Bronze.png': {'name': 'Bronze',                                             'offset': [7, 3]},
     '33_GraphiteBlackPaintedMetal.png': {'name': 'Graphite Black Painted Metal',    'offset': [0, 4]},
     '33_HalfMetalNoise.png': {'name': 'Half Metal Noise',                           'offset': [1, 4]},
     '34_GrayShinyPlastic.png': {'name': 'Gray Shiny Plastic',                       'offset': [2, 4]},
@@ -66,6 +28,46 @@ udim_mapping = {
     '37_PerforatedSyntheticFabric02.png': {'name': 'Perforated Synthetic Fabric',   'offset': [5, 4]},
     '38_Fell.png': {'name': 'Fell',                                                 'offset': [6, 4]},
     '39_CorrugatedMetal.png': {'name': 'Corrugated Metal',                          'offset': [7, 4]},
+    '24_GearShiftStickPlastic.png': {'name': 'Gear Shift Stick Plastic',            'offset': [0, 3]},
+    '25_Leather.png': {'name': 'Leather',                                           'offset': [1, 3]},
+    '26_PerforatedPlastic.png': {'name': 'Perforated Synthetic Fabric',             'offset': [2, 3]},
+    '27_GlassClear.png': {'name': 'Glass Clear',                                    'offset': [3, 3]},
+    '28_GlassSquare.png': {'name': 'Glass Square',                                  'offset': [4, 3]},
+    '29_GlassLine.png': {'name': 'Glass Lines',                                     'offset': [5, 3]},
+    '30_Palladium.png': {'name': 'Palladium',                                       'offset': [6, 3]},
+    '31_Bronze.png': {'name': 'Bronze',                                             'offset': [7, 3]},
+    '16_PaintedMetal.png': {'name': 'Painted Metal',                                'offset': [0, 2]},
+    '17_PaintedPlastic.png': {'name': 'PaintedPlastic',                             'offset': [1, 2]},
+    '18_SilverRough.png': {'name': 'Silver Rough',                                  'offset': [2, 2]},
+    '19_BrassScratched.png': {'name': 'Brass Scratched',                            'offset': [3, 2]},
+    '20_ReflectorWhite.png': {'name': 'Reflector White',                            'offset': [4, 2]},
+    '21_ReflectorRed.png': {'name': 'Reflector Red',                                'offset': [5, 2]},
+    '22_Reflector_Yellow.png': {'name': 'Reflector Yellow',                         'offset': [6, 2]},
+    '23_ReflectorDaylight.png': {'name': 'Reflector Daylight',                      'offset': [7, 2]},
+    '08_SilverScratched.png': {'name': 'Silver Scratched',                          'offset': [0, 1]},
+    '09_SilverBumpy.png': {'name': 'Silver Bumpy',                                  'offset': [1, 1]},
+    '10_Fabric.png': {'name': 'Fabric',                                             'offset': [2, 1]},
+    '11_Fabric.png': {'name': 'Fabric',                                             'offset': [3, 1]},
+    '12_Leather.png': {'name': 'Leather',                                           'offset': [4, 1]},
+    '13_Leather.png': {'name': 'Leather',                                           'offset': [5, 1]},
+    '14_Wood.png': {'name': 'Wood',                                                 'offset': [6, 1]},
+    '15_Dirt.png': {'name': 'Dirt',                                                 'offset': [7, 1]},
+    '00_PaintedMetal.png': {'name': 'Painted Metal',                                'offset': [0, 0]},
+    '01_PaintedPlastic.png': {'name': 'Painted Plastic',                            'offset': [1, 0]},
+    '02_Chrome.png': {'name': 'Chrome',                                             'offset': [2, 0]},
+    '03_Copper.png': {'name': 'Copper',                                             'offset': [3, 0]},
+    '04_GalvanizedMetal.png': {'name': 'Galvanized Metal',                          'offset': [4, 0]},
+    '05_Rubber.png': {'name': 'Rubber',                                             'offset': [5, 0]},
+    '06_PaintedMetalOld.png': {'name': 'Painted Metal Old',                         'offset': [6, 0]},
+    '07_Fabric.png': {'name': 'Fabric',                                             'offset': [7, 0]},
+    '0_ColorMaterial.png': {'name': 'Color Material 0',                             'offset': [0, -1]},
+    '1_ColorMaterial.png': {'name': 'Color Material 1',                             'offset': [1, -1]},
+    '2_ColorMaterial.png': {'name': 'Color Material 2',                             'offset': [2, -1]},
+    '3_ColorMaterial.png': {'name': 'Color Material 3',                             'offset': [3, -1]},
+    '4_ColorMaterial.png': {'name': 'Color Material 4',                             'offset': [4, -1]},
+    '5_ColorMaterial.png': {'name': 'Color Material 5',                             'offset': [5, -1]},
+    '6_ColorMaterial.png': {'name': 'Color Material 6',                             'offset': [6, -1]},
+    '7_ColorMaterial.png': {'name': 'Color Material 7',                             'offset': [7, -1]},
 }
 
 
@@ -79,6 +81,10 @@ classes = []
 
 
 def generate_udim_previews():
+    def no_number(name):
+        """Return name without number prefix"""
+        return name.split('_', 1)[1]
+
     preview_collection = preview_collections[udim_picker_preview_collection]
     image_paths = []
     # Get all icons from folder
@@ -86,6 +92,8 @@ def generate_udim_previews():
     for path in os.listdir(directory):
         if path.lower().endswith('.png'):
             image_paths.append(path)
+
+    image_paths = sorted(image_paths, key=no_number)
 
     # Generate icons and build enum
     for i, filename in enumerate(image_paths):
@@ -151,28 +159,20 @@ class I3D_IO_OT_udim_mover(Operator):
 
 
 @register
-class I3D_IO_MT_PIE_UDIM_picker(Menu):
-    bl_idname = 'I3D_IO_MT_PIE_UDIM_picker'
-    bl_label = 'UDIM Picker'
+class I3D_IO_OT_udim_picker_move_relative(Operator):
+    bl_idname = 'i3dio.udim_picker_move_relative'
+    bl_label = ""
 
     def draw(self, context):
         layout = self.layout
-
-        wm = context.window_manager
-
-        pie = layout.menu_pie()
-        pie.template_icon_view(wm, "udim_previews", show_labels=True, scale=5.0, scale_popup=4.0)
-
-        # Relative movement operators
-
-        # First Column
-        box = pie.box().box()
-        row = box.row()
+        row = layout.row()
+        row.alignment = 'CENTER'
+        row.split()
         row.split()
         row.split()
         row.label(text="Move Relative")
 
-        grid = box.grid_flow(row_major=True, columns=3, even_columns=True, even_rows=True, align=True)
+        grid = layout.grid_flow(row_major=True, columns=3, even_columns=True, even_rows=True, align=True)
 
         # Left & Up
         op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
@@ -218,6 +218,58 @@ class I3D_IO_MT_PIE_UDIM_picker(Menu):
         op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
         op.uv_offset = [1, -1]
         op.relative_move = True
+
+        layout.label(text='')
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self)
+
+
+@register
+class I3D_IO_OT_udim_picker_grid_order(Operator):
+    bl_idname = 'i3dio.udim_picker_grid_order'
+    bl_label = ""
+
+    def draw(self, context):
+        layout = self.layout
+        grid = layout.grid_flow(row_major=True, columns=8, even_columns=True, even_rows=False)
+
+        for udim_id, udim_item in udim_mapping.items():
+            cell = grid.column().box()
+            cell.alignment = 'CENTER'
+            cell.label(text=udim_item['name'])
+            cell.template_icon(icon_value=preview_collections[udim_picker_preview_collection][udim_id].icon_id, scale=3)
+            o = cell.operator('i3dio.udim_mover', text='Select')
+            o.uv_offset = udim_item['offset']
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=800)
+
+
+@register
+class I3D_IO_MT_PIE_UDIM_picker(Menu):
+    bl_idname = 'I3D_IO_MT_PIE_UDIM_picker'
+    bl_label = 'UDIM Picker'
+
+    def draw(self, context):
+        layout = self.layout
+
+        wm = context.window_manager
+
+        pie = layout.menu_pie()
+
+        pie.operator('i3dio.udim_picker_grid_order', text="Pick UDIMs")
+
+        # Relative movement operators
+        pie.operator('i3dio.udim_picker_move_relative', text="Move UDIM's Relatively")
+
+        #pie.template_icon_view(wm, "udim_previews", show_labels=True, scale=5.0, scale_popup=4.0)
 
 
 def add_hotkey():
