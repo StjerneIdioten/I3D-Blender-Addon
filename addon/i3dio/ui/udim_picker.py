@@ -244,6 +244,7 @@ class I3D_IO_OT_udim_picker_grid_order(Operator):
             cell.template_icon(icon_value=preview_collections[udim_picker_preview_collection][udim_id].icon_id, scale=3)
             o = cell.operator('i3dio.udim_mover', text='Select')
             o.uv_offset = udim_item['offset']
+            o.relative_move = False
 
     def execute(self, context):
         return {'FINISHED'}
