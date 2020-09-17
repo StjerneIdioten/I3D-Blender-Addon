@@ -116,7 +116,10 @@ class I3D_IO_OT_udim_mover(Operator):
     bl_options = {'INTERNAL'}
 
     uv_offset: IntVectorProperty(default=(0, 0), size=2)
-    relative_move: BoolProperty(default=False)
+    mode: EnumProperty(
+        items=[('RELATIVE', '', ''),
+               ('ABSOLUTE', '', '')],
+        default='ABSOLUTE')
 
     @classmethod
     def poll(cls, context):
@@ -124,36 +127,39 @@ class I3D_IO_OT_udim_mover(Operator):
         return obj and obj.type == 'MESH' and obj.mode == 'EDIT'
 
     def execute(self, context):
-        obj = context.active_object
-        mesh = obj.data
-        b_mesh = bmesh.from_edit_mesh(mesh)
-        uv_layer = b_mesh.loops.layers.uv.verify()
+        # Grab the current synch setting, instead of looking it up all the time
+        sync_enabled = bpy.context.scene.tool_settings.use_uv_select_sync
 
-        if self.relative_move:
-            for face in b_mesh.faces:
-                for loop in face.loops:
-                    loop_uv = loop[uv_layer]
-                    if loop_uv.select: #or loop.vert.select:
-                        loop_uv.uv += Vector(self.uv_offset)
-        else:
-            cumulative_uv_position = Vector((0.0, 0.0))
-            uvs_to_move = []
+        # Grabs only unique meshes (no instances) and weeds out any objects without selected vertices
+        objects = [obj for obj in bpy.context.objects_in_mode_unique_data if obj.data.total_vert_sel]
+        for obj in objects:
+            bm = bmesh.from_edit_mesh(obj.data)
+            uv_layer = bm.loops.layers.uv.verify()
+            if self.mode == 'RELATIVE':
+                for face in bm.faces:
+                    for loop in face.loops:
+                        loop_uv = loop[uv_layer]
+                        # If synch is enabled, loop_uv.select isn't set on selection
+                        if loop.vert.select and (sync_enabled or loop_uv.select):
+                            loop_uv.uv += Vector(self.uv_offset)
+            elif self.mode == 'ABSOLUTE':
+                cumulative_uv_position = Vector((0.0, 0.0))
+                uvs_to_move = []
 
-            for face in b_mesh.faces:
-                for loop in face.loops:
-                    loop_uv = loop[uv_layer]
-                    if loop_uv.select: #or loop.vert.select:
-                        uvs_to_move.append(loop_uv)
-                        cumulative_uv_position += loop_uv.uv
+                for face in bm.faces:
+                    for loop in face.loops:
+                        loop_uv = loop[uv_layer]
+                        if loop.vert.select and (sync_enabled or loop_uv.select):
+                            uvs_to_move.append(loop_uv)
+                            cumulative_uv_position += loop_uv.uv
 
-            if len(uvs_to_move):
                 cumulative_uv_position = Vector([math.floor(x) for x in (cumulative_uv_position / len(uvs_to_move))])
 
                 for uv in uvs_to_move:
                     uv.uv -= cumulative_uv_position
                     uv.uv += Vector(self.uv_offset)
 
-        bmesh.update_edit_mesh(mesh)
+            bmesh.update_edit_mesh(obj.data)
 
         return {'FINISHED'}
 
@@ -177,47 +183,47 @@ class I3D_IO_OT_udim_picker_move_relative(Operator):
         # Left & Up
         op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
         op.uv_offset = [-1, 1]
-        op.relative_move = True
+        op.mode = 'RELATIVE'
 
         # Up
         op = grid.operator('i3dio.udim_mover', text='', icon='TRIA_UP')
         op.uv_offset = [0, 1]
-        op.relative_move = True
+        op.mode = 'RELATIVE'
 
         # Right & Up
         op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
         op.uv_offset = [1, 1]
-        op.relative_move = True
+        op.mode = 'RELATIVE'
 
         # Left
         op = grid.operator('i3dio.udim_mover', text='', icon='TRIA_LEFT')
         op.uv_offset = [-1, 0]
-        op.relative_move = True
+        op.mode = 'RELATIVE'
 
         # Zero
         op = grid.operator('i3dio.udim_mover', text='', icon='HANDLETYPE_VECTOR_VEC')
         op.uv_offset = [0, 0]
-        op.relative_move = False
+        op.mode = 'ABSOLUTE'
 
         # Right
         op = grid.operator('i3dio.udim_mover', text='', icon='TRIA_RIGHT')
         op.uv_offset = [1, 0]
-        op.relative_move = True
+        op.mode = 'RELATIVE'
 
         # Left & Down
         op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
         op.uv_offset = [-1, -1]
-        op.relative_move = True
+        op.mode = 'RELATIVE'
 
         # Down
         op = grid.operator('i3dio.udim_mover', text='', icon='TRIA_DOWN')
         op.uv_offset = [0, -1]
-        op.relative_move = True
+        op.mode = 'RELATIVE'
 
         # Right & Down
         op = grid.operator('i3dio.udim_mover', text='', icon='KEYTYPE_KEYFRAME_VEC')
         op.uv_offset = [1, -1]
-        op.relative_move = True
+        op.mode = 'RELATIVE'
 
         layout.label(text='')
 
@@ -244,7 +250,7 @@ class I3D_IO_OT_udim_picker_grid_order(Operator):
             cell.template_icon(icon_value=preview_collections[udim_picker_preview_collection][udim_id].icon_id, scale=3)
             o = cell.operator('i3dio.udim_mover', text='Select')
             o.uv_offset = udim_item['offset']
-            o.relative_move = False
+            o.mode = 'ABSOLUTE'
 
     def execute(self, context):
         return {'FINISHED'}
