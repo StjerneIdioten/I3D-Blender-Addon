@@ -153,11 +153,12 @@ class I3D_IO_OT_udim_mover(Operator):
                             uvs_to_move.append(loop_uv)
                             cumulative_uv_position += loop_uv.uv
 
-                cumulative_uv_position = Vector([math.floor(x) for x in (cumulative_uv_position / len(uvs_to_move))])
+                if len(uvs_to_move):
+                    cumulative_uv_position = Vector([math.floor(x) for x in (cumulative_uv_position / len(uvs_to_move))])
 
-                for uv in uvs_to_move:
-                    uv.uv -= cumulative_uv_position
-                    uv.uv += Vector(self.uv_offset)
+                    for uv in uvs_to_move:
+                        uv.uv -= cumulative_uv_position
+                        uv.uv += Vector(self.uv_offset)
 
             bmesh.update_edit_mesh(obj.data)
 
