@@ -2,6 +2,7 @@ import logging
 import os
 from mathutils import Vector
 import math
+from collections import defaultdict
 logger = logging.getLogger(__name__)
 
 import bpy, bmesh
@@ -139,30 +140,63 @@ class I3D_IO_OT_udim_mover(Operator):
                 for face in bm.faces:
                     for loop in face.loops:
                         loop_uv = loop[uv_layer]
-                        # If synch is enabled, loop_uv.select isn't set on selection
+                        # If sync is enabled, loop_uv.select isn't set on selection
                         if loop.vert.select and (sync_enabled or loop_uv.select):
                             loop_uv.uv += Vector(self.uv_offset)
             elif self.mode == 'ABSOLUTE':
-                cumulative_uv_position = Vector((0.0, 0.0))
-                uvs_to_move = []
-
-                for face in bm.faces:
+                # Could use a bidict for this, if I want to install the extra dependency
+                faces_to_verts = defaultdict(set)
+                verts_to_faces = defaultdict(set)
+                for face in [face for face in bm.faces if face.select]:
+                    #print(f"Face {face.index}")
+                    # Calculate lists of unique vert uv's and make a reverse lookup between faces and verts
                     for loop in face.loops:
                         loop_uv = loop[uv_layer]
                         if loop.vert.select and (sync_enabled or loop_uv.select):
-                            uvs_to_move.append(loop_uv)
-                            cumulative_uv_position += loop_uv.uv
+                            unique_uv_id = loop_uv.uv.to_tuple(5), loop.vert.index
+                            faces_to_verts[face.index].add(unique_uv_id)
+                            verts_to_faces[unique_uv_id].add(face.index)
+                            #print(f"\tUV: {unique_uv_id}")
 
-                if len(uvs_to_move):
-                    cumulative_uv_position = Vector([math.floor(x) for x in (cumulative_uv_position / len(uvs_to_move))])
+                uv_islands = []
+                # A list of all the selected faces
+                faces_left = set(faces_to_verts.keys())
+                while len(faces_left) > 0:
+                    current_island = []
+                    # Sets aren't indexable and we don't care about which value we get. So this is the easiest way.
+                    faces_idx = next(iter(faces_left))
+                    self.parse_island(bm, faces_idx, faces_left, current_island, faces_to_verts, verts_to_faces)
+                    uv_islands.append(current_island)
 
-                    for uv in uvs_to_move:
-                        uv.uv -= cumulative_uv_position
-                        uv.uv += Vector(self.uv_offset)
+                for island in uv_islands:
+                    cumulative_uv_position = Vector((0.0, 0.0))
+                    uvs_to_move = []
+                    for face in island:
+                        for loop in face.loops:
+                            loop_uv = loop[uv_layer]
+                            if loop.vert.select and (sync_enabled or loop_uv.select):
+                                uvs_to_move.append(loop_uv)
+                                cumulative_uv_position += loop_uv.uv
+
+                    if len(uvs_to_move):
+                        cumulative_uv_position = Vector([math.floor(x) for x in (cumulative_uv_position / len(uvs_to_move))])
+
+                        for uv in uvs_to_move:
+                            uv.uv -= cumulative_uv_position
+                            uv.uv += Vector(self.uv_offset)
 
             bmesh.update_edit_mesh(obj.data)
 
         return {'FINISHED'}
+
+    def parse_island(self, bm, face_idx, faces_left, island, faces_to_verts, verts_to_faces):
+        if face_idx in faces_left:
+            faces_left.remove(face_idx)
+            island.append(bm.faces[face_idx])
+            for v in faces_to_verts[face_idx]:
+                connected_faces = verts_to_faces[v]
+                for face in connected_faces:
+                    self.parse_island(bm, face, faces_left, island, faces_to_verts, verts_to_faces)
 
 
 @register
