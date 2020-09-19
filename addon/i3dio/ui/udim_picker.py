@@ -322,7 +322,12 @@ def add_hotkey():
         logger.warning(f"Keymap Error")
         return
 
-    km = kc.keymaps.new(name='UV Editor', space_type='EMPTY')
+    km = kc.keymaps.new(name='UV Editor')
+    kmi = km.keymap_items.new('wm.call_menu_pie', 'U', 'PRESS', ctrl=True, shift=False)
+    kmi.properties.name = I3D_IO_MT_PIE_UDIM_picker.bl_idname
+    addon_keymaps.append((km, kmi))
+
+    km = kc.keymaps.new(name='Mesh')
     kmi = km.keymap_items.new('wm.call_menu_pie', 'U', 'PRESS', ctrl=True, shift=False)
     kmi.properties.name = I3D_IO_MT_PIE_UDIM_picker.bl_idname
     addon_keymaps.append((km, kmi))
