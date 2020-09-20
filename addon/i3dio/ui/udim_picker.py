@@ -128,19 +128,20 @@ class I3D_IO_OT_udim_mover(Operator):
         return obj and obj.type == 'MESH' and obj.mode == 'EDIT'
 
     def execute(self, context):
-        # Grab the current synch setting, instead of looking it up all the time
+        # Grab the current sync setting, instead of looking it up all the time
         sync_enabled = bpy.context.scene.tool_settings.use_uv_select_sync
         if not sync_enabled and 'UV Editing' not in [screen.name for screen in context.workspace.screens]:
             self.report({'INFO'}, f"UDIM Picker was used within mesh editor, but UV sync is disabled!")
             # Technically I could return the operator, but I will allow it to run just in case someone has some
             # other way of selecting uv's outside of the uv-editor screen
+
         # Grabs only unique meshes (no instances) and weeds out any objects without selected vertices
         objects = [obj for obj in bpy.context.objects_in_mode_unique_data if obj.data.total_vert_sel]
         for obj in objects:
             bm = bmesh.from_edit_mesh(obj.data)
             uv_layer = bm.loops.layers.uv.verify()
             if self.mode == 'RELATIVE':
-                for face in bm.faces:
+                for face in [face for face in bm.faces if face.select]:
                     for loop in face.loops:
                         loop_uv = loop[uv_layer]
                         # If sync is enabled, loop_uv.select isn't set on selection
