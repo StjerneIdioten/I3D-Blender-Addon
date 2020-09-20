@@ -130,7 +130,10 @@ class I3D_IO_OT_udim_mover(Operator):
     def execute(self, context):
         # Grab the current synch setting, instead of looking it up all the time
         sync_enabled = bpy.context.scene.tool_settings.use_uv_select_sync
-
+        if not sync_enabled and 'UV Editing' not in [screen.name for screen in context.workspace.screens]:
+            self.report({'INFO'}, f"UDIM Picker was used within mesh editor, but UV sync is disabled!")
+            # Technically I could return the operator, but I will allow it to run just in case someone has some
+            # other way of selecting uv's outside of the uv-editor screen
         # Grabs only unique meshes (no instances) and weeds out any objects without selected vertices
         objects = [obj for obj in bpy.context.objects_in_mode_unique_data if obj.data.total_vert_sel]
         for obj in objects:
@@ -310,6 +313,9 @@ class I3D_IO_MT_PIE_UDIM_picker(Menu):
 
         # Relative movement operators
         pie.operator('i3dio.udim_picker_move_relative', text="Move UDIM's Relatively")
+
+        # UV sync quick access, should probably move to some settings menu once more settings become available
+        pie.prop(bpy.context.scene.tool_settings, 'use_uv_select_sync')
 
         #pie.template_icon_view(wm, "udim_previews", show_labels=True, scale=5.0, scale_popup=4.0)
 
