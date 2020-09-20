@@ -207,6 +207,7 @@ class I3D_IO_OT_udim_mover(Operator):
 class I3D_IO_OT_udim_picker_move_relative(Operator):
     bl_idname = 'i3dio.udim_picker_move_relative'
     bl_label = ""
+    bl_description = "Move selected UV faces in relative UDIM-tile steps"
 
     def draw(self, context):
         layout = self.layout
@@ -277,6 +278,7 @@ class I3D_IO_OT_udim_picker_move_relative(Operator):
 class I3D_IO_OT_udim_picker_grid_order(Operator):
     bl_idname = 'i3dio.udim_picker_grid_order'
     bl_label = ""
+    bl_description = "Move selected UV-faces to a specific UDIM-tile, it does not pack them."
 
     def draw(self, context):
         layout = self.layout
@@ -299,6 +301,18 @@ class I3D_IO_OT_udim_picker_grid_order(Operator):
 
 
 @register
+class I3D_IO_OT_udim_setup(Operator):
+    bl_idname = 'i3dio.udim_setup'
+    bl_label = "Setup UV Editor"
+    bl_description = "This will change different settings in relation to having a good setup for FS UDIM's"
+    bl_options = {'INTERNAL'}
+
+    def execute(self, context):
+        context.area.spaces.active.uv_editor.tile_grid_shape = [8, 5]
+        return {'FINISHED'}
+
+
+@register
 class I3D_IO_MT_PIE_UDIM_picker(Menu):
     bl_idname = 'I3D_IO_MT_PIE_UDIM_picker'
     bl_label = 'UDIM Picker'
@@ -317,6 +331,10 @@ class I3D_IO_MT_PIE_UDIM_picker(Menu):
 
         # UV sync quick access, should probably move to some settings menu once more settings become available
         pie.prop(bpy.context.scene.tool_settings, 'use_uv_select_sync')
+
+        if context.space_data.type == 'IMAGE_EDITOR':
+            # General setup function for settings up parameters that makes UV-editing easier for FS
+            pie.operator('i3dio.udim_setup')
 
         #pie.template_icon_view(wm, "udim_previews", show_labels=True, scale=5.0, scale_popup=4.0)
 
