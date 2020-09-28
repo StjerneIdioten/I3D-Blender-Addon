@@ -159,3 +159,13 @@ def escape_attrib(text):
         return text
     except (TypeError, AttributeError):
         ET._raise_serialization_error(text)
+
+
+class CommentedTreeBuilder(ET.TreeBuilder):
+    """
+    This class is used to enable elemtree to NOT delete comments of parsed trees...
+    """
+    def comment(self, data):
+        self.start(ET.Comment, {})
+        self.data(data)
+        self.end(ET.Comment)
