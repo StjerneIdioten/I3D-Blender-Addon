@@ -267,7 +267,8 @@ class I3D:
 
     def export_i3d_mapping(self) -> None:
         try:
-            tree = ET.parse(bpy.path.abspath(self.settings['i3d_mapping_file_path']))
+            parser = ET.XMLParser(target=xml_i3d.CommentedTreeBuilder())
+            tree = ET.parse(bpy.path.abspath(self.settings['i3d_mapping_file_path']), parser)
         except ET.ParseError as e:
             self.logger.warning(f"Supplied mapping file is not correct xml, failed with error: {e}")
         else:
