@@ -19,7 +19,7 @@ set -x
 apt-get update
 apt-get -y install git rsync python3 python3-pip python3-sphinx python3-sphinx-rtd-theme
 
-pip3 install ../addon/requirements.txt
+python3 -m pip install  ./addon/requirements.txt
 
 #####################
 # DECLARE VARIABLES #
