@@ -3,7 +3,6 @@ from typing import List
 import sys
 import time
 import logging
-
 import bpy
 from bpy_extras.io_utils import (
     axis_conversion
