@@ -12,6 +12,13 @@ BlenderObject = Union[bpy.types.Object, bpy.types.Collection]
 
 
 def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon=0.0000001) -> bool:
+    """
+
+    :param a:
+    :param b:
+    :param epsilon:
+    :return:
+    """
     if len(a) != len(b) or not isinstance(a, mathutils.Vector) or not isinstance(b, mathutils.Vector):
         raise TypeError("Both arguments must be vectors of equal length!")
 

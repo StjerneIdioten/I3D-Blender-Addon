@@ -13,4 +13,7 @@
     <option name="versionSpecifier" value="Greater or equal (&gt;=x.y.z)" />
     <option name="modifyBaseFiles" value="true" />
   </component>
+  <component name="ReSTService">
+    <option name="DOC_DIR" value="D:\Github\I3D-Blender-Addon\docs" />
+  </component>
 </module>
