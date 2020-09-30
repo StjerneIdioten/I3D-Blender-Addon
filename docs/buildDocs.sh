@@ -17,10 +17,9 @@ set -x
 ###################
  
 apt-get update
-apt-get -y install git rsync python3-sphinx python3-sphinx-rtd-theme
+apt-get -y install git rsync python3 python3-pip python3-sphinx python3-sphinx-rtd-theme
 
-python3 -V
-pip install ../addon/requirements.txt
+pip3 install ../addon/requirements.txt
 
 #####################
 # DECLARE VARIABLES #
