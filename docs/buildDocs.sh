@@ -17,8 +17,9 @@ set -x
 ###################
  
 apt-get update
-apt-get -y install git rsync python3 python3-pip python3-sphinx python3-sphinx-rtd-theme python3-sphinx-autodoc-typehints
+apt-get -y install git rsync python3 python3-pip python3-sphinx python3-sphinx-rtd-theme
 
+python3 -m pip install sphinx-autodoc-typehints
 python3 -m pip install -r ./addon/requirements.txt
 
 #####################
