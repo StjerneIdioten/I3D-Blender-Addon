@@ -1,11 +1,10 @@
 .. _autodoc:
- 
-.. contents::
- 
-utility.py
-=============
+
+Utility (i3dio.utility)
+=======================
  
 .. automodule:: utility
   :members:
   :undoc-members:
+  :show-inheritance:
  

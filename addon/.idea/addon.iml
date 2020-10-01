@@ -5,6 +5,9 @@
       <sourceFolder url="file://$MODULE_DIR$/i3dio" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/venv" />
     </content>
+    <content url="file://$MODULE_DIR$/../docs">
+      <excludeFolder url="file://$MODULE_DIR$/../docs" />
+    </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
@@ -12,6 +15,10 @@
     <option name="requirementsPath" value="D:\Github\I3D-Blender-Addon\addon\requirements.txt" />
     <option name="versionSpecifier" value="Greater or equal (&gt;=x.y.z)" />
     <option name="modifyBaseFiles" value="true" />
+  </component>
+  <component name="PyDocumentationSettings">
+    <option name="format" value="GOOGLE" />
+    <option name="myDocStringFormat" value="Google" />
   </component>
   <component name="ReSTService">
     <option name="DOC_DIR" value="D:\Github\I3D-Blender-Addon\docs" />

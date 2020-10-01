@@ -1,3 +1,6 @@
+"""
+This module contains various small utility functions, that don't really belong anywhere else
+"""
 from __future__ import annotations
 from typing import Union, List
 import logging
@@ -11,13 +14,22 @@ logger = logging.getLogger(__name__)
 BlenderObject = Union[bpy.types.Object, bpy.types.Collection]
 
 
-def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon=0.0000001) -> bool:
-    """
+def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon: float = 0.0000001) -> bool:
+    """Compares two vectors elementwise, to see if they are equal
 
-    :param a:
-    :param b:
-    :param epsilon:
-    :return:
+    The function will run through the elements of vector a and compare them with vector b elementwise. If the function
+    reaches a set of values not within epsilon, it will return immediately.
+
+    Args:
+        a: The first vector
+        b: The second vector
+        epsilon: The absolute tolerance to which the elements should be within
+
+    Returns:
+        True if the vectors are elementwise equal to the precision of epsilon
+
+    Raises:
+        TypeError: If the vectors aren't vectors with equal length
     """
     if len(a) != len(b) or not isinstance(a, mathutils.Vector) or not isinstance(b, mathutils.Vector):
         raise TypeError("Both arguments must be vectors of equal length!")
@@ -30,8 +42,24 @@ def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon=0.0000001) 
 
 
 def as_fs_relative_path(filepath: str):
-    """If the filepath is relative to the fs dir, then return it with $ referring to the fs data dir
-    else return the path"""
+    """Checks if a filepath is relative to the FS data directory
+
+    Checks the addon settings for the FS installation path and compares that with the supplied filepath, to see if it
+    originates from within that.
+
+    Args:
+        filepath: The filepath to check
+
+    Returns:
+        The $data replaced filepath, if applicable, or a cleaned up version of the supplied filepath
+
+    Todo:
+        This should check if the addon path is actually set to something
+
+    Todo:
+        This should be rewritten to use `pathlib <https://docs.python.org/3.7/library/pathlib.html>`_ instead
+        of just strings
+    """
     logger.debug(f"Original filepath: {filepath}")
     filepath_clean = os.path.normpath(bpy.path.abspath(filepath))  # normpath cleans up stuff such as '../'
     logger.debug(f"Cleaned filepath: {filepath_clean}")
@@ -51,9 +79,6 @@ def as_fs_relative_path(filepath: str):
 
 
 def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderObject]:
-    """Sorts the supplied list of blender objects by name (slow) and returns a new sorted list. If used for
-    sorting children of objects, bear in mind that the children themselves are gathered by blender in
-    O(len(data.objects)), since blender doesn't store the list of children but looks it up everytime"""
     sorted_objects = list(objects)  # Create new list from whatever comes in, whether it is an existing list or a tuple
     sorted_objects.sort(key=lambda x: x.name)  # Sort by name
     return sorted_objects
