@@ -38,12 +38,13 @@ bl_info = {
     "support": "COMMUNITY",
     "category": "Import-Export",
     "tracker_url": "https://github.com/StjerneIdioten/I3D-Blender-Addon/issues",
-    "wiki_url": "https://github.com/StjerneIdioten/I3D-Blender-Addon/wiki"
+    "wiki_url": "https://stjerneidioten.github.io/I3D-Blender-Addon/"
 }
 
 
 def register():
     ui.addon_preferences.register()
+    ui.udim_picker.register()
     ui.shader_picker.register()
     ui.exporter.register()
     ui.object.register()
@@ -62,5 +63,6 @@ def unregister():
     ui.mesh.unregister()
     ui.light.unregister()
     ui.shader_picker.unregister()
+    ui.udim_picker.unregister()
     ui.addon_preferences.unregister()
 
