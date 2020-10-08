@@ -38,7 +38,7 @@ bl_info = {
     "support": "COMMUNITY",
     "category": "Import-Export",
     "tracker_url": "https://github.com/StjerneIdioten/I3D-Blender-Addon/issues",
-    "wiki_url": "https://github.com/StjerneIdioten/I3D-Blender-Addon/wiki"
+    "wiki_url": "https://stjerneidioten.github.io/I3D-Blender-Addon/"
 }
 
 
