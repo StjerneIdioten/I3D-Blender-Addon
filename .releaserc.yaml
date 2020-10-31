@@ -11,9 +11,11 @@
         {"type": "refactor", "release": "patch"},
         {"type": "style", "release": false},
         {"type": "docs", "release": "patch"},
-        {"type": "featsmall", "release": "patch"},
         {"scope": "no-release", "release": false},
-        {type": "ci", "release": false}
+        {"type": "test", "release": false},
+        {"type": "chore", "release": false},
+        {"type": "build", "release": false},
+        {"type": "ci", "release": false}
       ]
     }],
     ["@semantic-release/release-notes-generator", {
@@ -24,10 +26,12 @@
           {"type": "fix", "section": "Bug Fixes"},
           {"type": "perf", "section": "Performance Improvements"},
           {"type": "revert", "section": "Reverts"},
-          {"type": "docs", "section": "Documentation", "hidden": true},
+          {"type": "docs", "section": "Documentation"},
           {"type": "refactor", "section": "Code Refactoring", "hidden": true},
-          {"type": "ci", "section": "Continuous Integration", "hidden": true},
-          {"type": "featsmall", "section": "Features"}
+          {"type": "chore", "section": "Chores", "hidden": true},
+          {"type": "test", "section": "Tests"},
+          {"type": "build", "section": "Build", "hidden": true},
+          {"type": "ci", "section": "Continuous Integration", "hidden": true}
         ]
       }
     }],
