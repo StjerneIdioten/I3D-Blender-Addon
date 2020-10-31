@@ -2,6 +2,7 @@
   <dictionary name="StjerneIdioten">
     <words>
       <w>addon</w>
+      <w>commitizen</w>
       <w>depsgraph</w>
       <w>eafp</w>
       <w>idname</w>

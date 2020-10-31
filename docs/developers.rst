@@ -1,7 +1,11 @@
 .. _developers:
 
-Guidelines
-==========
+.. toctree::
+    :glob:
+    :maxdepth: 2
+
+    developers/guidelines/*
+    developers/toolchain/*
 
 Code Reference
 ==============
