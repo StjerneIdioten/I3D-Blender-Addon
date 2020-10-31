@@ -10,7 +10,7 @@
       "releaseRules": [
         {"type": "refactor", "release": "patch"},
         {"type": "style", "release": false},
-        {"type": "docs", "release": "patch"},
+        {"type": "docs", "release": "false"},
         {"scope": "no-release", "release": false},
         {"type": "test", "release": false},
         {"type": "chore", "release": false},
