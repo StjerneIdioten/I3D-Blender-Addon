@@ -1,10 +1,9 @@
-import xml.etree.ElementTree as ET
 import bpy
 
 from .node import Node
 
 from .. import (
-    utility,
+    utility, xml_i3d
 )
 from ..ui import shader_picker
 
@@ -58,7 +57,7 @@ class Material(Node):
             else:
                 self.logger.debug(f"Has Glossmap '{utility.as_fs_relative_path(gloss_image_path)}'")
                 file_id = self.i3d.add_file_image(gloss_image_path)
-                self.xml_elements['Glossmap'] = ET.SubElement(self.element, 'Glossmap')
+                self.xml_elements['Glossmap'] = xml_i3d.SubElement(self.element, 'Glossmap')
                 self._write_attribute('fileId', file_id, 'Glossmap')
         else:
             self.logger.debug(f"Has no Glossmap")
@@ -80,7 +79,7 @@ class Material(Node):
             else:
                 self.logger.debug(f"Has Normalmap '{utility.as_fs_relative_path(normal_image_path)}'")
                 file_id = self.i3d.add_file_image(normal_image_path)
-                self.xml_elements['Normalmap'] = ET.SubElement(self.element, 'Normalmap')
+                self.xml_elements['Normalmap'] = xml_i3d.SubElement(self.element, 'Normalmap')
                 self._write_attribute('fileId', file_id, 'Normalmap')
         else:
             self.logger.debug(f"Has no Normalmap")
@@ -102,7 +101,7 @@ class Material(Node):
                 if diffuse_image_path is not None:
                     self.logger.debug(f"Has diffuse texture '{utility.as_fs_relative_path(diffuse_image_path)}'")
                     file_id = self.i3d.add_file_image(diffuse_image_path)
-                    self.xml_elements['Texture'] = ET.SubElement(self.element, 'Texture')
+                    self.xml_elements['Texture'] = xml_i3d.SubElement(self.element, 'Texture')
                     self._write_attribute('fileId', file_id, 'Texture')
         # Write the diffuse colors
         self._write_diffuse(diffuse)
@@ -147,7 +146,7 @@ class Material(Node):
                 value = ' '.join(map('{0:.6f}'.format, value))
                 parameter_dict['value'] = value
 
-                ET.SubElement(self.element, 'CustomParameter', parameter_dict)
+                xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
 
             for texture in shader_settings.shader_textures:
                 self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")
@@ -156,4 +155,4 @@ class Material(Node):
                     texture_id = self.i3d.add_file_image(texture.source)
                     texture_dict['fileId'] = str(texture_id)
 
-                    ET.SubElement(self.element, 'Custommap', texture_dict)
+                    xml_i3d.SubElement(self.element, 'Custommap', texture_dict)

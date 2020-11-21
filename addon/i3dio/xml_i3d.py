@@ -4,13 +4,28 @@ from __future__ import annotations  # Enables python 4.0 annotation typehints fx
 from typing import (Union, Dict)
 import math
 import logging
+
+# Load in the xml modules
+xml_libraries = {'element_tree'}
+xml_current_library = 'element_tree'
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
+XML_Element = ET.Element
+xml_parsing_exceptions = [ET.ParseError, FileNotFoundError]
+try:
+    from lxml import etree
+    xml_libraries.add('lxml')
+    print("xml_i3d has access to lxml")
+    XML_Element = Union[ET.Element, etree.Element]
+    xml_parsing_exceptions.append(etree.ParseError)
+    xml_current_library = 'lxml'
+except ImportError as e:
+    etree = e
+    print("xml_i3d does not have access to lxml")
+
+
+print("xml_i3d just got reloaded")
 
 logger = logging.getLogger(__name__)
-
-root_attributes = {'version': '1.6',
-                   'xmlns:sxi': 'http://www.w3.org/2001/XMLSchema-instance',
-                   'xsi:noNamespaceSchemaLocation': 'http://i3d.giants.ch/schema/i3d-1.6.xsd'}
 
 file_ending = '.i3d'
 
@@ -18,27 +33,123 @@ merge_group_prefix = 'MergedMesh_'
 skinned_mesh_prefix = 'SkinnedMesh_'
 
 
-def write_int(element: ET.Element, attribute: str, value: int) -> None:
+def _generic_library_switcher(function: str, *argv, **kwargs):
+    """
+    Very generic way of calling functions that have the same signature between the two libraries
+
+    Args:
+        function:
+        *argv:
+        **kwargs:
+
+    Returns:
+
+    """
+    if xml_current_library == 'lxml':
+        return getattr(etree, function)(*argv, **kwargs)
+    else:
+        return getattr(ET, function)(*argv, **kwargs)
+
+
+class CommentedTreeBuilder(ET.TreeBuilder):
+    """
+    This class is used to enable elemtree to NOT delete comments of parsed trees...
+    """
+    def comment(self, data):
+        self.start(ET.Comment, {})
+        self.data(data)
+        self.end(ET.Comment)
+
+
+def parse(*argv, **kwargs):
+    tree = None
+    try:
+        if xml_current_library == 'lxml':
+            tree = etree.parse(*argv, **kwargs, parser=etree.XMLParser(remove_blank_text=True))
+        else:
+            tree = ET.parse(*argv, **kwargs, parser=ET.XMLParser(target=CommentedTreeBuilder()))
+    except tuple(xml_parsing_exceptions) as e:
+        print(f"Error while parsing xml file: {e}")
+    return tree
+
+
+def SubElement(*argv, **kwargs):
+    return _generic_library_switcher('SubElement', *argv, **kwargs)
+
+
+def Element(*argv, **kwargs):
+    return _generic_library_switcher('Element', *argv, **kwargs)
+
+
+def ElementTree(*argv, **kwargs):
+    return _generic_library_switcher('ElementTree', *argv, **kwargs)
+
+
+def write_tree_to_file(tree, file_path: str, *argv, **kwargs):
+    if xml_current_library == 'lxml':
+        f = open(file_path, 'w')
+        i3d_string = etree.tostring(tree, *argv, pretty_print=True, **kwargs).decode(kwargs['encoding'])
+        i3d_string = i3d_string.replace("&gt;", ">")
+        f.write(i3d_string)
+        f.close()
+    else:
+        add_indentations(tree.getroot())
+        tree.write(file_path, *argv, **kwargs)
+
+
+def export_to_i3d_file(source: XML_Element, file_path: str, *argv, **kwargs):
+    settings = {
+        'xml_declaration': True,
+        'encoding': 'iso-8859-1',
+        'method': 'xml'
+    }
+
+    write_tree_to_file(ElementTree(source), file_path, *argv, **settings, **kwargs)
+
+
+def i3d_root_element(name: str):
+
+    root_attributes = {
+        'version': '1.6',
+    }
+
+    namespaced_attributes = {
+        'xsi:noNamespaceSchemaLocation': 'http://i3d.giants.ch/schema/i3d-1.6.xsd',
+        'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance'
+    }
+
+    if xml_current_library == 'lxml':
+        nsmap = {
+            'xsi': 'http://www.w3.org/2001/XMLSchema-instance'
+        }
+        attr_qname = etree.QName("http://www.w3.org/2001/XMLSchema-instance", 'noNamespaceSchemaLocation')
+        return Element('i3D', attrib={'name': name, **root_attributes,
+                                      attr_qname: 'http://i3d.giants.ch/schema/i3d-1.6.xsd'}, nsmap=nsmap)
+    else:
+        return Element('i3D', attrib={'name': name, **root_attributes, **namespaced_attributes})
+
+
+def write_int(element: XML_Element, attribute: str, value: int) -> None:
     """Write the attribute into the element with formatting for ints"""
     element.set(attribute, f"{value:d}")
 
 
-def write_float(element: ET.Element, attribute: str, value: float) -> None:
+def write_float(element: XML_Element, attribute: str, value: float) -> None:
     """Write the attribute into the element with formatting for floats"""
     element.set(attribute, f"{value:.7f}")
 
 
-def write_bool(element: ET.Element, attribute: str, value: bool) -> None:
+def write_bool(element: XML_Element, attribute: str, value: bool) -> None:
     """Write the attribute into the element with formatting for booleans"""
     element.set(attribute, f"{value!s}".lower())
 
 
-def write_string(element: ET.Element, attribute: str, value: str) -> None:
+def write_string(element: XML_Element, attribute: str, value: str) -> None:
     """Write the attribute into the element with formatting for strings"""
     element.set(attribute, value)
 
 
-def write_attribute(element: ET.Element, attribute: str, value) -> None:
+def write_attribute(element: XML_Element, attribute: str, value) -> None:
     if isinstance(value, float):
         write_float(element, attribute, value)
     elif isinstance(value, bool):  # Order matters, since bool is an int subclass!
@@ -49,7 +160,7 @@ def write_attribute(element: ET.Element, attribute: str, value) -> None:
         write_string(element, attribute, value)
 
 
-def write_property_group(property_group, elements: Dict[str, Union[ET.Element, None]]) -> None:
+def write_property_group(property_group, elements: Dict[str, Union[XML_Element, None]]) -> None:
     logger.info(f"Writing non-default properties from propertygroup: '{type(property_group).__name__}'")
     # Since blender properties are basically abusing the annotation system, we can also abuse this to create
     # a generic property export function by accessing the annotation dictionary
@@ -100,7 +211,7 @@ def write_property_group(property_group, elements: Dict[str, Union[ET.Element, N
     logger.info(f"Wrote '{properties_written}' properties")
 
 
-def add_indentations(element: ET.Element, level: int = 0) -> None:
+def add_indentations(element: XML_Element, level: int = 0) -> None:
     """
     Used for pretty printing the xml since etree does not indent elements and keeps everything in one continues
     string and since i3d files are supposed to be human readable, we need indentation. There is a patch for
@@ -130,7 +241,7 @@ def add_indentations(element: ET.Element, level: int = 0) -> None:
             element.tail = indents
 
 
-def escape_attrib(text):
+def escape_attrib_element_tree(text):
     # escape attribute value
     try:
         if "&" in text:
@@ -161,11 +272,7 @@ def escape_attrib(text):
         ET._raise_serialization_error(text)
 
 
-class CommentedTreeBuilder(ET.TreeBuilder):
-    """
-    This class is used to enable elemtree to NOT delete comments of parsed trees...
-    """
-    def comment(self, data):
-        self.start(ET.Comment, {})
-        self.data(data)
-        self.end(ET.Comment)
+# Assign the escape attribute function to replace the default implementation
+ET._escape_attrib = escape_attrib_element_tree
+
+

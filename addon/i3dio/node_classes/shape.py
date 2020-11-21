@@ -1,4 +1,3 @@
-import xml.etree.ElementTree as ET
 import math
 import mathutils
 import collections
@@ -8,7 +7,7 @@ import bpy
 
 from .node import (Node, SceneGraphNode)
 
-from .. import debugging
+from .. import (debugging, xml_i3d)
 from ..i3d import I3D
 
 
@@ -167,9 +166,9 @@ class IndexedTriangleSet(Node):
 
     def _create_xml_element(self) -> None:
         super()._create_xml_element()
-        self.xml_elements['vertices'] = ET.SubElement(self.element, 'Vertices')
-        self.xml_elements['triangles'] = ET.SubElement(self.element, 'Triangles')
-        self.xml_elements['subsets'] = ET.SubElement(self.element, 'Subsets')
+        self.xml_elements['vertices'] = xml_i3d.SubElement(self.element, 'Vertices')
+        self.xml_elements['triangles'] = xml_i3d.SubElement(self.element, 'Triangles')
+        self.xml_elements['subsets'] = xml_i3d.SubElement(self.element, 'Subsets')
 
     @property
     def name(self):
@@ -358,7 +357,7 @@ class IndexedTriangleSet(Node):
                 vertex_attributes['bw'] = vertex.blend_weights_for_xml()
                 vertex_attributes['bi'] = vertex.blend_ids_for_xml()
 
-            ET.SubElement(self.xml_elements['vertices'], 'v', vertex_attributes)
+            xml_i3d.SubElement(self.xml_elements['vertices'], 'v', vertex_attributes)
 
         if vertices_has_colors:
             self._write_attribute('color', True, 'vertices')
@@ -368,7 +367,7 @@ class IndexedTriangleSet(Node):
 
         # Write triangles to xml
         for triangle in self.triangles[offset:]:
-            ET.SubElement(self.xml_elements['triangles'], 't', {'vi': "{0} {1} {2}".format(*triangle)})
+            xml_i3d.SubElement(self.xml_elements['triangles'], 't', {'vi': "{0} {1} {2}".format(*triangle)})
 
     def populate_xml_element(self):
         if len(self.evaluated_mesh.mesh.vertices) == 0:
@@ -388,7 +387,7 @@ class IndexedTriangleSet(Node):
         # Write subsets
         for _, subset in self.subsets.items():
             self.material_indexes += f"{subset.material_id} "
-            ET.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
+            xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
 
         # Removes the last whitespace from the string, since an extra will always be added
         self.material_indexes = self.material_indexes.strip()

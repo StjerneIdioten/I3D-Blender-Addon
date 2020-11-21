@@ -1,4 +1,3 @@
-import xml.etree.ElementTree as ET
 import bpy
 from bpy.types import (Panel)
 from bpy.props import (
@@ -9,6 +8,8 @@ from bpy.props import (
     FloatProperty,
     CollectionProperty
 )
+
+from .. import xml_i3d
 
 classes = []
 
@@ -70,10 +71,9 @@ class I3DLoadCustomShader(bpy.types.Operator):
 
         attributes = context.object.active_material.i3d_attributes
 
-        try:
-            tree = ET.parse(bpy.path.abspath(attributes.source))
-        except ET.ParseError as e:
-            print(f"Shader file is not correct xml, failed with error: {e}")
+        tree = xml_i3d.parse(bpy.path.abspath(attributes.source))
+        if tree is None:
+            print(f"Shader file is not correct xml")
             clear_shader(context)
         else:
             root = tree.getroot()
@@ -149,10 +149,9 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
 
         shader = context.object.active_material.i3d_attributes
 
-        try:
-            tree = ET.parse(bpy.path.abspath(shader.source))
-        except (ET.ParseError, FileNotFoundError) as e:
-            print(f"Shader file is no longer valid: {e}")
+        tree = xml_i3d.parse(bpy.path.abspath(shader.source))
+        if tree is None:
+            print(f"Shader file is no longer valid")
             clear_shader(context)
         else:
             shader.shader_parameters.clear()

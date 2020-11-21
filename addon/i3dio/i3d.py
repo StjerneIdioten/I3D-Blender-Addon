@@ -2,10 +2,7 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import (Union, Dict, List, Type, OrderedDict, Optional)
 import logging
-import xml.etree.ElementTree as ET
 from . import xml_i3d
-
-ET._escape_attrib = xml_i3d.escape_attrib
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +25,15 @@ class I3D:
         }
 
         # Initialize top-level categories
-        self.xml_elements = {'Root': ET.Element('i3D', {**{'name': name}, **xml_i3d.root_attributes})}
-        self.xml_elements['Asset'] = ET.SubElement(self.xml_elements['Root'], 'Asset')
-        self.xml_elements['Files'] = ET.SubElement(self.xml_elements['Root'], 'Files')
-        self.xml_elements['Materials'] = ET.SubElement(self.xml_elements['Root'], 'Materials')
-        self.xml_elements['Shapes'] = ET.SubElement(self.xml_elements['Root'], 'Shapes')
-        self.xml_elements['Dynamics'] = ET.SubElement(self.xml_elements['Root'], 'Dynamics')
-        self.xml_elements['Scene'] = ET.SubElement(self.xml_elements['Root'], 'Scene')
-        self.xml_elements['Animation'] = ET.SubElement(self.xml_elements['Root'], 'Animation')
-        self.xml_elements['UserAttributes'] = ET.SubElement(self.xml_elements['Root'], 'UserAttributes')
+        self.xml_elements = {'Root': xml_i3d.i3d_root_element(name)}
+        self.xml_elements['Asset'] = xml_i3d.SubElement(self.xml_elements['Root'], 'Asset')
+        self.xml_elements['Files'] = xml_i3d.SubElement(self.xml_elements['Root'], 'Files')
+        self.xml_elements['Materials'] = xml_i3d.SubElement(self.xml_elements['Root'], 'Materials')
+        self.xml_elements['Shapes'] = xml_i3d.SubElement(self.xml_elements['Root'], 'Shapes')
+        self.xml_elements['Dynamics'] = xml_i3d.SubElement(self.xml_elements['Root'], 'Dynamics')
+        self.xml_elements['Scene'] = xml_i3d.SubElement(self.xml_elements['Root'], 'Scene')
+        self.xml_elements['Animation'] = xml_i3d.SubElement(self.xml_elements['Root'], 'Animation')
+        self.xml_elements['UserAttributes'] = xml_i3d.SubElement(self.xml_elements['Root'], 'UserAttributes')
 
         self.scene_root_nodes = []
         self.conversion_matrix = conversion_matrix
@@ -180,12 +177,12 @@ class I3D:
     def add_user_attributes(self, user_attributes, node_id):
         node_attribute_element = self.xml_elements['UserAttributes'].find(f"UserAttribute[@nodeId='{node_id:d}']")
         if node_attribute_element is None:
-            node_attribute_element = ET.SubElement(self.xml_elements['UserAttributes'], 'UserAttribute',
+            node_attribute_element = xml_i3d.SubElement(self.xml_elements['UserAttributes'], 'UserAttribute',
                                                    attrib={'nodeId': str(node_id)})
 
         for attribute in user_attributes:
             attrib = {'name': attribute.name, 'type': attribute.type.replace('data_', '')}
-            attribute_element = ET.SubElement(node_attribute_element, 'Attribute', attrib=attrib)
+            attribute_element = xml_i3d.SubElement(node_attribute_element, 'Attribute', attrib=attrib)
             xml_i3d.write_attribute(attribute_element, 'value', getattr(attribute, attribute.type))
 
     def add_material(self, blender_material: bpy.types.Material) -> int:
@@ -256,21 +253,15 @@ class I3D:
         return f"{longest_string * '-'}\n" + tree_string
 
     def export_to_i3d_file(self) -> None:
-        xml_i3d.add_indentations(self.xml_elements['Root'])
-        ET.ElementTree(self.xml_elements['Root']).write(self.paths['i3d_file_path'],
-                                                        xml_declaration=True,
-                                                        encoding='iso-8859-1',
-                                                        method='xml')
+        xml_i3d.export_to_i3d_file(self.xml_elements['Root'], self.paths['i3d_file_path'])
 
         if self.settings['i3d_mapping_file_path'] != '':
             self.export_i3d_mapping()
 
     def export_i3d_mapping(self) -> None:
-        try:
-            parser = ET.XMLParser(target=xml_i3d.CommentedTreeBuilder())
-            tree = ET.parse(bpy.path.abspath(self.settings['i3d_mapping_file_path']), parser)
-        except ET.ParseError as e:
-            self.logger.warning(f"Supplied mapping file is not correct xml, failed with error: {e}")
+        tree = xml_i3d.parse(bpy.path.abspath(self.settings['i3d_mapping_file_path']))
+        if tree is None:
+            self.logger.warning(f"Supplied mapping file is not correct xml, failed with error")
         else:
             root = tree.getroot()
             i3d_mappings_element = root.find('i3dMappings')
@@ -297,12 +288,11 @@ class I3D:
                         name = mapping_node.name
 
                     attributes = {'id': name, 'node': build_index_string(mapping_node)}
-                    ET.SubElement(i3d_mappings_element, 'i3dMapping', attributes)
+                    xml_i3d.SubElement(i3d_mappings_element, 'i3dMapping', attributes)
 
-                xml_i3d.add_indentations(i3d_mappings_element)
-                tree.write(bpy.path.abspath(self.settings['i3d_mapping_file_path']),
-                           xml_declaration=True,
-                           encoding='utf-8')
+                xml_i3d.write_tree_to_file(tree, bpy.path.abspath(self.settings['i3d_mapping_file_path']),
+                                           xml_declaration=True,
+                                           encoding='utf-8')
             else:
                 self.logger.warning(f"Supplied mapping file does not contain an <i3dMappings> tag anywhere! Cannot"
                                     f"export mappings.")

@@ -1,7 +1,6 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from abc import (ABC, abstractmethod)
 import logging
-import xml.etree.ElementTree as ET
 from typing import (Union, Dict)
 import math
 import mathutils
@@ -67,10 +66,10 @@ class Node(ABC):
         self.logger.debug(f"Filling out basic attributes, {{name='{self.name}', nodeId='{self.id}'}}")
         attributes = {type(self).NAME_FIELD_NAME: self.name, type(self).ID_FIELD_NAME: str(self.id)}
         try:
-            self.element = ET.SubElement(self.parent.element, type(self).ELEMENT_TAG, attributes)
+            self.element = xml_i3d.SubElement(self.parent.element, type(self).ELEMENT_TAG, attributes)
             self.logger.debug(f"has parent element with name [{self.parent.name}]")
         except AttributeError:
-            self.element = ET.Element(type(self).ELEMENT_TAG, attributes)
+            self.element = xml_i3d.Element(type(self).ELEMENT_TAG, attributes)
 
     def populate_xml_element(self):
         # This should be overwritten in derived nodes, if they need to add extra attributes/xml-elements to the base
@@ -95,7 +94,7 @@ class SceneGraphNode(Node):
                  ):
         self.children = []
         self.blender_object = blender_object
-        self.xml_elements: Dict[str, Union[ET.Element, None]] = {'Node': None}
+        self.xml_elements: Dict[str, Union[xml_i3d.XML_Element, None]] = {'Node': None}
         super().__init__(id_, i3d, parent)
 
         try:
@@ -116,7 +115,7 @@ class SceneGraphNode(Node):
         return self.blender_object.name
 
     @property
-    def element(self) -> Union[ET.Element, None]:
+    def element(self) -> Union[xml_i3d.XML_Element, None]:
         return self.xml_elements['Node']
 
     @element.setter
