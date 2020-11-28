@@ -5,6 +5,7 @@ Welcome to I3D Addon for Blender's documentation!
     :maxdepth: -1
     :caption: Documentation:
 
+    installation
     features
 
 .. toctree::
