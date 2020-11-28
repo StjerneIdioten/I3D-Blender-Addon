@@ -14,16 +14,11 @@ xml_parsing_exceptions = [ET.ParseError, FileNotFoundError]
 try:
     from lxml import etree
     xml_libraries.add('lxml')
-    print("xml_i3d has access to lxml")
     XML_Element = Union[ET.Element, etree.Element]
     xml_parsing_exceptions.append(etree.ParseError)
     xml_current_library = 'lxml'
 except ImportError as e:
     etree = e
-    print("xml_i3d does not have access to lxml")
-
-
-print("xml_i3d just got reloaded")
 
 logger = logging.getLogger(__name__)
 

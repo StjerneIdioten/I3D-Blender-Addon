@@ -47,11 +47,9 @@ def register():
     try:
         import lxml
     except ImportError as e:
-        print("lxml was not found")
         import os
         import ctypes
         if ctypes.windll.shell32.IsUserAnAdmin():
-            print("Blender is run as administrator")
             import subprocess
             import sys
             python_exe = sys.executable
@@ -61,16 +59,14 @@ def register():
             try:
                 import lxml
             except ImportError as e:
-                raise ImportError('lxml is still not installed') from e
+                raise ImportError('Lxml could not be installed, despite prerequisites being met') from e
             else:
-                print("lxml is now installed")
+                print("Lxml is now installed and ready for use")
                 # TODO: See if it is even necessary to import xml_i3d beforehand, maybe reload can be avoided
                 import importlib
                 importlib.reload(xml_i3d)  # We need to reload this library so it now has access to lxml
         else:
             print('You must run blender as administrator to be able to install lxml!')
-    else:
-        print("lxml is already installed")
 
     ui.addon_preferences.register()
     ui.udim_picker.register()
