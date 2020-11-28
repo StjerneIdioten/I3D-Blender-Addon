@@ -8,5 +8,6 @@ Features
     :maxdepth: 2
 
     features/udim_picker/*
+    features/i3d_mapping/*
 
 

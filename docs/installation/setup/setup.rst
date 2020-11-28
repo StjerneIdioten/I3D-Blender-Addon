@@ -33,6 +33,7 @@ The exporter will just export all files/references with absolute paths. Which me
 own pc, unless you manually edit all of the references to be relative to the data folder. You will also receive a
 warning in the blender info console everytime you export.
 
+.. _installation_setup_xml_library:
 
 XML Library
 -----------
