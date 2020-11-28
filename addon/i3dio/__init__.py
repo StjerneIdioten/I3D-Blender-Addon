@@ -54,7 +54,7 @@ def register():
             print("Blender is run as administrator")
             import subprocess
             import sys
-            python_exe = bpy.app.binary_path_python
+            python_exe = sys.executable
             result = subprocess.run(['echo', 'yes', '|', python_exe, '-m', 'pip', 'install', '-r',
                                      f'{os.path.dirname(os.path.realpath(__file__))}\\requirements.txt'],
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, shell=True)
