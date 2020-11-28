@@ -179,8 +179,10 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         # Since it is single threaded, this warning wouldn't be sent before the exported starts exporting.
         # So it can't come before the export and it drowns if the export time comes after it.
         if bpy.context.preferences.addons['i3dio'].preferences.fs_data_path == '':
-            self.report({'WARNING'}, "FS Data folder path is not set in addon preferences! "
-                                     "Files were exported as if using absolute paths")
+            self.report({'WARNING'},
+                        "FS Data folder path is not set, "
+                        "see https://stjerneidioten.github.io/"
+                        "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder")
 
         return {'FINISHED'}
     
