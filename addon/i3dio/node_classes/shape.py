@@ -321,7 +321,9 @@ class IndexedTriangleSet(Node):
         self.process_subset(mesh, material_name, triangle_offset)
         self.write_vertices(vertex_offset)
         self.write_triangles(triangle_offset)
-        list(self.xml_elements['subsets'])[0].attrib = self.subsets[material_name].as_dict()
+        subset = list(self.xml_elements['subsets'])[0]
+        for key, value in self.subsets[material_name].as_dict().items():
+            subset.set(key, value)
 
     def write_vertices(self, offset=0):
         # Vertices
