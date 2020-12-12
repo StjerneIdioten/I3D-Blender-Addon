@@ -4,6 +4,14 @@
 [![semantic-release](https://img.shields.io/badge/%20%20%F0%9F%93%A6%F0%9F%9A%80-semantic--release-e10079.svg)](https://github.com/semantic-release/semantic-release)
 ![Latest Release](https://github.com/StjerneIdioten/I3D-Blender-Addon/workflows/Release/badge.svg)
 
+<p align="left">
+  <a href="https://www.buymeacoffee.com/StjerneIdioten">Support Me</a> •
+  <a href="https://stjerneidioten.github.io/I3D-Blender-Addon">Documentation</a> •
+  <a href="https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/latest/download/i3d_exporter.zip">Download Newest Release</a> •
+  <a href="https://github.com/StjerneIdioten/I3D-Blender-Addon/releases">All Releases</a> •
+  <a href="https://github.com/StjerneIdioten/I3D-Blender-Addon/discussions">Discussion Forum</a> •
+</p>
+
 ## Description
 
 This project aims to develop and maintain an entirely new i3d exporter addon for Blender. The main goals are maintaining an exporter that is up to date with the newest Blender versions and adding long sought features such as skinned meshes, mergegroups and what ever else the community might have a need for.
@@ -30,6 +38,15 @@ The user **Redphoenix** from **VertexDezign** has been so kind as to put togethe
 Installation instructions can be found described in great detail [here](https://stjerneidioten.github.io/I3D-Blender-Addon/installation.html), but it's more or less just a standard Blender addon installation.
 
 The newest release can always be found [here](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/latest) and the [releases page](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases) contains all currently available releases. This consists of both legacy versions for older Blender versions and different development versions with experimental features.
+
+The following table has an overview of the available exporter versions. Legacy versions are kept around for older Blender versions, but they are not actively developed anymore nor do they get new features or bug fixes.
+
+Blender Version | Status
+--------|-------
+[2.91](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/latest/download/i3d_exporter.zip) | Current
+[2.90](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/download/v1.2.1/i3d_exporter.zip) | Legacy
+[2.83](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/download/v0.10.0/i3d_exporter.zip) | Legacy
+
 
 ## Help
 
