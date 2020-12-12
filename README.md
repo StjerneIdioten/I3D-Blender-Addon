@@ -60,7 +60,12 @@ I can also be reached in several other places, I am not hard to find through my 
 
 ## Mod Showcase
 
-Here you can see a few mods created using the exporter to showcase what it is capable of. 
+Here you can see a few mods created using the exporter. This is not an exhaustive list, but mostly just to give a view of what is possible with the exporter.
 If you want your mod in this list then please feel free to contact me through the discussion forum.
 
-- [Veenhuis JVK 16000](https://www.farming-simulator.com/mod.php?lang=en&country=dk&mod_id=158125&title=fs2019) 
+- [Veenhuis JVK 16000](https://www.farming-simulator.com/mod.php?lang=en&country=dk&mod_id=158125&title=fs2019)
+- [Massey Ferguson 700](https://www.farming-simulator.com/mod.php?lang=en&country=dk&mod_id=188982&title=fs2019)
+- [Marshall QM/14](https://www.farming-simulator.com/mod.php?lang=en&country=dk&mod_id=187971&title=fs2019)
+- [Marston ACE 10 1993](https://www.farming-simulator.com/mod.php?lang=en&country=dk&mod_id=187042&title=fs2019)
+- [Marston 22' Bale Trailer 1993](https://www.farming-simulator.com/mod.php?lang=en&country=dk&mod_id=183611&title=fs2019)
+- [Marston ACE 10 1984](https://www.farming-simulator.com/mod.php?lang=en&country=dk&mod_id=181044&title=fs2019)
