@@ -19,7 +19,7 @@ This project aims to develop and maintain an entirely new i3d exporter addon for
 The current status is that the exporter can do most of the things that the maya exporter can do and now makes Blender a viable option for creating mods for Giants Engine games.
 
 ## Support
-If you enjoy the exporter and what to support further development, then feel free to throw a little something my way.
+If you enjoy the exporter and want to support further development, then feel free to throw a little something my way.
 
 <a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=3BLFKTJDUC4Y6&currency_code=EUR&source=url" target="_blank"><img src="https://www.paypalobjects.com/en_US/DK/i/btn/btn_donateCC_LG.gif" alt="Buy Me A Coffee"></a>
 
@@ -60,7 +60,7 @@ I can also be reached in several other places, I am not hard to find through my 
 
 ## Mod Showcase
 
-Here you can see a few mods created using the exporter to showcase what it is capable of:
+Here you can see a few mods created using the exporter to showcase what it is capable of. 
+If you want your mod in this list then please feel free to contact me through the discussion forum.
 
 - [Veenhuis JVK 16000](https://www.farming-simulator.com/mod.php?lang=en&country=dk&mod_id=158125&title=fs2019) 
-
