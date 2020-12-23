@@ -63,6 +63,13 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=True
     )
 
+    alphabetic_uvs: BoolProperty(
+        name="Alphabetic UV's",
+        description="UV's will be exported in  alphabetic order instead of list order "
+                    "(To get around not having reordering of UV's in blender)",
+        default=False
+    )
+
     object_types_to_export: EnumProperty(
         name="Object types",
         description="Select which objects should be included in the exported",
@@ -246,6 +253,9 @@ class I3D_IO_PT_export_options(Panel):
 
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'apply_unit_scale')
+
+        row = layout.row()
+        row.prop(bpy.context.scene.i3dio, 'alphabetic_uvs')
 
         box = layout.box()
         row = box.row()

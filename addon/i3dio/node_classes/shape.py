@@ -213,9 +213,13 @@ class IndexedTriangleSet(Node):
 
                 # Add uvs
                 uvs = []
-                for count, uv in enumerate(mesh.uv_layers):
+                uv_keys = mesh.uv_layers.keys()
+                if self.i3d.settings['alphabetic_uvs']:
+                    uv_keys = sorted(uv_keys)
+
+                for count, uv_key in enumerate(uv_keys):
                     if count < 4:
-                        uvs.append(uv.data[loop_index].uv)
+                        uvs.append(mesh.uv_layers.get(uv_key).data[loop_index].uv)
 
                 blend_weights = []
                 blend_ids = []
