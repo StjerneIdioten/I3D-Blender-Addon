@@ -51,7 +51,7 @@ Blender Version | Status
 ## Help
 
 If you need help with the addon in any way, the following channels are available:
-* [Documentation](https://github.com/StjerneIdioten/I3D-Blender-Addon/wiki): The documentation will eventually contain all information about every aspect of the exporter
+* [Documentation](https://stjerneidioten.github.io/I3D-Blender-Addon): The documentation will eventually contain all information about every aspect of the exporter
 * [Issue Tracker](https://github.com/StjerneIdioten/I3D-Blender-Addon/issues): If you come across any bugs, please post them here.
 * [Discussion Forum](https://github.com/StjerneIdioten/I3D-Blender-Addon/discussions): The official discussion forum hosted here on github
 * [VertexDezign Discord](https://discord.gg/GVfNFpM): There is an official support channel available for the exporter
