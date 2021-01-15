@@ -31,6 +31,10 @@ class Material(Node):
     def element(self, value):
         self.xml_elements['node'] = value
 
+    @property
+    def normal(self):
+        return self.xml_elements.get('Normalmap', None)
+
     def populate_xml_element(self):
         if self.blender_material.use_nodes:
             self._resolve_with_nodes()

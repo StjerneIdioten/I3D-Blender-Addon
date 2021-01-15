@@ -158,6 +158,7 @@ class IndexedTriangleSet(Node):
         self.bone_mapping: ChainMap = bone_mapping
         self.bind_index = 0
         self.vertex_group_ids = {}
+        self.normal = False
         if shape_name is None:
             self.shape_name = self.evaluated_mesh.name
         else:
@@ -287,6 +288,8 @@ class IndexedTriangleSet(Node):
                 #  object. The evaluated one still contains references to deleted nodes from the node_tree
                 #  of the material. Although I thought it would be updated?
                 material_id = self.i3d.add_material(triangle_material.original)
+                if self.i3d.materials[material_id].normal is not None:
+                    self.normal = True
                 self.subsets[triangle_material.name] = SubSet(material_id)
 
             # Add triangle to subset
@@ -332,7 +335,8 @@ class IndexedTriangleSet(Node):
     def write_vertices(self, offset=0):
         # Vertices
         self._write_attribute('count', len(self.vertices), 'vertices')
-        self._write_attribute('normal', True, 'vertices')
+        if self.normal:
+            self._write_attribute('normal', True, 'vertices')
         self._write_attribute('tangent', True, 'vertices')
         for count, _ in enumerate(list(self.vertices.keys())[0].uvs_for_xml()):
             self._write_attribute(f"uv{count}", True, 'vertices')
