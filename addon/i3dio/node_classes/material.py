@@ -32,7 +32,7 @@ class Material(Node):
         self.xml_elements['node'] = value
 
     @property
-    def normal(self):
+    def tangent(self):
         return self.xml_elements.get('Normalmap', None)
 
     def populate_xml_element(self):
