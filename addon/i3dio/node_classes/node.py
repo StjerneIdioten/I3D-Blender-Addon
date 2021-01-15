@@ -261,8 +261,8 @@ class LightNode(SceneGraphNode):
         self._write_attribute('color', color)
         self.logger.info(f"Has color {color}")
 
-        self._write_attribute('range', light.distance)
-        self.logger.info(f"Has range {light.distance}")
+        self._write_attribute('range', light.cutoff_distance)
+        self.logger.info(f"Has range {light.cutoff_distance}")
 
         self._write_attribute('castShadowMap', light.use_shadow)
         self.logger.info('casts shadows' if light.use_shadow else 'does not cast shadows')
