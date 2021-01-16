@@ -4,6 +4,8 @@ from __future__ import annotations  # Enables python 4.0 annotation typehints fx
 from typing import (Union, Dict)
 import math
 import logging
+import bpy
+import mathutils
 
 # Load in the xml modules
 xml_libraries = {'element_tree'}
@@ -20,12 +22,16 @@ try:
 except ImportError as e:
     etree = e
 
+from . import utility
+
 logger = logging.getLogger(__name__)
 
 file_ending = '.i3d'
 
 merge_group_prefix = 'MergedMesh_'
 skinned_mesh_prefix = 'SkinnedMesh_'
+
+i3d_max = 3.40282e+38
 
 
 def _generic_library_switcher(function: str, *argv, **kwargs):
@@ -131,7 +137,7 @@ def write_int(element: XML_Element, attribute: str, value: int) -> None:
 
 def write_float(element: XML_Element, attribute: str, value: float) -> None:
     """Write the attribute into the element with formatting for floats"""
-    element.set(attribute, f"{value:.7f}")
+    element.set(attribute, f"{value:.6g}")
 
 
 def write_bool(element: XML_Element, attribute: str, value: bool) -> None:
@@ -144,6 +150,10 @@ def write_string(element: XML_Element, attribute: str, value: str) -> None:
     element.set(attribute, value)
 
 
+def write_vector(element: XML_Element, attribute: str, values: tuple) -> None:
+    element.set(attribute, "{0:.6g} {1:.6g} {2:.6g}".format(*values))
+
+
 def write_attribute(element: XML_Element, attribute: str, value) -> None:
     if isinstance(value, float):
         write_float(element, attribute, value)
@@ -153,16 +163,37 @@ def write_attribute(element: XML_Element, attribute: str, value) -> None:
         write_int(element, attribute, value)
     elif isinstance(value, str):
         write_string(element, attribute, value)
+    elif isinstance(value, (list, tuple, bpy.types.bpy_prop_array, mathutils.Color)):
+        write_vector(element, attribute, tuple(value))
+    else:
+        logger.warning(f"No xml attribute writing function for attribute of type '{type(value)}'")
 
 
-def write_property_group(property_group, elements: Dict[str, Union[XML_Element, None]]) -> None:
+def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Element, None]]) -> None:
     logger.info(f"Writing non-default properties from propertygroup: '{type(property_group).__name__}'")
     # Since blender properties are basically abusing the annotation system, we can also abuse this to create
     # a generic property export function by accessing the annotation dictionary
     properties_written = 0
     for prop_key in property_group.__annotations__.keys():
+        # If the attribute isn't in the i3d_map, then it isn't supposed to be exported as an attribute
+        if prop_key not in property_group.i3d_map:
+            continue
+
         prop_name = prop_key
         value = getattr(property_group, prop_key)
+
+        tracking = getattr(property_group, prop_key + '_tracking', None)
+        if tracking:
+            member_to_track = property_group.i3d_map[prop_key].get('tracking')
+            if 'obj_types' in member_to_track:
+                if not isinstance(obj, member_to_track['obj_types']):
+                    continue
+
+            if 'mapping' in member_to_track:
+                value = member_to_track['mapping'][getattr(obj, member_to_track['member_path'])]
+            else:
+                value = getattr(obj, member_to_track['member_path'])
+
         value_to_write = value
         default = property_group.i3d_map[prop_key].get('default')
         i3d_name = property_group.i3d_map[prop_key].get('name')
@@ -172,6 +203,10 @@ def write_property_group(property_group, elements: Dict[str, Union[XML_Element, 
         # Special case of checking floats, since these can be not equal due to floating point errors
         if isinstance(value, float):
             if math.isclose(value, default, abs_tol=0.0000001):
+                continue
+        elif isinstance(value, (bpy.types.bpy_prop_array, mathutils.Color)):
+            value = tuple(value)
+            if utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default)):
                 continue
         # In the case that the value is default, then just ignore it
         elif value == default:
@@ -200,6 +235,7 @@ def write_property_group(property_group, elements: Dict[str, Union[XML_Element, 
                 value_to_write = property_group.i3d_map[prop_key].get('override')
 
         logger.debug(f"Property '{prop_name}' with value '{value}'. Default is '{default}'")
+
         write_attribute(elements[i3d_placement], i3d_name, value_to_write)
         properties_written += 1
 

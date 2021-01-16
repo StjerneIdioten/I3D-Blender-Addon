@@ -128,16 +128,16 @@ class SceneGraphNode(Node):
     def _write_properties(self):
         # Write general node properties (Transform properties in Giants Engine)
         try:
-            xml_i3d.write_property_group(self.blender_object.i3d_attributes, self.xml_elements)
+            xml_i3d.write_i3d_properties(self.blender_object, self.blender_object.i3d_attributes, self.xml_elements)
         except AttributeError:
             # Not all nodes has general node properties, such as collections.
             pass
 
         # Try to write node specific properties, not all nodes have these (Such as cameras)
-        try:
-            xml_i3d.write_property_group(self.blender_object.data.i3d_attributes, self.xml_elements)
-        except AttributeError:
-            self.logger.debug('Has no data specific attributes')
+        #try:
+        xml_i3d.write_i3d_properties(self.blender_object.data, self.blender_object.data.i3d_attributes, self.xml_elements)
+        #except AttributeError as e:
+        #    self.logger.debug(f'Has no data specific attributes: {e}')
 
     def _write_user_attributes(self):
         try:
@@ -234,50 +234,50 @@ class LightNode(SceneGraphNode):
 
     def populate_xml_element(self):
         light = self.blender_object.data
-        self.logger.info(f"Is a light of type {light.type!r}")
-        falloff_type = None
-        if light.type == 'POINT':
-            light_type = 'point'
-            falloff_type = light.falloff_type
-        elif light.type == 'SUN':
-            light_type = 'directional'
-        elif light.type == 'SPOT':
-            light_type = 'spot'
-            falloff_type = light.falloff_type
-            cone_angle = math.degrees(light.spot_size)
-            self._write_attribute('coneAngle', cone_angle)
-            self.logger.info(f"Has a cone angle of {cone_angle}")
-            # Blender spot 0.0 -> 1.0, GE spot 0.0 -> 5.0
-            drop_off = 5.0 * light.spot_blend
-            self._write_attribute('dropOff', drop_off)
-            self.logger.info(f"Has a drop off of {drop_off}")
-        elif light.type == 'AREA':
-            light_type = 'point'
-            self.logger.warning(f"Is an AREA light, which is not supported and defaults to point light")
-
-        self._write_attribute('type', light_type)
-
-        color = "{0:f} {1:f} {2:f}".format(*light.color)
-        self._write_attribute('color', color)
-        self.logger.info(f"Has color {color}")
-
-        self._write_attribute('range', light.cutoff_distance)
-        self.logger.info(f"Has range {light.cutoff_distance}")
-
-        self._write_attribute('castShadowMap', light.use_shadow)
-        self.logger.info('casts shadows' if light.use_shadow else 'does not cast shadows')
-
-        if falloff_type is not None:
-            if falloff_type == 'CONSTANT':
-                falloff_type = 0
-                self.logger.info(f"Has decay rate of type {'CONSTANT'} which is '0' in i3d")
-            elif falloff_type == 'INVERSE_LINEAR':
-                falloff_type = 1
-                self.logger.info(f"Has decay rate of type {'INVERSE_LINEAR'} which is '1' in i3d")
-            elif falloff_type == 'INVERSE_SQUARE':
-                falloff_type = 2
-                self.logger.info(f"has decay rate of type {'INVERSE_SQUARE'} which is '2' in i3d")
-            self._write_attribute('decayRate', falloff_type)
+        # self.logger.info(f"Is a light of type {light.type!r}")
+        # falloff_type = None
+        # if light.type == 'POINT':
+        #     light_type = 'point'
+        #     falloff_type = light.falloff_type
+        # elif light.type == 'SUN':
+        #     light_type = 'directional'
+        # elif light.type == 'SPOT':
+        #     light_type = 'spot'
+        #     falloff_type = light.falloff_type
+        #     cone_angle = math.degrees(light.spot_size)
+        #     self._write_attribute('coneAngle', cone_angle)
+        #     self.logger.info(f"Has a cone angle of {cone_angle}")
+        #     # Blender spot 0.0 -> 1.0, GE spot 0.0 -> 5.0
+        #     drop_off = 5.0 * light.spot_blend
+        #     self._write_attribute('dropOff', drop_off)
+        #     self.logger.info(f"Has a drop off of {drop_off}")
+        # elif light.type == 'AREA':
+        #     light_type = 'point'
+        #     self.logger.warning(f"Is an AREA light, which is not supported and defaults to point light")
+        #
+        # self._write_attribute('type', light_type)
+        #
+        # color = "{0:f} {1:f} {2:f}".format(*light.color)
+        # self._write_attribute('color', color)
+        # self.logger.info(f"Has color {color}")
+        #
+        # self._write_attribute('range', light.cutoff_distance)
+        # self.logger.info(f"Has range {light.cutoff_distance}")
+        #
+        # self._write_attribute('castShadowMap', light.use_shadow)
+        # self.logger.info('casts shadows' if light.use_shadow else 'does not cast shadows')
+        #
+        # if falloff_type is not None:
+        #     if falloff_type == 'CONSTANT':
+        #         falloff_type = 0
+        #         self.logger.info(f"Has decay rate of type {'CONSTANT'} which is '0' in i3d")
+        #     elif falloff_type == 'INVERSE_LINEAR':
+        #         falloff_type = 1
+        #         self.logger.info(f"Has decay rate of type {'INVERSE_LINEAR'} which is '1' in i3d")
+        #     elif falloff_type == 'INVERSE_SQUARE':
+        #         falloff_type = 2
+        #         self.logger.info(f"has decay rate of type {'INVERSE_SQUARE'} which is '2' in i3d")
+        #     self._write_attribute('decayRate', falloff_type)
 
         super().populate_xml_element()
 
