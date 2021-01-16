@@ -77,3 +77,5 @@ If you want your mod in this list then please feel free to contact me through th
 - [NMC Reaper Pack](https://www.farming-simulator.com/mod.php?lang=en&country=us&mod_id=181834&title=fs2019)
 - [NMC Backbed Pack](https://www.farming-simulator.com/mod.php?lang=en&country=us&mod_id=181835&title=fs2019)
 - [NMC Scarok Pack](https://www.farming-simulator.com/mod.php?lang=en&country=us&mod_id=135769&title=fs2019)
+- [NMC Wheel Loader](https://www.farming-simulator.com/mod.php?lang=en&country=us&mod_id=189680&title=fs2019)
+- [NMC Pickup Blade](https://www.farming-simulator.com/mod.php?lang=en&country=us&mod_id=189681&title=fs2019)
