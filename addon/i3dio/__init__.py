@@ -68,6 +68,7 @@ def register():
         else:
             print('You must run blender as administrator to be able to install lxml!')
 
+    ui.helper_functions.register()
     ui.addon_preferences.register()
     ui.udim_picker.register()
     ui.shader_picker.register()
@@ -90,4 +91,5 @@ def unregister():
     ui.shader_picker.unregister()
     ui.udim_picker.unregister()
     ui.addon_preferences.unregister()
+    ui.helper_functions.unregister()
 

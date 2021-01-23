@@ -11,7 +11,7 @@ from bpy.props import (
     BoolProperty
 )
 
-from ..utility import tracking_property
+from .helper_functions import i3d_property
 from ..xml_i3d import i3d_max
 
 classes = []
@@ -36,11 +36,13 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
                           },
         'emit_diffuse': {'name': 'emitDiffuse', 'default': True},
         'emit_specular': {'name': 'emitSpecular', 'default': True},
+        'scattering': {'name': 'scattering', 'default': False},
         'range': {'name': 'range', 'default': 1, 'tracking': {'member_path': 'cutoff_distance'}},
         'color': {'name': 'color', 'default': (1.0, 1.0, 1.0), 'tracking': {'member_path': 'color'}},
-        'cone_angle': {'name': 'coneAngle', 'default': 60, 'tracking': {'member_path': 'spot_size',
-                                                                        'obj_types': bpy.types.SpotLight}},
-        'drop_off': {'name': 'dropOff', 'default': 4},
+        'cone_angle': {'name': 'coneAngle', 'default': 60, 'type': 'ANGLE', 'depends': {'name': 'type_of_light', 'value': 'spot'},
+                       'tracking': {'member_path': 'spot_size'}
+                       },
+        'drop_off': {'name': 'dropOff', 'default': 4, 'depends': {'name': 'type_of_light', 'value': 'spot'}},
         'depth_map_bias': {'name': 'depthMapBias', 'default': 0.0012},
         'depth_map_slope_scale_bias': {'name': 'depthMapSlopeScaleBias', 'default': 2.0},
     }
@@ -57,8 +59,8 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
     )
 
     type_of_light_tracking: BoolProperty(
-        name="Track Light Type",
-        description="Use the light type of the light object instead",
+        name="Type",
+        description="Can be found at: Object Data Properties -> Light",
         default=True
     )
 
@@ -71,12 +73,13 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         soft_max=500,
         size=3,
         precision=3,
+        subtype='COLOR',
         default=i3d_map['color']['default']
         )
 
     color_tracking: BoolProperty(
-        name="Track Color",
-        description="Use the color value of the light object instead",
+        name="Color",
+        description="Can be found at: Object Data Properties -> Light -> Color",
         default=True
     )
 
@@ -92,6 +95,12 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['emit_specular']['default']
     )
 
+    scattering: BoolProperty(
+        name="Light Scattering",
+        description="Light Scattering",
+        default=i3d_map['scattering']['default']
+    )
+
     range: FloatProperty(
         name="Range",
         description="Range",
@@ -103,8 +112,8 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
     )
 
     range_tracking: BoolProperty(
-        name="Track Range",
-        description="Use the range value of the light object instead",
+        name="Custom Distance",
+        description="Can be found at: Object Data Properties -> Light -> Custom Distance -> Distance",
         default=True
     )
 
@@ -119,9 +128,9 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
     )
 
     cone_angle_tracking: BoolProperty(
-        name="Track Range",
-        description="Use the range value of the light object instead",
-        default=True
+        name="Spot Size",
+        description="Can be found at: Object Data Properties -> Light -> Spot Shape -> Size",
+        default=True,
     )
 
     drop_off: FloatProperty(
@@ -167,15 +176,18 @@ class I3D_IO_PT_light_attributes(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
+        layout.alignment = 'RIGHT'
         obj = bpy.context.active_object.data
 
-        tracking_property(layout, obj.i3d_attributes, 'type_of_light')
+        i3d_property(layout, obj.i3d_attributes, 'type_of_light', obj)
         layout.prop(obj.i3d_attributes, "emit_diffuse")
         layout.prop(obj.i3d_attributes, "emit_specular")
-        tracking_property(layout, obj.i3d_attributes, 'range')
-        tracking_property(layout, obj.i3d_attributes, 'color')
-        tracking_property(layout, obj.i3d_attributes, 'cone_angle')
-        layout.prop(obj.i3d_attributes, "drop_off")
+        layout.prop(obj.i3d_attributes, "scattering")
+        i3d_property(layout, obj.i3d_attributes, 'range', obj)
+        i3d_property(layout, obj.i3d_attributes, 'color', obj)
+        i3d_property(layout, obj.i3d_attributes, 'cone_angle', obj)
+
+        i3d_property(layout, obj.i3d_attributes, 'drop_off', obj)
         layout.prop(obj.i3d_attributes, "depth_map_bias")
         layout.prop(obj.i3d_attributes, "depth_map_slope_scale_bias")
 

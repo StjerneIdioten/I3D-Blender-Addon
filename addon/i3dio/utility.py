@@ -82,15 +82,3 @@ def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderOb
     sorted_objects = list(objects)  # Create new list from whatever comes in, whether it is an existing list or a tuple
     sorted_objects.sort(key=lambda x: x.name)  # Sort by name
     return sorted_objects
-
-
-def tracking_property(layout, attributes, attribute: str):
-    row = layout.row()
-    attrib = row.row()
-    attrib.prop(attributes, attribute)
-    icon = 'UNLOCKED'
-    if getattr(attributes, attribute + '_tracking'):
-        attrib.enabled = False
-        icon = 'LOCKED'
-
-    row.prop(attributes, attribute + '_tracking', icon=icon, icon_only=True, emboss=False)

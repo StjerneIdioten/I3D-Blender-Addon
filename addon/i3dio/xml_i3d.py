@@ -169,6 +169,7 @@ def write_attribute(element: XML_Element, attribute: str, value) -> None:
         logger.warning(f"No xml attribute writing function for attribute of type '{type(value)}'")
 
 
+# TODO: Clean up this very generic, but spaghetti ish implementation of i3d attributes
 def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Element, None]]) -> None:
     logger.info(f"Writing non-default properties from propertygroup: '{type(property_group).__name__}'")
     # Since blender properties are basically abusing the annotation system, we can also abuse this to create
@@ -182,11 +183,35 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
         prop_name = prop_key
         value = getattr(property_group, prop_key)
 
+        # Dependency Checks
+
+        # If the value depends on some other value being something specific
+        depends = property_group.i3d_map[prop_key].get('depends')
+        if depends is not None:
+            # Pre-initialize to non-tracked version
+            member_value = getattr(property_group, depends['name'])
+            # If the dependant value has a parameter that it is tracking
+            member_depends_tracking = property_group.i3d_map[depends['name']].get('tracking', False)
+            if member_depends_tracking:
+                # If we are currently using the tracked value
+                if getattr(property_group, depends['name'] + '_tracking'):
+                    # Get the value of the tracked member
+                    member_value = getattr(obj, member_depends_tracking['member_path'])
+                    # If there exist a map to map from tracked to i3d, then convert
+                    if member_depends_tracking.get('mapping', False):
+                        member_value = member_depends_tracking['mapping'][member_value]
+
+            # If the dependant member does not equal the correct value
+            if member_value != depends['value']:
+                continue
+
+        # Tracking checks
+
         tracking = getattr(property_group, prop_key + '_tracking', None)
         if tracking:
             member_to_track = property_group.i3d_map[prop_key].get('tracking')
-            if 'obj_types' in member_to_track:
-                if not isinstance(obj, member_to_track['obj_types']):
+            if 'value' in member_to_track:
+                if getattr(obj, member_to_track['member_path']) != member_to_track['value']:
                     continue
 
             if 'mapping' in member_to_track:
@@ -199,6 +224,8 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
         i3d_name = property_group.i3d_map[prop_key].get('name')
         field_type = property_group.i3d_map[prop_key].get('type')
         i3d_placement = property_group.i3d_map[prop_key].get('placement', 'Node')
+
+        # Conversion Checks
 
         # Special case of checking floats, since these can be not equal due to floating point errors
         if isinstance(value, float):
@@ -217,7 +244,7 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
             value_to_write = 1
         # String field is used for unique types, that then get converted fx. HEX values. This is signaled by
         # having an extra type field in the i3d_map dictionary entry for the propertygroup
-        elif field_type is not None:
+        if field_type is not None:
             if field_type == 'HEX':
                 try:
                     value_decimal = int(value, 16)
@@ -233,6 +260,10 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
                         continue
             elif field_type == 'OVERRIDE':
                 value_to_write = property_group.i3d_map[prop_key].get('override')
+            elif field_type == 'ANGLE':
+                value_to_write = math.degrees(value)
+                if math.isclose(value_to_write, default, abs_tol=0.0001):
+                    continue
 
         logger.debug(f"Property '{prop_name}' with value '{value}'. Default is '{default}'")
 
