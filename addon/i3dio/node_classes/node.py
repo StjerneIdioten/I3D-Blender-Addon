@@ -133,11 +133,16 @@ class SceneGraphNode(Node):
             # Not all nodes has general node properties, such as collections.
             pass
 
-        # Try to write node specific properties, not all nodes have these (Such as cameras)
-        #try:
-        xml_i3d.write_i3d_properties(self.blender_object.data, self.blender_object.data.i3d_attributes, self.xml_elements)
-        #except AttributeError as e:
-        #    self.logger.debug(f'Has no data specific attributes: {e}')
+        # Try to write node specific properties, not all nodes have these (Such as cameras or collections)
+        try:
+            data = self.blender_object.data
+        except AttributeError:
+            self.logger.debug(f'Is a Collection, which does not have "data"')
+        else:
+            try:
+                xml_i3d.write_i3d_properties(data, self.blender_object.data.i3d_attributes, self.xml_elements)
+            except AttributeError:
+                self.logger.debug(f'Has no data specific attributes')
 
     def _write_user_attributes(self):
         try:
