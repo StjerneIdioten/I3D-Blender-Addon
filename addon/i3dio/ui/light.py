@@ -181,7 +181,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
     )
 
     cast_shadow_map_tracking: BoolProperty(
-        name="Contact Shadows",
+        name="Shadows",
         description="Can be found at: Object Data Properties -> Shadow",
         default=True,
     )
