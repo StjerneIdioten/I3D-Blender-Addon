@@ -186,15 +186,16 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
         # Dependency Checks
 
         # If the value depends on some other value being something specific
-        depends = property_group.i3d_map[prop_key].get('depends')
-        if depends is not None:
+        dependants = property_group.i3d_map[prop_key].get('depends', [])
+        dependency_break = False
+        for dependant in dependants:
             # Pre-initialize to non-tracked version
-            member_value = getattr(property_group, depends['name'])
+            member_value = getattr(property_group, dependant['name'])
             # If the dependant value has a parameter that it is tracking
-            member_depends_tracking = property_group.i3d_map[depends['name']].get('tracking', False)
+            member_depends_tracking = property_group.i3d_map[dependant['name']].get('tracking', False)
             if member_depends_tracking:
                 # If we are currently using the tracked value
-                if getattr(property_group, depends['name'] + '_tracking'):
+                if getattr(property_group, dependant['name'] + '_tracking'):
                     # Get the value of the tracked member
                     member_value = getattr(obj, member_depends_tracking['member_path'])
                     # If there exist a map to map from tracked to i3d, then convert
@@ -202,11 +203,16 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
                         member_value = member_depends_tracking['mapping'][member_value]
 
             # If the dependant member does not equal the correct value
-            if member_value != depends['value']:
-                continue
+            if member_value != dependant['value']:
+                # One of the dependencies were broke, so skip searching through the rest.
+                dependency_break = True
+                break
+
+        # If this attribute did not live up to a dependency, then skip it.
+        if dependency_break:
+            continue
 
         # Tracking checks
-
         tracking = getattr(property_group, prop_key + '_tracking', None)
         if tracking:
             member_to_track = property_group.i3d_map[prop_key].get('tracking')

@@ -3,11 +3,7 @@ This module contains various small ui helper functions.
 """
 from __future__ import annotations
 import bpy
-from bpy.types import (
-    Operator
-)
 
-from bpy.props import (EnumProperty, StringProperty, BoolProperty)
 
 classes = []
 
@@ -17,34 +13,6 @@ def register(cls):
     return cls
 
 
-# @register
-# class I3D_IO_OT_helper_set_tracking(Operator):
-#     bl_idname = 'i3dio.helper_set_tracking'
-#     bl_label = "Set tracking attribute"
-#     bl_description = "Set tracking attribute"
-#     bl_options = {'INTERNAL'}
-#
-#     attribute_type: EnumProperty(
-#         items=[
-#             ('obj', 'Object', ""),
-#             ('data', 'Data', "")
-#         ],
-#         default='obj'
-#     )
-#
-#     attribute: StringProperty()
-#     state: BoolProperty()
-#
-#     def execute(self, context):
-#         attributes = context.object.i3d_attributes
-#         if self.attribute_type == 'data':
-#             attributes = context.object.data.i3d_attributes
-#
-#         setattr(attributes, self.attribute, self.state)
-#
-#         return {'FINISHED'}
-
-
 def i3d_property(layout, attributes, attribute: str, obj):
     i3d_map = attributes.i3d_map[attribute]
     row = layout.row()
@@ -52,35 +20,40 @@ def i3d_property(layout, attributes, attribute: str, obj):
 
     # Check if this i3d attribute has a dependency on another property being a certain value
     if i3d_map.get('depends'):
-        # Pre-initialize the non-tracking member
-        member_value = getattr(attributes, i3d_map['depends']['name'])
-        # Is this property dependent on a tracking member?
-        tracking = getattr(attributes, i3d_map['depends']['name'] + '_tracking', None)
-        if tracking is not None:
-            # Is the tracking member currently tracking
-            if tracking:
-                # Get the value of the tracked member
-                member_value = getattr(obj, attributes.i3d_map[i3d_map['depends']['name']]['tracking']['member_path'])
-                # If there is a mapping for it, convert the tracked value
-                mapping = attributes.i3d_map[i3d_map['depends']['name']]['tracking'].get('mapping')
-                icon = 'LOCKED'
-                if mapping is not None:
-                    member_value = mapping[member_value]
-            else:
-                icon = 'UNLOCKED'
-            # else:
-            #     attribute_type = 'obj'
-            #     if not isinstance(obj, bpy.types.Object):
-            #         attribute_type = 'data'
-            #     bpy.ops.i3dio.helper_set_tracking(attribute_type='data', attribute=attribute, state=False)
 
-        if member_value != i3d_map['depends']['value']:
-            attrib_row = row.row()
-            attrib_row.prop(attributes, attribute)
-            attrib_row.enabled = False
-            if getattr(attributes, attribute + '_tracking', None) is not None:
-                attrib_row.prop(attributes, attribute + '_tracking', icon=icon, icon_only=True, emboss=False)
-            return
+        # Get list of depending values
+        dependants = i3d_map['depends']
+
+        for dependant in dependants:
+            # Pre-initialize the non-tracking member
+            member_value = getattr(attributes, dependant['name'])
+            # Is this property dependent on a tracking member?
+            tracking = getattr(attributes, dependant['name'] + '_tracking', None)
+            if tracking is not None:
+                # Is the tracking member currently tracking
+                if tracking:
+                    # Get the value of the tracked member
+                    member_value = getattr(obj, attributes.i3d_map[dependant['name']]['tracking']['member_path'])
+                    # If there is a mapping for it, convert the tracked value
+                    mapping = attributes.i3d_map[dependant['name']]['tracking'].get('mapping')
+                    icon = 'LOCKED'
+                    if mapping is not None:
+                        member_value = mapping[member_value]
+                else:
+                    icon = 'UNLOCKED'
+                # else:
+                #     attribute_type = 'obj'
+                #     if not isinstance(obj, bpy.types.Object):
+                #         attribute_type = 'data'
+                #     bpy.ops.i3dio.helper_set_tracking(attribute_type='data', attribute=attribute, state=False)
+
+            if member_value != dependant['value']:
+                attrib_row = row.row()
+                attrib_row.prop(attributes, attribute)
+                attrib_row.enabled = False
+                if getattr(attributes, attribute + '_tracking', None) is not None:
+                    attrib_row.prop(attributes, attribute + '_tracking', icon=icon, icon_only=True, emboss=False)
+                return
 
     # Is this a property, which can track one of the blender builtins?
     tracking = getattr(attributes, attribute + '_tracking', None)
