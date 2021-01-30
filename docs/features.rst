@@ -5,8 +5,9 @@ Features
 
 .. toctree::
     :glob:
-    :maxdepth: 2
+    :maxdepth: 3
 
+    features/i3d_attributes/*
     features/udim_picker/*
     features/i3d_mapping/*
 
