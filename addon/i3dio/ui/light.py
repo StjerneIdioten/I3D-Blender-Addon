@@ -128,7 +128,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     scattering: BoolProperty(
         name="Light Scattering",
-        description="Light Scattering",
+        description="Depends on 'Type' being 'Directional'",
         default=i3d_map['scattering']['default']
     )
 
@@ -151,7 +151,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     cone_angle: FloatProperty(
         name="Cone Angle",
-        description="Cone Angle",
+        description="Depends on 'Type' being 'Spot'",
         default=i3d_map['cone_angle']['default'],
         precision=3,
         unit='ROTATION',
@@ -169,7 +169,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     drop_off: FloatProperty(
         name="Drop Off",
-        description="Drop Off",
+        description="Depends on 'Type' being 'Spot'",
         default=i3d_map['drop_off']['default'],
         precision=3,
         min=0,
@@ -192,7 +192,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     shadow_map_bias: FloatProperty(
         name="Shadow Map Bias",
-        description="Shadow Map Bias",
+        description="Depends on 'Cast Shadow Map' being 'True'",
         default=i3d_map['shadow_map_bias']['default'],
         precision=3,
         min=0.0,
@@ -201,7 +201,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     shadow_map_slope_scale_bias: FloatProperty(
         name="Shadow Map Slope Scale Bias",
-        description="Shadow Map Slope Scale Bias",
+        description="Depends on 'Cast Shadow Map' being 'True'",
         default=i3d_map['shadow_map_slope_scale_bias']['default'],
         precision=3,
         min=-i3d_max,
@@ -212,7 +212,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     shadow_map_slope_clamp: FloatProperty(
         name="Shadow Map Slope Clamp",
-        description="Shadow Map Slope Clamp",
+        description="Depends on 'Cast Shadow Map' being 'True'",
         default=i3d_map['shadow_map_slope_clamp']['default'],
         precision=3,
         min=-i3d_max,
@@ -223,7 +223,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     shadow_map_resolution: EnumProperty(
         name="Shadow Map Resolution",
-        description="Shadow Map Resolution",
+        description="Depends on 'Cast Shadow Map' being 'True'",
         items=[
             ('256', '256', "256"),
             ('512', '512', "512"),
@@ -236,13 +236,13 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     shadow_map_perspective: BoolProperty(
         name="Shadowmap Perspective",
-        description="Shadowmap Perspective",
+        description="Depends on 'Cast Shadow Map' being 'True'",
         default=i3d_map['shadow_map_perspective']['default'],
     )
 
     shadow_far_distance: FloatProperty(
         name="Shadow Far Distance",
-        description="Shadow Far Distance",
+        description="Depends on 'Cast Shadow Map' being 'True'",
         default=i3d_map['shadow_far_distance']['default'],
         precision=3,
         min=0,
@@ -253,7 +253,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     shadow_extrusion_distance: FloatProperty(
         name="Shadow Extrusion Distance",
-        description="Shadow Extrusion Distance",
+        description="Depends on 'Cast Shadow Map' being 'True'",
         default=i3d_map['shadow_extrusion_distance']['default'],
         precision=3,
         min=0,
@@ -264,7 +264,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     shadow_map_num_splits: EnumProperty(
         name="Shadow Map Num Splits",
-        description="Shadow Map Num Splits",
+        description="Depends on 'Cast Shadow Map' being 'True'",
         items=[
             ('1', '1', "1"),
             ('4', '4', "4")
@@ -274,7 +274,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     split_distance_1: FloatProperty(
         name="Split Distance #1",
-        description="Split Distance #1",
+        description="Depends on 'Cast Shadow Map' being 'True' and 'Shadow Map Num Splits' being '4'",
         default=i3d_map['split_distance_1']['default'],
         precision=3,
         min=0,
@@ -285,7 +285,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     split_distance_2: FloatProperty(
         name="Split Distance #2",
-        description="Split Distance #2",
+        description="Depends on 'Cast Shadow Map' being 'True' and 'Shadow Map Num Splits' being '4'",
         default=i3d_map['split_distance_2']['default'],
         precision=3,
         min=0,
@@ -296,7 +296,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     split_distance_3: FloatProperty(
         name="Split Distance #3",
-        description="Split Distance #3",
+        description="Depends on 'Cast Shadow Map' being 'True' and 'Shadow Map Num Splits' being '4'",
         default=i3d_map['split_distance_3']['default'],
         precision=3,
         min=0,
@@ -307,7 +307,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
     split_distance_4: FloatProperty(
         name="Split Distance #4",
-        description="Split Distance #4",
+        description="Depends on 'Cast Shadow Map' being 'True' and 'Shadow Map Num Splits' being '4'",
         default=i3d_map['split_distance_4']['default'],
         precision=3,
         min=0,
