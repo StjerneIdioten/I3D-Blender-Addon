@@ -54,6 +54,12 @@ class SkinnedMeshRootNode(TransformGroupNode):
             if bone.parent is None:
                 self._add_bone(bone, self)
 
+    def add_i3d_mapping_to_xml(self):
+        """Wont export armature mapping, if 'collapsing armatures' is enabled
+        """
+        if not self.i3d.settings['collapse_armatures']:
+            super().add_i3d_mapping_to_xml()
+
     def _add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]):
         """Recursive function for adding a bone along with all of its children"""
         self.bones.append(self.i3d.add_bone(bone_object, parent))
