@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Discussion Forum - Feature Requests
+    url: https://github.com/StjerneIdioten/I3D-Blender-Addon/discussions/categories/ideas-feature-requests
+    about: Please add your ideas for new features here or join the discussion about already suggested features!
+  - name: VertexDezign Discord - Support Channel
+    url: https://discord.gg/GVfNFpM
+    about: For live help and a huge searchable discussion thread, go here.
