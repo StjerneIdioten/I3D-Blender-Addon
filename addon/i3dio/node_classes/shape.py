@@ -279,8 +279,15 @@ class IndexedTriangleSet(Node):
             mesh.materials.append(self.i3d.get_default_material().blender_material)
             self.logger.info(f"assigned default material i3d_default_material")
 
+        has_warned_for_empty_slot = False
         for triangle in mesh.loop_triangles:
             triangle_material = mesh.materials[triangle.material_index]
+
+            if triangle_material is None:
+                if not has_warned_for_empty_slot: 
+                    self.logger.warning(f"triangle(s) found with empty material slot, assigning default material")
+                    has_warned_for_empty_slot = True
+                triangle_material = self.i3d.get_default_material().blender_material
 
             if triangle_material.name not in self.subsets:
                 self.logger.info(f"Has material {triangle_material.name!r}")
