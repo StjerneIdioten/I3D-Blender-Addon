@@ -13,6 +13,9 @@ from bpy.props import (
     CollectionProperty,
 )
 
+from .helper_functions import i3d_property
+from ..xml_i3d import i3d_max
+
 classes = []
 
 
@@ -24,10 +27,12 @@ def register(cls):
 @register
 class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'visibility': {'name': 'visibility', 'default': True},
+        'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
+                                                                           'mapping': {True: False,
+                                                                                       False: True}}},
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
-        'object_mask': {'name': 'objectMask', 'default': 0},
+        'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
         'rigid_body_type': {'default': 'none'},
         'collision': {'name': 'collision', 'default': True},
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
@@ -37,30 +42,41 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
     visibility: BoolProperty(
         name="Visibility",
-        description="Visibility flag inside of Giants Engine, decoupled from blender visibility",
+        description="Visibility",
         default=i3d_map['visibility']['default']
+    )
+
+    visibility_tracking: BoolProperty(
+        name="Render Visibility",
+        description="Can be found at: Object Properties -> Visibility -> Renders "
+                    "(can also be toggled through outliner)",
+        default=True
     )
 
     clip_distance: FloatProperty(
         name="Clip Distance",
         description="Anything above this distance to the camera, wont be rendered",
         default=i3d_map['clip_distance']['default'],
-        min=0.0
+        min=0.0,
+        max=i3d_max,
+        soft_min=0,
+        soft_max=65535.0
     )
 
     min_clip_distance: FloatProperty(
         name="Min Clip Distance",
         description="Anything below this distance to the camera, wont be rendered",
         default=i3d_map['min_clip_distance']['default'],
-        min=0.0
+        min=0.0,
+        max=i3d_max,
+        soft_min=0,
+        soft_max=65535.0
     )
 
-    object_mask: IntProperty(
+    object_mask: StringProperty(
         name="Object Mask",
         description="Used for determining if the object interacts with certain rendering effects",
         default=i3d_map['object_mask']['default'],
-        min=0,
-        max=2147483647
     )
 
     rigid_body_type: EnumProperty(
@@ -118,9 +134,9 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.use_property_decorate = False
         obj = bpy.context.active_object
 
-        layout.prop(obj.i3d_attributes, 'visibility')
-        layout.prop(obj.i3d_attributes, 'clip_distance')
-        layout.prop(obj.i3d_attributes, 'min_clip_distance')
+        i3d_property(layout, obj.i3d_attributes, 'visibility', obj)
+        i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
+        i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
 
 
 @register
