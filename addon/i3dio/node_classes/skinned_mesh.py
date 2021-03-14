@@ -14,6 +14,7 @@ from .shape import (ShapeNode, EvaluatedMesh)
 from ..i3d import I3D
 from .. import xml_i3d
 
+import math
 
 class SkinnedMeshBoneNode(TransformGroupNode):
     def __init__(self, id_: int, bone_object: bpy.types.Bone,
@@ -34,6 +35,11 @@ class SkinnedMeshBoneNode(TransformGroupNode):
             # multiply that with the bones transform in armature space. The new 4x4 matrix gives the position and
             # rotation in relation to the parent bone (of the head, that is)
             bone_transform = self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
+
+        # Blender bones are visually pointing along the Z-axis, but internally they are using Y. To get around this
+        # discrepancy the local matrix has a 90 deg rotation around the X-axis. To make the bone have the expected
+        # orientation in GE, rotate it -90 deg on around X.
+        bone_transform = bone_transform @ mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
 
         conversion_matrix = self.i3d.conversion_matrix @ bone_transform @ self.i3d.conversion_matrix.inverted()
 
