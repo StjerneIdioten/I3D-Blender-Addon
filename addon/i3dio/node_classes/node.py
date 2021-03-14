@@ -133,7 +133,7 @@ class SceneGraphNode(Node):
         try:
             data = self.blender_object.data
         except AttributeError:
-            self.logger.debug(f'Is a Collection, which does not have "data"')
+            self.logger.debug(f'Is a "{type(self.blender_object).__name__}", which does not have "data"')
         else:
             try:
                 xml_i3d.write_i3d_properties(data, self.blender_object.data.i3d_attributes, self.xml_elements)

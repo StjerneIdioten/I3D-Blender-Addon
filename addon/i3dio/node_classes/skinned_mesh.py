@@ -24,9 +24,11 @@ class SkinnedMeshBoneNode(TransformGroupNode):
     def _transform_for_conversion(self) -> mathutils.Matrix:
 
         if self.blender_object.parent is None:
-            # The bone is parented to the armature directly, and therefor should just use the matrix_local which is in
+            # The bone is parented to the armature directly, and therefore should just use the matrix_local which is in
             # relation to the armature anyway.
             bone_transform = self.blender_object.matrix_local
+            if self.i3d.settings['collapse_armatures']:
+                bone_transform = self.parent.blender_object.matrix_local @ bone_transform
         else:
             # To find the transform of the bone, we take the inverse of its parents transform in armature space and
             # multiply that with the bones transform in armature space. The new 4x4 matrix gives the position and
