@@ -44,10 +44,10 @@ The following table has an overview of the available exporter versions. Legacy v
 
 Blender Version | Exporter Version
 --------|-------
-[2.92](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/latest/download/i3d_exporter.zip) | Latest
-[2.91](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/download/v3.0.0/i3d_exporter.zip) | v3.0.0
-[2.90](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/download/v1.2.1/i3d_exporter.zip) | v1.2.1
-[2.83](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/download/v0.10.0/i3d_exporter.zip) | v0.10.0
+2.92 | [Latest](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/latest/download/i3d_exporter.zip)
+2.91 | [v3.0.0](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/download/v3.0.0/i3d_exporter.zip)
+2.90 | [v1.2.1](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/download/v1.2.1/i3d_exporter.zip)
+2.83 | [v0.10.0](https://github.com/StjerneIdioten/I3D-Blender-Addon/releases/download/v0.10.0/i3d_exporter.zip)
 
 
 ## Help
