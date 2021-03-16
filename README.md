@@ -12,18 +12,19 @@
   <a href="https://github.com/StjerneIdioten/I3D-Blender-Addon/discussions">Discussion Forum</a> •
 </p>
 
+## Donate
+If you enjoy the exporter and want to express your gratitude with a little something, then here is a couple of links. It is in no way mandatory and I will continue doing my best to create the best exporter no matter how many donations role in 😉 I have spent 100's of hours so far and I plan on spending many more.
+
+<a href="https://www.buymeacoffee.com/StjerneIdioten"><img src="https://img.buymeacoffee.com/button-api/?text=Buy me a beverage&emoji=🥤&slug=StjerneIdioten&button_colour=BD5FFF&font_colour=ffffff&font_family=Poppins&outline_colour=000000&coffee_colour=FFDD00"></a>
+
+<a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=3BLFKTJDUC4Y6&currency_code=EUR&source=url" target="_blank"><img src="https://www.paypalobjects.com/en_US/DK/i/btn/btn_donateCC_LG.gif" alt="Buy Me A Coffee"></a>
+
+
 ## Description
 
 This project aims to develop and maintain an entirely new i3d exporter addon for Blender. The main goals are maintaining an exporter that is up to date with the newest Blender versions and adding long sought features such as skinned meshes, mergegroups and what ever else the community might have a need for.
 
 The current status is that the exporter can do most of the things that the maya exporter can do and now makes Blender a viable option for creating mods for Giants Engine games.
-
-## Support
-If you enjoy the exporter and want to support further development, then feel free to throw a little something my way.
-
-<a href="https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=3BLFKTJDUC4Y6&currency_code=EUR&source=url" target="_blank"><img src="https://www.paypalobjects.com/en_US/DK/i/btn/btn_donateCC_LG.gif" alt="Buy Me A Coffee"></a>
-
-<a href="https://www.buymeacoffee.com/StjerneIdioten" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-green.png" alt="Buy Me A Coffee" height="41" width="174"></a>
 
 ## Documentation
 The official documentation for the exporter can be found [here](https://stjerneidioten.github.io/I3D-Blender-Addon/) and will be updated as I go along. 
