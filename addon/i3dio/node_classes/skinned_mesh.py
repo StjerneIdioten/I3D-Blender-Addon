@@ -14,6 +14,7 @@ from .shape import (ShapeNode, EvaluatedMesh)
 from ..i3d import I3D
 from .. import xml_i3d
 
+import math
 
 class SkinnedMeshBoneNode(TransformGroupNode):
     def __init__(self, id_: int, bone_object: bpy.types.Bone,
@@ -24,14 +25,21 @@ class SkinnedMeshBoneNode(TransformGroupNode):
     def _transform_for_conversion(self) -> mathutils.Matrix:
 
         if self.blender_object.parent is None:
-            # The bone is parented to the armature directly, and therefor should just use the matrix_local which is in
+            # The bone is parented to the armature directly, and therefore should just use the matrix_local which is in
             # relation to the armature anyway.
             bone_transform = self.blender_object.matrix_local
+            if self.i3d.settings['collapse_armatures']:
+                bone_transform = self.parent.blender_object.matrix_local @ bone_transform
         else:
             # To find the transform of the bone, we take the inverse of its parents transform in armature space and
             # multiply that with the bones transform in armature space. The new 4x4 matrix gives the position and
             # rotation in relation to the parent bone (of the head, that is)
             bone_transform = self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
+
+        # Blender bones are visually pointing along the Z-axis, but internally they are using Y. To get around this
+        # discrepancy the local matrix has a 90 deg rotation around the X-axis. To make the bone have the expected
+        # orientation in GE, rotate it -90 deg on around X.
+        bone_transform = bone_transform @ mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
 
         conversion_matrix = self.i3d.conversion_matrix @ bone_transform @ self.i3d.conversion_matrix.inverted()
 
@@ -53,6 +61,12 @@ class SkinnedMeshRootNode(TransformGroupNode):
         for bone in armature_object.data.bones:
             if bone.parent is None:
                 self._add_bone(bone, self)
+
+    def add_i3d_mapping_to_xml(self):
+        """Wont export armature mapping, if 'collapsing armatures' is enabled
+        """
+        if not self.i3d.settings['collapse_armatures']:
+            super().add_i3d_mapping_to_xml()
 
     def _add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]):
         """Recursive function for adding a bone along with all of its children"""

@@ -102,11 +102,7 @@ class SceneGraphNode(Node):
         except AttributeError:
             pass
 
-        try:
-            if getattr(self.blender_object.i3d_mapping, 'is_mapped'):
-                self.i3d.i3d_mapping.append(self)
-        except AttributeError:
-            pass
+        self.add_i3d_mapping_to_xml()
 
         self.logger.debug(f"Initialized as a '{self.__class__.__name__}'")
 
@@ -137,7 +133,7 @@ class SceneGraphNode(Node):
         try:
             data = self.blender_object.data
         except AttributeError:
-            self.logger.debug(f'Is a Collection, which does not have "data"')
+            self.logger.debug(f'Is a "{type(self.blender_object).__name__}", which does not have "data"')
         else:
             try:
                 xml_i3d.write_i3d_properties(data, self.blender_object.data.i3d_attributes, self.xml_elements)
@@ -206,6 +202,13 @@ class SceneGraphNode(Node):
 
     def add_child(self, node: SceneGraphNode):
         self.children.append(node)
+
+    def add_i3d_mapping_to_xml(self):
+        try:
+            if getattr(self.blender_object.i3d_mapping, 'is_mapped'):
+                self.i3d.i3d_mapping.append(self)
+        except AttributeError:
+            pass
 
 
 class TransformGroupNode(SceneGraphNode):
