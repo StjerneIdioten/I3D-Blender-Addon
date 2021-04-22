@@ -60,6 +60,11 @@ If you need help with the addon in any way, the following channels are available
 
 I can also be reached in several other places, I am not hard to find through my nickname. But please keep exporter related support to the official channels listed here. So that it might come in handy for anyone else with the same problem.
 
+## Development Diaries
+
+Ongoing development will, from time to time, be discussed/shared through development diaries. This list will keep track of them.
+* **#000** - [Status of Exporter Development](https://github.com/StjerneIdioten/I3D-Blender-Addon/discussions/129) *(22/04-2021)*
+
 ## Mod Showcase
 
 Here you can see a few mods created using the exporter. This is not an exhaustive list, but mostly just to give a view of what is possible with the exporter.
