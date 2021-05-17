@@ -49,6 +49,7 @@ class Material(Node):
             self._diffuse_from_nodes(main_node)
             self._normal_from_nodes(main_node)
             self._specular_from_nodes(main_node)
+            self._emissive_from_nodes(main_node)
         else:
             self.logger.warning(f"Uses nodes but Principled BSDF node is not found!")
 
@@ -109,6 +110,22 @@ class Material(Node):
                     self._write_attribute('fileId', file_id, 'Texture')
         # Write the diffuse colors
         self._write_diffuse(diffuse)
+
+    def _emissive_from_nodes(self, node):
+        emission_socket = node.inputs['Emission']
+        if emission_socket.is_linked:
+            try:
+                emissive_path = emission_socket.links[0].from_node.image.filepath
+            except (AttributeError, IndexError, KeyError):
+                pass
+            else:
+                if emissive_path is not None:
+                    self.logger.info("Has Emissivemap")
+                    file_id = self.i3d.add_file_image(emissive_path)
+                    self.xml_elements['Emissive'] = xml_i3d.SubElement(self.element, 'Emissivemap')
+                    self._write_attribute('fileId', file_id, 'Emissive')
+                    return
+        self.logger.debug("Has no Emissivemap")
 
     def _resolve_without_nodes(self):
         material = self.blender_material
