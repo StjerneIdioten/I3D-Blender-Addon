@@ -32,7 +32,7 @@ bl_info = {
     "description": "Exports blender projects into GIANTS I3D format for use in Giants Engine based games such as "
                    "Farming Simulator",
     "version": (0, 0, 0),  # Always (0, 0, 0) since versioning is controlled by the CI
-    "blender": (2, 92, 0),
+    "blender": (2, 93, 0),
     "location": "File > Import-Export",
     "warning": "First Unofficial Alpha Version",
     "support": "COMMUNITY",
