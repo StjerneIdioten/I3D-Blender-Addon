@@ -63,7 +63,7 @@ def i3d_property(layout, attributes, attribute: str, obj):
             row.alignment = 'RIGHT'
             # Display the name of the property
             lab = row.column()
-            lab.label(text=attributes.__annotations__[attribute][1]['name'])
+            lab.label(text=attributes.i3d_map[attribute]['name'])
             attrib_row = row.row()
             if getattr(obj, attributes.i3d_map[attribute]['tracking']['member_path'], None) is not None:
                 attrib_row.prop(obj, attributes.i3d_map[attribute]['tracking']['member_path'], text='')
@@ -72,7 +72,7 @@ def i3d_property(layout, attributes, attribute: str, obj):
                     attrib_row.label(text=f"'{mapping[getattr(obj, attributes.i3d_map[attribute]['tracking']['member_path'])]}' "
                                           f"in GE")
 
-                attrib_row.label(text=f"Follows '{attributes.__annotations__[attribute+'_tracking'][1]['name']}'")
+                attrib_row.label(text=f"Follows '{attributes.i3d_map[attribute]['tracking']['member_path']}")
             else:
                 lab.enabled = False
 
