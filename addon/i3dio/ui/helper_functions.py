@@ -65,7 +65,7 @@ def i3d_property(layout, attributes, attribute: str, obj):
             lab = row.column()
             lab.label(text=attributes.__annotations__[attribute][1]['name'])
             attrib_row = row.row()
-            if getattr(obj, attributes.i3d_map[attribute]['tracking']['member_path'], False):
+            if getattr(obj, attributes.i3d_map[attribute]['tracking']['member_path'], None) is not None:
                 attrib_row.prop(obj, attributes.i3d_map[attribute]['tracking']['member_path'], text='')
                 mapping = attributes.i3d_map[attribute]['tracking'].get('mapping')
                 if mapping is not None:
@@ -82,7 +82,7 @@ def i3d_property(layout, attributes, attribute: str, obj):
         # If we are not tracking a blender builtin
         else:
             row.prop(attributes, attribute)  # Just display the i3d attribute then
-            if getattr(obj, attributes.i3d_map[attribute]['tracking']['member_path'], False):
+            if getattr(obj, attributes.i3d_map[attribute]['tracking']['member_path'], None) is not None:
                 icon = 'UNLOCKED'  # Show a unlocked icon to indicate this can be locked to a blender builtin
                 row.prop(attributes, attribute + '_tracking', icon=icon, icon_only=True, emboss=False)
 
