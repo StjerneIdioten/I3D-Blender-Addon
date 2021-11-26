@@ -6,6 +6,7 @@
 
     developers/guidelines/*
     developers/toolchain/*
+    developers/software_structure/*
 
 Code Reference
 ==============
