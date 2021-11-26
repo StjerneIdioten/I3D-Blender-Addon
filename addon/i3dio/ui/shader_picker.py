@@ -97,36 +97,42 @@ class I3DLoadCustomShader(bpy.types.Operator):
 
 
 def parameter_element_as_dict(parameter):
-    parameter_dictionary = {'name': parameter.attrib['name'],
-                            'type': parameter.attrib['type']}
+    parameter_list = []
 
-    if parameter_dictionary['type'] == 'float':
+    if parameter.attrib['type'] == 'float':
         type_length = 1
-    elif parameter_dictionary['type'] == 'float2':
+    elif parameter.attrib['type'] == 'float2':
         type_length = 2
-    elif parameter_dictionary['type'] == 'float3':
+    elif parameter.attrib['type'] == 'float3':
         type_length = 3
-    elif parameter_dictionary['type'] == 'float4':
+    elif parameter.attrib['type'] == 'float4':
         type_length = 4
     else:
         print(f"Shader Parameter type is unknown!")
 
-    default_value = parameter.attrib.get('defaultValue')
+    def parse_default(default):
+        default_parsed = []
+        if default is not None:
+            default_parsed = default.split()
+            # For some reason, Giants shaders has to specify their default values in terms of float4... Where the extra
+            # parts compared with what the actual type length is, aren't in any way relevant.
+            if len(default_parsed) > type_length:
+                default_parsed = default_parsed[:type_length-1]
 
-    if default_value is not None:
-        default_value = default_value.split()
-        # For some reason, Giants shaders has to specify their default values in terms of float4... Where the extra
-        # parts compared with what the actual type length is, aren't in any way relevant.
-        if len(default_value) > type_length:
-            default_value = default_value[:type_length-1]
+        default_parsed += ['0']*(type_length-len(default_parsed))
+        return default_parsed
+
+    if 'arraySize' in parameter.attrib:
+        for child in parameter:
+            parameter_list.append({'name': f"{parameter.attrib['name']}{child.attrib['index']}",
+                                   'type': parameter.attrib['type'],
+                                   'default_value': parse_default(child.text)})
     else:
-        default_value = []
+        parameter_list.append({'name': parameter.attrib['name'],
+                               'type': parameter.attrib['type'],
+                               'default_value': parse_default(parameter.attrib.get('defaultValue'))})
 
-    default_value += ['0']*(type_length-len(default_value))
-
-    parameter_dictionary['default_value'] = default_value
-
-    return parameter_dictionary
+    return parameter_list
 
 
 def texture_element_as_dict(texture):
@@ -165,7 +171,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                 for parameter in parameters:
                     group_name = parameter.attrib.get('group', 'mandatory')
                     group = grouped_parameters.setdefault(group_name, [])
-                    group.append(parameter_element_as_dict(parameter))
+                    group.extend(parameter_element_as_dict(parameter))
 
             textures = root.find('Textures')
             grouped_textures = {}
