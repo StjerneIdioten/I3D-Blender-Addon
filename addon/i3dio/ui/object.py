@@ -34,6 +34,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
         'rigid_body_type': {'default': 'none'},
+        'lod_distance': {'name': 'lodDistance', 'default': "Enter your LOD Distances if needed."},
         'collision': {'name': 'collision', 'default': True},
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
         'compound': {'name': 'compound', 'default': False},
@@ -51,6 +52,13 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Can be found at: Object Properties -> Visibility -> Renders "
                     "(can also be toggled through outliner)",
         default=True
+    )
+
+    lod_distance: StringProperty(
+        name="LOD Distance",
+        description="For example:0 100",
+        default=i3d_map['lod_distance']['default'],
+        maxlen=1024
     )
 
     clip_distance: FloatProperty(
@@ -117,6 +125,8 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     )
 
 
+
+
 @register
 class I3D_IO_PT_object_attributes(Panel):
     bl_space_type = 'PROPERTIES'
@@ -133,11 +143,11 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         obj = bpy.context.active_object
-
+        
         i3d_property(layout, obj.i3d_attributes, 'visibility', obj)
         i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
-
+        i3d_property(layout, obj.i3d_attributes, 'lod_distance', obj)
 
 @register
 class I3D_IO_PT_rigid_body_attributes(Panel):
@@ -145,7 +155,7 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
     bl_region_type = 'WINDOW'
     bl_label = 'Rigidbody'
     bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_object_attributes'
+    
 
     @classmethod
     def poll(cls, context):
