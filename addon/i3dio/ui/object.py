@@ -155,7 +155,7 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
     bl_region_type = 'WINDOW'
     bl_label = 'Rigidbody'
     bl_context = 'object'
-    
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
 
     @classmethod
     def poll(cls, context):
