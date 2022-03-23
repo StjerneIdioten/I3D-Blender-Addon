@@ -27,6 +27,8 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'casts_shadows': {'name': 'castsShadows', 'default': False},
         'receive_shadows': {'name': 'receiveShadows', 'default': False},
         'non_renderable': {'name': 'nonRenderable', 'default': False},
+        'lod_distance': {'name': 'lodDistance', 'default': "Enter your LOD Distances if needed."},
+        'is_occluder': {'name': 'occluder', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
         'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
         'decal_layer': {'name': 'decalLayer', 'default': 0},
@@ -50,6 +52,18 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         name="Non Renderable",
         description="Don't render the mesh, used for collision boxes etc.",
         default=i3d_map['non_renderable']['default']
+    )
+
+    is_occluder: BoolProperty(
+        name="Occluder",
+        description="Is Occluder?",
+        default=i3d_map['is_occluder']['default']
+    )
+    lod_distance: StringProperty(
+        name="LOD Distance",
+        description="For example:0 100",
+        default=i3d_map['lod_distance']['default'],
+        maxlen=1024
     )
 
     distance_blending: BoolProperty(
@@ -106,6 +120,8 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "receive_shadows")
         layout.prop(obj.i3d_attributes, "non_renderable")
         layout.prop(obj.i3d_attributes, "distance_blending")
+        layout.prop(obj.i3d_attributes, "is_occluder")
+        layout.prop(obj.i3d_attributes, "lod_distance")
         layout.prop(obj.i3d_attributes, "cpu_mesh")
         layout.prop(obj.i3d_attributes, "decal_layer")
         layout.prop(obj.i3d_attributes, 'fill_volume')
