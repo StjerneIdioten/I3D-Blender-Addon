@@ -56,7 +56,15 @@ class Material(Node):
         gloss_node = self.blender_material.node_tree.nodes.get('Glossmap')
         if gloss_node is not None:
             try:
-                gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
+                if bpy.app.version < (3, 3, 0):
+                    gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
+                else:
+                    if gloss_node.type == "SEPARATE_COLOR":
+                        gloss_image_path = gloss_node.inputs['Color'].links[0].from_node.image.filepath
+                    elif gloss_node.type == "TEX_IMAGE":
+                        gloss_image_path = gloss_node.image.filepath
+                    else:
+                        raise AttributeError(f"Has an improperly setup Glossmap")
             except (AttributeError, IndexError, KeyError):
                 self.logger.exception(f"Has an improperly setup Glossmap")
             else:
