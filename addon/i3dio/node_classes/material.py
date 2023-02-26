@@ -157,6 +157,10 @@ class Material(Node):
         if shader_settings.source != shader_picker.shader_unselected_default_text:
             shader_file_id = self.i3d.add_file_shader(shader_settings.source)
             self._write_attribute('customShaderId', shader_file_id)
+            if shader_settings.source.endswith("mirrorShader.xml"):
+                params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
+                xml_i3d.SubElement(self.element, 'Reflectionmap', params)
+
             if shader_settings.variation != shader_picker.shader_no_variation:
                 self._write_attribute('customShaderVariation', shader_settings.variation)
             for parameter in shader_settings.shader_parameters:
