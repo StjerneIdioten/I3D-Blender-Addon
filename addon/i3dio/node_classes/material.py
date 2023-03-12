@@ -56,7 +56,15 @@ class Material(Node):
         gloss_node = self.blender_material.node_tree.nodes.get('Glossmap')
         if gloss_node is not None:
             try:
-                gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
+                if bpy.app.version < (3, 3, 0):
+                    gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
+                else:
+                    if gloss_node.type == "SEPARATE_COLOR":
+                        gloss_image_path = gloss_node.inputs['Color'].links[0].from_node.image.filepath
+                    elif gloss_node.type == "TEX_IMAGE":
+                        gloss_image_path = gloss_node.image.filepath
+                    else:
+                        raise AttributeError(f"Has an improperly setup Glossmap")
             except (AttributeError, IndexError, KeyError):
                 self.logger.exception(f"Has an improperly setup Glossmap")
             else:
@@ -149,6 +157,10 @@ class Material(Node):
         if shader_settings.source != shader_picker.shader_unselected_default_text:
             shader_file_id = self.i3d.add_file_shader(shader_settings.source)
             self._write_attribute('customShaderId', shader_file_id)
+            if shader_settings.source.endswith("mirrorShader.xml"):
+                params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
+                xml_i3d.SubElement(self.element, 'Reflectionmap', params)
+
             if shader_settings.variation != shader_picker.shader_no_variation:
                 self._write_attribute('customShaderVariation', shader_settings.variation)
             for parameter in shader_settings.shader_parameters:

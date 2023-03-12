@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../../GE-Core/.idea/GE-Core.iml" filepath="$PROJECT_DIR$/../../GE-Core/.idea/GE-Core.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/addon.iml" filepath="$PROJECT_DIR$/.idea/addon.iml" />
     </modules>
   </component>
