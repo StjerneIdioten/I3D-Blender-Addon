@@ -39,6 +39,13 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
         'compound': {'name': 'compound', 'default': False},
         'trigger': {'name': 'trigger', 'default': False},
+        'use_parent': {'name': 'useParent', 'default': True},
+        'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0},
+        'minute_of_day_end': {'name': 'minuteOfDayEnd', 'default': 0},
+        'day_of_year_start': {'name': 'dayOfYearStart', 'default': 0},
+        'day_of_year_end': {'name': 'dayOfYearEnd', 'default': 0},
+        'weather_required_mask': {'name': 'weatherRequiredMask', 'default': '0', 'type': 'HEX'},
+        'weather_prevent_mask': {'name': 'weatherPreventMask', 'default': '0', 'type': 'HEX'},
     }
 
     visibility: BoolProperty(
@@ -124,7 +131,63 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=i3d_map['trigger']['default']
     )
 
+    use_parent: BoolProperty(
+        name="Use Parent",
+        description="Can be found at: Attributes -> Visibility Condition",
+        default=True
+    )
 
+    minute_of_day_start: IntProperty(
+        name="Minute of Day Start",
+        description="The minute of day when visibility is true. "
+                    "8:00 AM = 480 / "
+                    "8:00 PM = 1200",
+        default=i3d_map['minute_of_day_start']['default'],
+        max=1440,
+        min=0,
+    )
+
+    minute_of_day_end: IntProperty(
+        name="Minute of Day End",
+        description="The minute of day when visibility is false. "
+                    "8:00 AM = 480 / "
+                    "8:00 PM = 1200",
+        default=i3d_map['minute_of_day_end']['default'],
+        max=1440,
+        min=0,
+    )
+
+    day_of_year_start: IntProperty(
+        name="Day of Year Start",
+        description="Day of Year when visibility is true.",
+        default=i3d_map['day_of_year_start']['default'],
+        max=365,
+        min=0,
+    )
+
+    day_of_year_end: IntProperty(
+        name="Day of Year End",
+        description="Day of Year when visibility is false.",
+        default=i3d_map['day_of_year_end']['default'],
+        max=365,
+        min=0,
+    )
+
+    weather_required_mask: StringProperty(
+        name="Weather Required Mask (Hex)",
+        description="The weather required mask as a hexadecimal value. "
+                    "Winter = 400 / "
+                    "Winter + Snow = 408",
+        default=i3d_map['weather_required_mask']['default']
+    )
+
+    weather_prevent_mask: StringProperty(
+        name="Weather Prevent Mask (Hex)",
+        description="The weather prevent mask as a hexadecimal value. "
+                    "Summer = 100 / "
+                    "Summer + Sun = 101",
+        default=i3d_map['weather_prevent_mask']['default']
+    )
 
 
 @register
@@ -192,6 +255,65 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
             obj.i3d_attributes.property_unset('collision')
             obj.i3d_attributes.property_unset('collision_mask')
             obj.i3d_attributes.property_unset('trigger')
+
+@register
+class I3D_IO_PT_visibility_condition_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = 'Visibility Condition'
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'use_parent')
+        
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'minute_of_day_start')
+        if obj.i3d_attributes.use_parent == True:
+            row.enabled = False
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'minute_of_day_end')
+        if obj.i3d_attributes.use_parent == True:
+            row.enabled = False
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'day_of_year_start')
+        if obj.i3d_attributes.use_parent == True:
+            row.enabled = False
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'day_of_year_end')
+        if obj.i3d_attributes.use_parent == True:
+            row.enabled = False
+
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'weather_required_mask')
+        if obj.i3d_attributes.use_parent == True:
+            row.enabled = False
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'weather_prevent_mask')
+        if obj.i3d_attributes.use_parent == True:
+            row.enabled = False
+
+        if obj.i3d_attributes.use_parent == True:
+            obj.i3d_attributes.property_unset('minute_of_day_start')
+            obj.i3d_attributes.property_unset('minute_of_day_end')
+            obj.i3d_attributes.property_unset('day_of_year_start')
+            obj.i3d_attributes.property_unset('day_of_year_end')
+            obj.i3d_attributes.property_unset('weather_required_mask')
+            obj.i3d_attributes.property_unset('weather_prevent_mask')
 
 
 @register
