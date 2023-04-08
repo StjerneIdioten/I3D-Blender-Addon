@@ -82,3 +82,23 @@ def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderOb
     sorted_objects = list(objects)  # Create new list from whatever comes in, whether it is an existing list or a tuple
     sorted_objects.sort(key=lambda x: x.name)  # Sort by name
     return sorted_objects
+
+def update_bv_data(dataObject: object):
+    if dataObject.i3d_bounding_volume.bounding_volume_object != None:
+        # Getting Center of Mesh: Answer from https://blender.stackexchange.com/a/62044
+        cursorLoc = bpy.context.scene.cursor.location.copy()
+        bpy.context.scene.cursor.location = dataObject.location
+        bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY')
+        loc = dataObject.location.copy()
+        bpy.ops.object.origin_set(type='ORIGIN_CURSOR')
+        bpy.context.scene.cursor.location = cursorLoc
+
+        dataObject.i3d_attributes.bv_center = loc
+
+        dimensions = [dataObject.i3d_bounding_volume.bounding_volume_object.dimensions.x,dataObject.i3d_bounding_volume.bounding_volume_object.dimensions.y,dataObject.i3d_bounding_volume.bounding_volume_object.dimensions.z]
+        radius = max(dimensions)
+        
+        if radius > 0:
+            dataObject.i3d_attributes.bv_radius = radius/2
+        else:
+            dataObject.i3d_attributes.bv_radius = 0

@@ -11,6 +11,7 @@ from bpy.props import (
     FloatProperty,
     IntProperty,
     CollectionProperty,
+    FloatVectorProperty,
 )
 
 from .helper_functions import i3d_property
@@ -27,7 +28,7 @@ def register(cls):
 @register
 class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
+        'visibility': {'name': 'Visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
                                                                            'mapping': {True: False,
                                                                                        False: True}}},
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
@@ -46,6 +47,8 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'day_of_year_end': {'name': 'dayOfYearEnd', 'default': 0},
         'weather_required_mask': {'name': 'weatherRequiredMask', 'default': '0', 'type': 'HEX'},
         'weather_prevent_mask': {'name': 'weatherPreventMask', 'default': '0', 'type': 'HEX'},
+        'bv_center': {'name': 'bv_center', 'default': (0,0,0)},
+        'bv_radius': {'name': 'bv_radius', 'default': 0},
     }
 
     visibility: BoolProperty(
@@ -187,6 +190,28 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
                     "Summer = 100 / "
                     "Summer + Sun = 101",
         default=i3d_map['weather_prevent_mask']['default']
+    )
+
+
+    bv_center: FloatVectorProperty(
+        name="Bounding Volume Center",
+        description="Center of the Bounding Volume",
+        default=i3d_map['bv_center']['default'],
+        min=-i3d_max,
+        max=i3d_max,
+        soft_min=-65535.0,
+        soft_max=65535.0,
+        size=3
+    )
+
+    bv_radius: FloatProperty(        
+        name="Bounding Volume Radius",
+        description="The radius of the Bounding Volume, or, the biggest dimension",
+        default=i3d_map['bv_radius']['default'],
+        min=0.0,
+        max=i3d_max,
+        soft_min=0,
+        soft_max=65535.0
     )
 
 
@@ -356,6 +381,55 @@ class I3D_IO_PT_merge_group_attributes(Panel):
         row = layout.row()
         row.prop(obj.i3d_merge_group, 'group_id')
 
+@register
+class I3DBoundingVolumes(bpy.types.PropertyGroup):
+    bounding_volume_object: PointerProperty(
+        #update=lambda self, context: get_bv_center_and_radius(self, context, bpy.context.active_object),
+        name="Bounding Volume",
+        description="Object used to calculate bvCenter and bvRadius",
+        type=bpy.types.Object
+    )
+
+
+@register
+class I3D_IO_PT_bounding_box(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = 'Bounding Volumes'
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object
+
+        row = layout.row()
+        row.prop(obj.i3d_bounding_volume, 'bounding_volume_object')     
+
+        row = layout.row()
+        layout.label(text="Both Center and Radius will be calculated when exporting automatically.")
+        
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'bv_center')
+        row.enabled = False
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'bv_radius')   
+        row.enabled = False
+
+        #row = layout.row()
+        #row.operator('object.i3d_update_bounding_voulume', text="Update Values")
+       
+        if obj.i3d_bounding_volume.bounding_volume_object is None:
+            obj.i3d_attributes.property_unset('bv_center')
+            obj.i3d_attributes.property_unset('bv_radius')
+
 
 @register
 class I3DMappingData(bpy.types.PropertyGroup):
@@ -402,12 +476,14 @@ def register():
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeObjectAttributes)
     bpy.types.Object.i3d_merge_group = PointerProperty(type=I3DMergeGroupObjectData)
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
+    bpy.types.Object.i3d_bounding_volume = PointerProperty(type=I3DBoundingVolumes)
 
 
 def unregister():
     del bpy.types.Object.i3d_mapping
     del bpy.types.Object.i3d_merge_group
     del bpy.types.Object.i3d_attributes
+    del bpy.types.Object.i3d_bounding_volume
 
     for cls in classes:
         bpy.utils.unregister_class(cls)
