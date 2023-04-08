@@ -39,6 +39,14 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
         'compound': {'name': 'compound', 'default': False},
         'trigger': {'name': 'trigger', 'default': False},
+        'restitution': {'name': 'restitution', 'default': 0.0},
+        'static_friction': {'name': 'staticFriction', 'default': 0.5},
+        'dynamic_friction': {'name': 'staticFriction', 'default': 0.5},
+        'linear_damping': {'name': 'linearDamping', 'default': 0.0},
+        'angular_damping': {'name': 'angularDamping', 'default': 0.01},
+        'density': {'name': 'density', 'default': 1.0},
+        'split_type': {'name': 'splitType', 'default': '0'},
+        'split_uvs': {'name': 'splitUvs', 'default': '0 0 1 1 1'},
         'use_parent': {'name': 'useParent', 'default': True},
         'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0},
         'minute_of_day_end': {'name': 'minuteOfDayEnd', 'default': 0},
@@ -129,6 +137,91 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Trigger",
         description="Trigger",
         default=i3d_map['trigger']['default']
+    )
+
+    restitution: FloatProperty(
+        name="Restitution",
+        description="Bounciness of the surface",
+        default=i3d_map['restitution']['default'],
+        min=0,
+        max=1
+    )
+
+    static_friction: FloatProperty(
+        name="Static Friction",
+        description="The force that resists motion between two non-moving surfaces",
+        default=i3d_map['static_friction']['default'],
+        min=0,
+        max=1
+    )
+
+    dynamic_friction: FloatProperty(
+        name="Dynamic Friction",
+        description="The force that resists motion between two moving surfaces",
+        default=i3d_map['dynamic_friction']['default'],
+        min=0,
+        max=1
+    )
+
+    linear_damping: FloatProperty(
+        name="Linear Damping",
+        description="Defines the slowdown factor for linear movement, affecting speed",
+        default=i3d_map['linear_damping']['default'],
+        min=0,
+        max=1
+    )
+
+    angular_damping: FloatProperty(
+        name="Angular Damping",
+        description="Defines the slowdown factor for angular movement, affecting spin",
+        default=i3d_map['angular_damping']['default'],
+        min=0,
+        max=1
+    )
+
+    density: FloatProperty(
+        name="Density",
+        description="Used with the shape of the object to calculate mass."
+                    "The higher the number, the heavier the object",
+        default=i3d_map['density']['default'],
+        min=0,
+        max=20
+    )
+
+    split_type: EnumProperty(
+        name="Split Type",
+        description="Split type determines what type of tree it is."
+                    "For custom tree type use a number over 19",
+        items=[
+            ('0', "None", "None"),
+            ('1', "Spruce", "Spruce"),
+            ('2', "Pine", "Pine"),
+            ('3', "Larch", "Larch"),
+            ('4', "Birch", "Birch"),
+            ('5', "Beech", "Beech"),
+            ('6', "Maple", "Maple"),
+            ('7', "Oak", "Oak"),
+            ('8', "Ash", "Ash"),
+            ('9', "Locust", "Locust"),
+            ('10', "Mahogany", "Mahogany"),
+            ('11', "Poplar", "Poplar"),
+            ('12', "AmericanElm", "American Elm"),
+            ('13', "Cypress", "Cypress"),
+            ('14', "DownyServiceberry", "Downy Serviceberry"),
+            ('15', "PagodaDogwood", "Pagoda Dogwood"),
+            ('16', "ShagbarkHickory", "Shagbark Hickory"),
+            ('17', "StonePine", "Stone Pine"),
+            ('18', "Willow", "Willow"),
+            ('19', "OliveTree", "Olive Tree")
+        ],
+        default=i3d_map['split_type']['default']
+    )
+
+    split_uvs: StringProperty(
+        name="Split UVs",
+        description="'Min U', 'Min V', 'Max U', 'Max V', 'Uv World Scale'",
+        default=i3d_map['split_uvs']['default'],
+        maxlen=1024
     )
 
     use_parent: BoolProperty(
@@ -229,8 +322,8 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         obj = bpy.context.active_object
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'rigid_body_type')
+
+        layout.prop(obj.i3d_attributes, 'rigid_body_type')
 
         if obj.i3d_attributes.rigid_body_type != 'none':
             row_compound = layout.row()
@@ -240,14 +333,31 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
                 row_compound.enabled = False
                 obj.i3d_attributes.property_unset('compound')
 
-            row = layout.row()
-            row.prop(obj.i3d_attributes, 'collision')
+            layout.prop(obj.i3d_attributes, 'collision')
+            layout.prop(obj.i3d_attributes, 'collision_mask')
+            layout.prop(obj.i3d_attributes, 'trigger')
+            layout.prop(obj.i3d_attributes, 'restitution')
+            layout.prop(obj.i3d_attributes, 'static_friction')
+            layout.prop(obj.i3d_attributes, 'dynamic_friction')
+            layout.prop(obj.i3d_attributes, 'linear_damping')
+            layout.prop(obj.i3d_attributes, 'angular_damping')
+            layout.prop(obj.i3d_attributes, 'density')
 
-            row = layout.row()
-            row.prop(obj.i3d_attributes, 'collision_mask')
+            row_split_type = layout.row()
+            row_split_type.prop(obj.i3d_attributes, 'split_type')
+            row_split_uvs = layout.row()
+            row_split_uvs.prop(obj.i3d_attributes, 'split_uvs')
 
-            row = layout.row()
-            row.prop(obj.i3d_attributes, 'trigger')
+            if obj.i3d_attributes.rigid_body_type != 'static':
+                row_split_type.enabled = False
+                row_split_uvs.enabled = False
+                obj.i3d_attributes.property_unset('split_type')
+                obj.i3d_attributes.property_unset('split_uvs')
+            else:
+                if obj.i3d_attributes.split_type == '0':
+                    row_split_uvs.enabled = False
+                    obj.i3d_attributes.property_unset('split_uvs')
+
         else:
             # Reset all properties if rigidbody is disabled (This is easier than doing conditional export for now.
             # Since properties that are defaulted, wont get exported)
@@ -255,6 +365,15 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
             obj.i3d_attributes.property_unset('collision')
             obj.i3d_attributes.property_unset('collision_mask')
             obj.i3d_attributes.property_unset('trigger')
+            obj.i3d_attributes.property_unset('restitution')
+            obj.i3d_attributes.property_unset('static_friction')
+            obj.i3d_attributes.property_unset('dynamic_friction')
+            obj.i3d_attributes.property_unset('linear_damping')
+            obj.i3d_attributes.property_unset('angular_damping')
+            obj.i3d_attributes.property_unset('density')
+            obj.i3d_attributes.property_unset('split_type')
+            obj.i3d_attributes.property_unset('split_uvs')
+
 
 @register
 class I3D_IO_PT_visibility_condition_attributes(Panel):
@@ -350,7 +469,7 @@ class I3D_IO_PT_merge_group_attributes(Panel):
 
         row = layout.row()
         row.prop(obj.i3d_merge_group, 'is_root')
-        if obj.i3d_merge_group.group_id is '':  # Defaults to a default initialized placeholder
+        if obj.i3d_merge_group.group_id == '':  # Defaults to a default initialized placeholder
             row.enabled = False
 
         row = layout.row()
