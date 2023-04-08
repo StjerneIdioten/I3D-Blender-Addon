@@ -40,10 +40,17 @@ class I3D_IO_AddonPreferences(AddonPreferences):
         update=xml_library_changed
     )
 
+    i3d_converter_path: StringProperty(
+        name="i3dConverter.exe",
+        subtype='FILE_PATH',
+        default=""
+    )
+
     def draw(self, context):
         layout = self.layout
         layout.prop(self, 'fs_data_path')
         layout.prop(self, 'xml_library')
+        layout.prop(self, 'i3d_converter_path')
 
 
 def register():
