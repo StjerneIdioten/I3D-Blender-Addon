@@ -88,7 +88,10 @@ def update_bv_data(dataObject: object):
         volumeObject = dataObject.data.i3d_attributes.bounding_volume_object
         bv_center = sum((mathutils.Vector(corner) for corner in volumeObject.bound_box), mathutils.Vector()) / 8
         world_center = volumeObject.matrix_world @ bv_center
-        relative_center = world_center - dataObject.location
+        dataObject_world_matrix = dataObject.matrix_world
+
+        relative_center = world_center - dataObject_world_matrix.to_translation()
+        relative_center = dataObject_world_matrix.to_3x3().inverted() @ relative_center
 
         dataObject.data.i3d_attributes.bv_center = (relative_center.x,relative_center.z,-relative_center.y)
         dataObject.data.i3d_attributes.bv_radius = max(volumeObject.dimensions) / 2
