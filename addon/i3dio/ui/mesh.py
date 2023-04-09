@@ -10,11 +10,15 @@ from bpy.props import (
     PointerProperty,
     FloatProperty,
     IntProperty,
-    CollectionProperty,
+    CollectionProperty,    
+    FloatVectorProperty,
 )
 
 classes = []
 
+from ..utility import update_bv_data
+
+from ..xml_i3d import i3d_max
 
 def register(cls):
     classes.append(cls)
@@ -32,7 +36,9 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
         'decal_layer': {'name': 'decalLayer', 'default': 0},
         'fill_volume': {'name': 'name', 'default': False, 'placement': 'IndexedTriangleSet',
-                        'type': 'OVERRIDE', 'override': 'fillVolumeShape'}
+                        'type': 'OVERRIDE', 'override': 'fillVolumeShape'},        
+        'bv_center': {'name': 'bvCenter', 'default': (0,0,0), 'placement': 'IndexedTriangleSet'},
+        'bv_radius': {'name': 'bvRadius', 'default': 0, 'placement': 'IndexedTriangleSet'}
     }
 
     casts_shadows: BoolProperty(
@@ -90,6 +96,34 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         default=i3d_map['fill_volume']['default']
     )
 
+    bounding_volume_object: PointerProperty(
+        #update=lambda self, context: update_bv_data(self, context, bpy.context.active_object),
+        name="Bounding Volume",
+        description="Object used to calculate bvCenter and bvRadius",
+        type=bpy.types.Object
+    )
+
+    bv_center: FloatVectorProperty(
+        name="Bounding Volume Center",
+        description="Center of the Bounding Volume",
+        default=i3d_map['bv_center']['default'],
+        min=-i3d_max,
+        max=i3d_max,
+        soft_min=-65535.0,
+        soft_max=65535.0,
+        size=3
+    )
+
+    bv_radius: FloatProperty(        
+        name="Bounding Volume Radius",
+        description="The radius of the Bounding Volume, or, the biggest dimension",
+        default=i3d_map['bv_radius']['default'],
+        min=0.0,
+        max=i3d_max,
+        soft_min=0,
+        soft_max=65535.0
+    )
+
 
 @register
 class I3D_IO_PT_shape_attributes(Panel):
@@ -118,6 +152,44 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "decal_layer")
         layout.prop(obj.i3d_attributes, 'fill_volume')
 
+
+@register
+class I3D_IO_PT_shape_bounding_box(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Bounding Volume"
+    bl_context = 'data'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object.data
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'bounding_volume_object')     
+
+        row = layout.row()
+        layout.label(text="Both Center and Radius will be calculated when exporting automatically.")
+        
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'bv_center')
+        row.enabled = False
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'bv_radius')   
+        row.enabled = False
+
+        #row = layout.row()
+        #row.operator('object.i3d_update_bounding_voulume', text="Update Values")
+       
+        if obj.i3d_attributes.bounding_volume_object is None:
+            obj.i3d_attributes.property_unset('bv_center')
+            obj.i3d_attributes.property_unset('bv_radius')
 
 def register():
     for cls in classes:
