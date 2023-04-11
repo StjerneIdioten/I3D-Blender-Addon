@@ -30,6 +30,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'is_occluder': {'name': 'occluder', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
         'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
+        'nav_mesh_mask': {'name': 'buildNavMeshMask', 'default': '0', 'type': 'HEX'},
         'decal_layer': {'name': 'decalLayer', 'default': 0},
         'fill_volume': {'name': 'name', 'default': False, 'placement': 'IndexedTriangleSet',
                         'type': 'OVERRIDE', 'override': 'fillVolumeShape'}
@@ -75,6 +76,12 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         default=i3d_map['cpu_mesh']['default']
     )
 
+    nav_mesh_mask: StringProperty(
+        name="Nav Mesh Mask (Hex)",
+        description="Build Nav Mesh Mask",
+        default=i3d_map['nav_mesh_mask']['default'],
+    )
+
     decal_layer: IntProperty(
         name="Decal Layer",
         description="Decal",
@@ -115,6 +122,7 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "distance_blending")
         layout.prop(obj.i3d_attributes, "is_occluder")
         layout.prop(obj.i3d_attributes, "cpu_mesh")
+        layout.prop(obj.i3d_attributes, "nav_mesh_mask")
         layout.prop(obj.i3d_attributes, "decal_layer")
         layout.prop(obj.i3d_attributes, 'fill_volume')
 
