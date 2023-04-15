@@ -41,6 +41,7 @@
     }],
     ["@semantic-release/github", {
       "assets": [{"path": "./addon/i3d_exporter.zip", "label": "I3D Exporter"}],
+      "successComment": false,
       "failTitle": false
       }
     ],
