@@ -1,4 +1,5 @@
 import bpy
+from pathlib import Path
 from bpy.types import (
     Panel
 )
@@ -13,7 +14,8 @@ from bpy.props import (
     CollectionProperty,
 )
 
-from .helper_functions import i3d_property
+from bl_operators.presets import AddPresetBase
+from .helper_functions import i3d_property, draw_preset_menu, get_addon_preset_paths
 from ..xml_i3d import i3d_max
 
 classes = []
@@ -191,6 +193,84 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
 
 @register
+class I3D_MT_display_presets(bpy.types.Menu):
+    bl_label = "Select Preset"
+    preset_operator = "script.execute_preset"
+
+    def draw(self, context):
+        layout = self.layout
+        preset_subdir = "i3dio"
+        addon_preset_paths = get_addon_preset_paths()
+        user_preset_paths = bpy.utils.preset_paths(preset_subdir)
+
+        preset_groups = [
+            {
+                'label': "Physics",
+                'paths': [str(Path(p) / "Physics") for p in addon_preset_paths]
+            },
+            {
+                'label': "NonPhysics",
+                'paths': [str(Path(p) / "NonPhysics") for p in addon_preset_paths]
+            },
+            {
+                'label': "Custom User Presets",
+                'paths': user_preset_paths
+            },
+        ]
+
+        draw_preset_menu(layout, preset_groups, self.preset_operator)
+
+
+@register
+class AddPresetObjectDisplay(AddPresetBase, bpy.types.Operator):
+    """Add an Object Display Preset"""
+    bl_idname = "object.object_display_preset_add"
+    bl_label = "Add Custom Preset"
+    preset_menu = "I3D_MT_display_presets"
+
+    # Based on this: https://docs.blender.org/api/current/bpy.types.Menu.html
+    # And this: https://sinestesia.co/blog/tutorials/using-blenders-presets-in-python/
+
+    # variable used for all preset values
+    preset_defines = [
+        "obj = bpy.context.object"
+    ]
+
+    # properties to store in the preset
+    @property
+    def preset_values(self):
+        if bpy.context.object.type == 'MESH':
+            return [
+                "obj.i3d_attributes.visibility",
+                "obj.i3d_attributes.clip_distance",
+                "obj.i3d_attributes.lod_distance",
+                "obj.i3d_attributes.rigid_body_type",
+                "obj.i3d_attributes.compound",
+                "obj.i3d_attributes.collision",
+                "obj.i3d_attributes.collision_mask",
+                "obj.i3d_attributes.density",
+                "obj.data.i3d_attributes.casts_shadows",
+                "obj.data.i3d_attributes.receive_shadows",
+                "obj.data.i3d_attributes.non_renderable",
+                "obj.data.i3d_attributes.cpu_mesh",
+                "obj.data.i3d_attributes.decal_layer",
+                "obj.data.i3d_attributes.fill_volume",
+                "obj.data.i3d_attributes.is_occluder",
+                "obj.data.i3d_attributes.nav_mesh_mask",
+                "obj.data.i3d_attributes.distance_blending",
+            ]
+        else:
+            return [
+                "obj.i3d_attributes.visibility",
+                "obj.i3d_attributes.clip_distance",
+                "obj.i3d_attributes.lod_distance",
+            ]
+
+    # where to store the preset
+    preset_subdir = "i3dio"
+
+
+@register
 class I3D_IO_PT_object_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -206,11 +286,17 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         obj = bpy.context.active_object
-        
+
+        row = layout.row(align=True)
+        row.menu(I3D_MT_display_presets.__name__, text=I3D_MT_display_presets.bl_label)
+        row.operator(AddPresetObjectDisplay.bl_idname, text="", icon='ADD')
+        row.operator(AddPresetObjectDisplay.bl_idname, text="", icon='REMOVE').remove_active = True
+
         i3d_property(layout, obj.i3d_attributes, 'visibility', obj)
         i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'lod_distance', obj)
+
 
 @register
 class I3D_IO_PT_rigid_body_attributes(Panel):
