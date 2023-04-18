@@ -26,6 +26,9 @@ python3 -m pip install -r ./addon/requirements.txt
 # DECLARE VARIABLES #
 #####################
  
+# prevent git "detected dubious ownership" errors
+git config --global --add safe.directory "*"
+
 pwd
 ls -lah
 export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
