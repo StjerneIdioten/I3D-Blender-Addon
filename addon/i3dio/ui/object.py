@@ -45,7 +45,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'linear_damping': {'name': 'linearDamping', 'default': 0.0},
         'angular_damping': {'name': 'angularDamping', 'default': 0.01},
         'density': {'name': 'density', 'default': 1.0},
-        'split_type': {'name': 'splitType', 'default': '0'},
+        'split_type': {'name': 'splitType', 'default': 0},
         'split_uvs': {'name': 'splitUvs', 'default': '0 0 1 1 1'},
         'use_parent': {'name': 'useParent', 'default': True},
         'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0},
@@ -188,33 +188,42 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         max=20
     )
 
-    split_type: EnumProperty(
+    split_type: IntProperty(
         name="Split Type",
         description="Split type determines what type of tree it is."
                     "For custom tree type use a number over 19",
+        default=i3d_map['split_type']['default'],
+        min=0,
+        max=200
+    )
+
+    split_type_presets: EnumProperty(
+        name="Split Type Presets",
+        description="List containing all in game tree types.",
         items=[
-            ('0', "None", "None"),
-            ('1', "Spruce", "Spruce"),
-            ('2', "Pine", "Pine"),
-            ('3', "Larch", "Larch"),
-            ('4', "Birch", "Birch"),
-            ('5', "Beech", "Beech"),
-            ('6', "Maple", "Maple"),
-            ('7', "Oak", "Oak"),
-            ('8', "Ash", "Ash"),
-            ('9', "Locust", "Locust"),
-            ('10', "Mahogany", "Mahogany"),
-            ('11', "Poplar", "Poplar"),
-            ('12', "AmericanElm", "American Elm"),
-            ('13', "Cypress", "Cypress"),
-            ('14', "DownyServiceberry", "Downy Serviceberry"),
-            ('15', "PagodaDogwood", "Pagoda Dogwood"),
-            ('16', "ShagbarkHickory", "Shagbark Hickory"),
-            ('17', "StonePine", "Stone Pine"),
-            ('18', "Willow", "Willow"),
-            ('19', "OliveTree", "Olive Tree")
+            ('0', "Custom / Manual", "Set a custom tree type or just set a tree type manually"),
+            ('1', "Spruce", "Spruce supports wood harvester"),
+            ('2', "Pine", "Pine supports wood harvester"),
+            ('3', "Larch", "Larch supports wood harvester"),
+            ('4', "Birch", "Birch doesn't support wood harvester"),
+            ('5', "Beech", "Beech doesn't support wood harvester"),
+            ('6', "Maple", "Maple doesn't support wood harvester"),
+            ('7', "Oak", "Oak doesn't support wood harvester"),
+            ('8', "Ash", "Ash doesn't support wood harvester"),
+            ('9', "Locust", "Locust doesn't support wood harvester"),
+            ('10', "Mahogany", "Mahogany doesn't support wood harvester"),
+            ('11', "Poplar", "Poplar doesn't support wood harvester"),
+            ('12', "American Elm", "American Elm doesn't support wood harvester"),
+            ('13', "Cypress", "Cypress doesn't support wood harvester"),
+            ('14', "Downy Serviceberry", "Downy Serviceberry doesn't support wood harvester"),
+            ('15', "Pagoda Dogwood", "Pagoda Dogwood doesn't support wood harvester"),
+            ('16', "Shagbark Hickory", "Shagbark Hickory doesn't support wood harvester"),
+            ('17', "Stone Pine", "Stone Pine doesn't support wood harvester"),
+            ('18', "Willow", "Willow doesn't support wood harvester"),
+            ('19', "Olive Tree", "Olive Tree doesn't support wood harvester")
         ],
-        default=i3d_map['split_type']['default']
+        default='0',
+        update=lambda self, context: setattr(self, 'split_type', int(self.split_type_presets))
     )
 
     split_uvs: StringProperty(
@@ -343,15 +352,23 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
             layout.prop(obj.i3d_attributes, 'angular_damping')
             layout.prop(obj.i3d_attributes, 'density')
 
+            row_split_type_presets = layout.row()
+            row_split_type_presets.prop(obj.i3d_attributes, 'split_type_presets')
+
             row_split_type = layout.row()
             row_split_type.prop(obj.i3d_attributes, 'split_type')
+            if obj.i3d_attributes.split_type_presets != '0':
+                row_split_type.enabled = False
+
             row_split_uvs = layout.row()
             row_split_uvs.prop(obj.i3d_attributes, 'split_uvs')
 
             if obj.i3d_attributes.rigid_body_type != 'static':
                 row_split_type.enabled = False
                 row_split_uvs.enabled = False
+                row_split_type_presets.enabled = False
                 obj.i3d_attributes.property_unset('split_type')
+                obj.i3d_attributes.property_unset('split_type_presets')
                 obj.i3d_attributes.property_unset('split_uvs')
             else:
                 if obj.i3d_attributes.split_type == '0':
@@ -372,6 +389,7 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
             obj.i3d_attributes.property_unset('angular_damping')
             obj.i3d_attributes.property_unset('density')
             obj.i3d_attributes.property_unset('split_type')
+            obj.i3d_attributes.property_unset('split_type_presets')
             obj.i3d_attributes.property_unset('split_uvs')
 
 
