@@ -92,6 +92,20 @@ def i3d_property(layout, attributes, attribute: str, obj):
         attrib_row.prop(attributes, attribute)
 
 
+def update_group_id(self, context):
+    self.group_id = self.group_list
+
+
+def get_group_id_list(self, context):
+    group_ids = set()
+
+    for obj in context.scene.objects:
+        if obj.type == 'MESH' and obj.i3d_merge_group.group_id != '':
+            group_ids.add(obj.i3d_merge_group.group_id)
+
+    return [(group_id, group_id, "") for group_id in group_ids]
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)

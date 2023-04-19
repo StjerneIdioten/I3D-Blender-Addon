@@ -13,7 +13,7 @@ from bpy.props import (
     CollectionProperty,
 )
 
-from .helper_functions import i3d_property
+from .helper_functions import i3d_property, update_group_id, get_group_id_list
 from ..xml_i3d import i3d_max
 
 classes = []
@@ -329,6 +329,27 @@ class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
                              default=''
                              )
 
+    group_list: EnumProperty(name='',
+                             description='List of merge groups available in the scene',
+                             items=get_group_id_list,
+                             update=update_group_id
+                             )
+
+
+@register
+class I3D_IO_OT_select_mg_objects(bpy.types.Operator):
+    bl_idname = "i3dio.select_mg_objects"
+    bl_label = "Select Objects in MG"
+    bl_description = "Select all objects in the same merge group"
+
+    group_id: bpy.props.StringProperty()
+
+    def execute(self, context):
+        for obj in context.scene.objects:
+            if obj.i3d_merge_group.group_id == self.group_id:
+                obj.select_set(True)
+        return {'FINISHED'}
+
 
 @register
 class I3D_IO_PT_merge_group_attributes(Panel):
@@ -355,6 +376,13 @@ class I3D_IO_PT_merge_group_attributes(Panel):
 
         row = layout.row()
         row.prop(obj.i3d_merge_group, 'group_id')
+        row.prop(obj.i3d_merge_group, 'group_list')
+
+        row = layout.row()
+        select_op = row.operator("i3dio.select_mg_objects", text="Select Objects in same MG")
+        select_op.group_id = obj.i3d_merge_group.group_id
+        if obj.i3d_merge_group.group_id == '':
+            row.enabled = False
 
 
 @register
