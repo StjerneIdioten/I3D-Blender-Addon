@@ -187,7 +187,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
                     "Summer = 100 / "
                     "Summer + Sun = 101",
         default=i3d_map['weather_prevent_mask']['default']
-    )
+    )    
 
 
 @register
@@ -329,7 +329,6 @@ class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
                              default=''
                              )
 
-
 @register
 class I3D_IO_PT_merge_group_attributes(Panel):
     bl_space_type = 'PROPERTIES'
@@ -370,7 +369,6 @@ class I3DMappingData(bpy.types.PropertyGroup):
         description="If this is left empty the name of the object itself will be used",
         default=''
     )
-
 
 @register
 class I3D_IO_PT_mapping_attributes(Panel):
