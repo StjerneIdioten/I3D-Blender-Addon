@@ -27,7 +27,7 @@ def register(cls):
 @register
 class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'visibility': {'name': 'Visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
+        'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
                                                                            'mapping': {True: False,
                                                                                        False: True}}},
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},

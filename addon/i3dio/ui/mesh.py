@@ -174,19 +174,8 @@ class I3D_IO_PT_shape_bounding_box(Panel):
         row.prop(obj.i3d_attributes, 'bounding_volume_object')     
 
         row = layout.row()
-        layout.label(text="Both Center and Radius will be calculated when exporting automatically.")
-        
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'bv_center')
-        row.enabled = False
+        layout.label(text="Both Center and Radius will be calculated automatically when exporting.")        
 
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'bv_radius')   
-        row.enabled = False
-
-        #row = layout.row()
-        #row.operator('object.i3d_update_bounding_voulume', text="Update Values")
-       
         if obj.i3d_attributes.bounding_volume_object is None:
             obj.i3d_attributes.property_unset('bv_center')
             obj.i3d_attributes.property_unset('bv_radius')

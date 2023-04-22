@@ -7,7 +7,7 @@ import bpy
 
 from .node import (Node, SceneGraphNode)
 
-from .. import (debugging, xml_i3d)
+from .. import (debugging, utility, xml_i3d)
 from ..i3d import I3D
 
 
@@ -432,3 +432,7 @@ class ShapeNode(SceneGraphNode):
         self._write_attribute('shapeId', self.shape_id)
         self._write_attribute('materialIds', self.i3d.shapes[self.shape_id].material_indexes)
         super().populate_xml_element()
+
+    def _write_properties(self):
+        utility.update_bv_data(self.blender_object)
+        super()._write_properties()

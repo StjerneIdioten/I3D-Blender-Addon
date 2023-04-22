@@ -122,8 +122,6 @@ class SceneGraphNode(Node):
         return f"{self.name}"
 
     def _write_properties(self):
-        # Implementation for Bounding Volumes requires calculation best here since we only need the data for export
-        utility.update_bv_data(self.blender_object)
         # Write general node properties (Transform properties in Giants Engine)
         try:
             xml_i3d.write_i3d_properties(self.blender_object, self.blender_object.i3d_attributes, self.xml_elements)
