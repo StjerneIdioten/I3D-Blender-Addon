@@ -10,6 +10,7 @@ from bpy.props import (
     PointerProperty,
     FloatProperty,
     IntProperty,
+    FloatVectorProperty,
     CollectionProperty,
 )
 
@@ -46,7 +47,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'angular_damping': {'name': 'angularDamping', 'default': 0.01},
         'density': {'name': 'density', 'default': 1.0},
         'split_type': {'name': 'splitType', 'default': 0},
-        'split_uvs': {'name': 'splitUvs', 'default': '0 0 1 1 1'},
+        'split_uvs': {'name': 'splitUvs', 'default': (0.0, 0.0, 1.0, 1.0, 1.0)},
         'use_parent': {'name': 'useParent', 'default': True},
         'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0},
         'minute_of_day_end': {'name': 'minuteOfDayEnd', 'default': 0},
@@ -181,7 +182,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
     density: FloatProperty(
         name="Density",
-        description="Used with the shape of the object to calculate mass."
+        description="Used with the shape of the object to calculate mass. "
                     "The higher the number, the heavier the object",
         default=i3d_map['density']['default'],
         min=0,
@@ -190,7 +191,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
     split_type: IntProperty(
         name="Split Type",
-        description="Split type determines what type of tree it is."
+        description="Split type determines what type of tree it is. "
                     "For custom tree type use a number over 19",
         default=i3d_map['split_type']['default'],
         min=0,
@@ -199,7 +200,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
     split_type_presets: EnumProperty(
         name="Split Type Presets",
-        description="List containing all in game tree types.",
+        description="List containing all in-game tree types.",
         items=[
             ('0', "Custom / Manual", "Set a custom tree type or just set a tree type manually"),
             ('1', "Spruce", "Spruce supports wood harvester"),
@@ -226,11 +227,13 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         update=lambda self, context: setattr(self, 'split_type', int(self.split_type_presets))
     )
 
-    split_uvs: StringProperty(
+    split_uvs: FloatVectorProperty(
         name="Split UVs",
-        description="'Min U', 'Min V', 'Max U', 'Max V', 'Uv World Scale'",
+        description="Min U, Min V, Max U, Max V, UV World Scale",
+        size=5,
         default=i3d_map['split_uvs']['default'],
-        maxlen=1024
+        min=0,
+        max=i3d_max
     )
 
     use_parent: BoolProperty(
@@ -357,11 +360,10 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
 
             row_split_type = layout.row()
             row_split_type.prop(obj.i3d_attributes, 'split_type')
-            if obj.i3d_attributes.split_type_presets != '0':
-                row_split_type.enabled = False
 
             row_split_uvs = layout.row()
-            row_split_uvs.prop(obj.i3d_attributes, 'split_uvs')
+            for i in range(len(obj.i3d_attributes.split_uvs)):
+                row_split_uvs.prop(obj.i3d_attributes, "split_uvs", index=i)
 
             if obj.i3d_attributes.rigid_body_type != 'static':
                 row_split_type.enabled = False
@@ -371,7 +373,7 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
                 obj.i3d_attributes.property_unset('split_type_presets')
                 obj.i3d_attributes.property_unset('split_uvs')
             else:
-                if obj.i3d_attributes.split_type == '0':
+                if obj.i3d_attributes.split_type == 0:
                     row_split_uvs.enabled = False
                     obj.i3d_attributes.property_unset('split_uvs')
 
