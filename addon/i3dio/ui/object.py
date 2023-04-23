@@ -361,20 +361,24 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
             row_split_type = layout.row()
             row_split_type.prop(obj.i3d_attributes, 'split_type')
 
-            row_split_uvs = layout.row()
-            for i in range(len(obj.i3d_attributes.split_uvs)):
-                row_split_uvs.prop(obj.i3d_attributes, "split_uvs", index=i)
+            split_uvs_col = layout.column()
+            split_uvs_col.label(text="Split UVs")
+            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=0, text="Min U")
+            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=1, text="Min V")
+            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=2, text="Max U")
+            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=3, text="Max V")
+            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=4, text="UV World Scale")
 
             if obj.i3d_attributes.rigid_body_type != 'static':
                 row_split_type.enabled = False
-                row_split_uvs.enabled = False
                 row_split_type_presets.enabled = False
+                split_uvs_col.enabled = False
                 obj.i3d_attributes.property_unset('split_type')
                 obj.i3d_attributes.property_unset('split_type_presets')
                 obj.i3d_attributes.property_unset('split_uvs')
             else:
                 if obj.i3d_attributes.split_type == 0:
-                    row_split_uvs.enabled = False
+                    split_uvs_col.enabled = False
                     obj.i3d_attributes.property_unset('split_uvs')
 
         else:
