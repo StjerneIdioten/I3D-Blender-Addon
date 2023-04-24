@@ -1,8 +1,6 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import List
 import sys
-import os
-import subprocess
 import time
 import logging
 import bpy
@@ -228,10 +226,7 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
             _add_object_to_i3d(i3d, child, parent)
     logger.debug(f"[{collection.name}] no more objects to process in collection")
 
-def _binarize_i3d(filepath: str):
-    i3dbinarize = bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path
-    gamepath = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path[:-5]
-    if i3dbinarize != '':
-        input_params = (i3dbinarize+' -in "'+filepath+'" -out "'+filepath+'" -gamePath "'+gamepath+'/"')
-        print(input_params)
-        os.system(input_params)
+
+
+
+

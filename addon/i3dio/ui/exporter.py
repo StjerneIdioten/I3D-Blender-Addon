@@ -1,6 +1,4 @@
 import bpy
-import time
-import logging
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -23,7 +21,6 @@ from .. import (
         xml_i3d
 )
 
-logger = logging.getLogger(__name__)
 
 classes = []
 
@@ -45,13 +42,6 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
             ('SELECTED_OBJECTS', "Selected Objects", "Export all of the selected objects")
         ],
         default='SELECTED_OBJECTS'
-    )
-
-    binarize_i3d: BoolProperty(
-        name="Binarize i3d",
-        description="Binarizes i3d after Export. "
-                    "Needs to have path to 3dConverter.exe set in Addon Preferences",
-        default=False
     )
 
     keep_collections_as_transformgroups: BoolProperty(
@@ -201,12 +191,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                         "see https://stjerneidioten.github.io/"
                         "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder")
 
-        if bpy.context.scene.i3dio.binarize_i3d == True:
-            logger.debug("Starting Binarize")
-            exporter._binarize_i3d(self.filepath)
-            logger.debug("Finished Binarize")
         return {'FINISHED'}
-        
     
     def draw(self, context):
         pass
@@ -260,13 +245,6 @@ class I3D_IO_PT_export_options(Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
-        row = layout.row()
-        row.prop(bpy.context.scene.i3dio, 'binarize_i3d')
-        if bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path == '':
-            row.enabled = False
-        else:
-            row.enabled = True
-        
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
 
