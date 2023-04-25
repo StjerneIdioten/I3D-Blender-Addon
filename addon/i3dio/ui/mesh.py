@@ -10,11 +10,13 @@ from bpy.props import (
     PointerProperty,
     FloatProperty,
     IntProperty,
-    CollectionProperty,
+    CollectionProperty,    
+    FloatVectorProperty,
 )
 
 classes = []
 
+from ..xml_i3d import i3d_max
 
 def register(cls):
     classes.append(cls)
@@ -97,6 +99,12 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         default=i3d_map['fill_volume']['default']
     )
 
+    bounding_volume_object: PointerProperty(
+        name="Bounding Volume Object",
+        description="The object used to calculate bvCenter and bvRadius. If the bounding volume object shares origin with the original object, then Giants Engine will always ignore the exported values and recalculate them itself",
+        type=bpy.types.Object,
+		)
+
 
 @register
 class I3D_IO_PT_shape_attributes(Panel):
@@ -125,6 +133,27 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "nav_mesh_mask")
         layout.prop(obj.i3d_attributes, "decal_layer")
         layout.prop(obj.i3d_attributes, 'fill_volume')
+
+
+@register
+class I3D_IO_PT_shape_bounding_box(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Bounding Volume"
+    bl_context = 'data'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object.data
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'bounding_volume_object')     
 
 
 def register():
