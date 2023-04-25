@@ -93,17 +93,16 @@ def i3d_property(layout, attributes, attribute: str, obj):
 
 
 def update_group_id(self, context):
-    self.group_id = self.group_list
+    """ Updates custom_mg list with new item if it's not already in the list """
+    if self.group_id:
+        # Check if the group id is not in the custom_mg list
+        group_id_not_in_list = self.group_id not in (item.value for item in context.scene.custom_mg)
 
-
-def get_group_id_list(self, context):
-    group_ids = set()
-
-    for obj in context.scene.objects:
-        if obj.type == 'MESH' and obj.i3d_merge_group.group_id != '':
-            group_ids.add(obj.i3d_merge_group.group_id)
-
-    return [(group_id, group_id, "") for group_id in group_ids]
+        # If group id is not in the list, add it
+        if group_id_not_in_list:
+            item = context.scene.custom_mg.add()
+            item.value = self.group_id
+            self.group_list = item.value
 
 
 def register():
