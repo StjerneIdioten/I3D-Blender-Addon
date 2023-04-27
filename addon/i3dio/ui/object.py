@@ -14,7 +14,7 @@ from bpy.props import (
     CollectionProperty,
 )
 
-from .helper_functions import i3d_property, update_group_id
+from .helper_functions import i3d_property
 from ..xml_i3d import i3d_max
 
 classes = []
@@ -460,11 +460,6 @@ class I3D_IO_PT_visibility_condition_attributes(Panel):
 
 
 @register
-class CustomPropertyGroup(bpy.types.PropertyGroup):
-    value: StringProperty(name="MG Items")
-
-
-@register
 class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
     is_root: BoolProperty(
         name="Root of merge group",
@@ -472,45 +467,19 @@ class I3DMergeGroupObjectData(bpy.types.PropertyGroup):
         default=False
     )
 
-    group_id: StringProperty(name='Merge Group',
-                             description='The merge group this object belongs to',
-                             default='',
-                             update=update_group_id
-                             )
+    group_id: StringProperty(
+        name='Merge Group',
+        description='The merge group this object belongs to',
+        default=''
+    )
 
-    group_list: EnumProperty(name='Merge Group List',
-                             description='List of merge groups available in the scene',
-                             items=lambda self, context: [(i.value, i.value, "") for i in context.scene.custom_mg],
-                             update=lambda self, context: setattr(self, "group_id", self.group_list)
-                             )
+    mg_enum: EnumProperty(
+        name='Merge Groups',
+        description='List with all your merge groups',
+        items=lambda self, context: [(item.name, item.name, "") for item in context.scene.i3dio.mg_items],
+        update=lambda self, context: setattr(self, 'group_id', self.mg_enum)
 
-@register
-class I3D_IO_OT_select_mg_objects(bpy.types.Operator):
-    bl_idname = "i3dio.select_mg_objects"
-    bl_label = "Select Objects in MG"
-    bl_description = "Select all objects in the same merge group"
-
-    group_id: bpy.props.StringProperty()
-
-    def execute(self, context):
-        for obj in context.scene.objects:
-            if obj.i3d_merge_group.group_id == self.group_id:
-                obj.select_set(True)
-        return {'FINISHED'}
-
-
-@register
-class I3D_IO_OT_DeleteMergeGroup(bpy.types.Operator):
-    bl_idname = "i3dio.delete_merge_group"
-    bl_label = "Delete Merge Group"
-
-    mg_index: bpy.props.IntProperty()
-
-    def execute(self, context):
-        scene = context.scene
-        if 0 <= self.mg_index < len(scene.custom_mg):
-            scene.custom_mg.remove(self.mg_index)
-        return {'FINISHED'}
+    )
 
 
 @register
@@ -529,23 +498,73 @@ class I3D_IO_PT_merge_group_attributes(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        obj = bpy.context.active_object
+        obj = context.object
 
-        row = layout.row()
-        row.prop(obj.i3d_merge_group, 'is_root')
+        row_root = layout.row()
+        row_root.prop(obj.i3d_merge_group, 'is_root')
+
+        row = layout.row(align=True)
+        row.use_property_decorate = False
+
+        # Get a compact row
+        sub = row.column(align=True)
+        sub.label(text="Merge Group:")
+        sub = row.column(align=True)
+        sub.prop(obj.i3d_merge_group, "mg_enum", icon="GROUP_VERTEX", icon_only=True)
+        sub = row.column(align=True)
+        sub.prop(obj.i3d_merge_group, "group_id", text="")
+
+        sub = row.column(align=True)
+
+        # Disable add operator if group_id = '' and if name already exist
+        sub.enabled = bool(obj.i3d_merge_group.group_id) and not any(mg.name == obj.i3d_merge_group.group_id for mg in
+                                                                     context.scene.i3dio.mg_items)
+        sub.operator("i3dio.add_merge_group", text="", icon="ADD").new_group_id = obj.i3d_merge_group.group_id
+
+        row_select_mg = layout.row()
+        row_select_mg.operator("i3dio.select_mg_objects",
+                               text="Select Objects in same MG").group_id = obj.i3d_merge_group.group_id
+
         if obj.i3d_merge_group.group_id == '':  # Defaults to a default initialized placeholder
-            row.enabled = False
+            row_root.enabled = False
+            row_select_mg.enabled = False
 
-        row = layout.row()
-        row.prop(obj.i3d_merge_group, 'group_id')
-        row.prop(obj.i3d_merge_group, 'group_list', text="")
-        row.operator("i3dio.delete_merge_group", text="", icon="REMOVE")
 
-        row = layout.row()
-        select_op = row.operator("i3dio.select_mg_objects", text="Select Objects in same MG")
-        select_op.group_id = obj.i3d_merge_group.group_id
-        if obj.i3d_merge_group.group_id == '':
-            row.enabled = False
+@register
+class I3D_IO_OT_add_merge_group(bpy.types.Operator):
+    bl_idname = "i3dio.add_merge_group"
+    bl_label = "Add Merge Group"
+    bl_description = "Add a new merge group to the list"
+    bl_options = {"REGISTER", "UNDO"}
+
+    new_group_id: StringProperty(name="")
+
+    def execute(self, context):
+        if self.new_group_id:
+            # Check if the new_group_id is not in the mg_items list
+            group_id_not_in_list = self.new_group_id not in (item.name for item in context.scene.i3dio.mg_items)
+
+            # If new_group_id is not in the list, add it
+            if group_id_not_in_list:
+                item = context.scene.i3dio.mg_items.add()
+                item.name = self.new_group_id
+
+        return {'FINISHED'}
+
+
+@register
+class I3D_IO_OT_select_mg_objects(bpy.types.Operator):
+    bl_idname = "i3dio.select_mg_objects"
+    bl_label = "Select Objects in MG"
+    bl_description = "Select all objects in the same merge group"
+
+    group_id: bpy.props.StringProperty()
+
+    def execute(self, context):
+        for obj in context.scene.objects:
+            if obj.i3d_merge_group.group_id == self.group_id:
+                obj.select_set(True)
+        return {'FINISHED'}
 
 
 @register
@@ -590,7 +609,6 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeObjectAttributes)
-    bpy.types.Scene.custom_mg = bpy.props.CollectionProperty(type=CustomPropertyGroup)
     bpy.types.Object.i3d_merge_group = PointerProperty(type=I3DMergeGroupObjectData)
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
 
@@ -598,7 +616,6 @@ def register():
 def unregister():
     del bpy.types.Object.i3d_mapping
     del bpy.types.Object.i3d_merge_group
-    del bpy.types.Scene.custom_mg
     del bpy.types.Object.i3d_attributes
 
     for cls in classes:

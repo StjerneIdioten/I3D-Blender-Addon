@@ -92,19 +92,6 @@ def i3d_property(layout, attributes, attribute: str, obj):
         attrib_row.prop(attributes, attribute)
 
 
-def update_group_id(self, context):
-    """ Updates custom_mg list with new item if it's not already in the list """
-    if self.group_id:
-        # Check if the group id is not in the custom_mg list
-        group_id_not_in_list = self.group_id not in (item.value for item in context.scene.custom_mg)
-
-        # If group id is not in the list, add it
-        if group_id_not_in_list:
-            item = context.scene.custom_mg.add()
-            item.value = self.group_id
-            self.group_list = item.value
-
-
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)

@@ -31,6 +31,11 @@ def register(cls):
 
 
 @register
+class I3DMergeGroupItems(bpy.types.PropertyGroup):
+    name: StringProperty()
+
+
+@register
 class I3DExportUIProperties(bpy.types.PropertyGroup):
     selection: EnumProperty(
         name="Export",
@@ -158,6 +163,8 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         ),
         default='CLEAN'
     )
+
+    mg_items: bpy.props.CollectionProperty(type=I3DMergeGroupItems)
 
 
 @register
