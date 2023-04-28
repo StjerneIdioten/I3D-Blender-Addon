@@ -117,7 +117,9 @@ class Material(Node):
                     self.xml_elements['Texture'] = xml_i3d.SubElement(self.element, 'Texture')
                     self._write_attribute('fileId', file_id, 'Texture')
         # Write the diffuse colors
-        self._write_diffuse(diffuse)
+        r, g, b, _ = diffuse
+        if (r, g, b) != (0, 0, 0):
+            self._write_diffuse(diffuse)
 
     def _emissive_from_nodes(self, node):
         emission_socket = node.inputs['Emission']
@@ -173,6 +175,7 @@ class Material(Node):
             if shader_settings.source.endswith("mirrorShader.xml"):
                 params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
                 xml_i3d.SubElement(self.element, 'Reflectionmap', params)
+                self._write_diffuse((0, 0, 0, 1))
 
             if shader_settings.variation != shader_picker.shader_no_variation:
                 self._write_attribute('customShaderVariation', shader_settings.variation)
