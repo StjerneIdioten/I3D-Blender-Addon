@@ -151,7 +151,7 @@ def write_string(element: XML_Element, attribute: str, value: str) -> None:
 
 
 def write_vector(element: XML_Element, attribute: str, values: tuple) -> None:
-    element.set(attribute, "{0:.6g} {1:.6g} {2:.6g}".format(*values))
+    element.set(attribute, ' '.join(f"{x:.6g}" for x in values))
 
 
 def write_attribute(element: XML_Element, attribute: str, value) -> None:
@@ -163,7 +163,7 @@ def write_attribute(element: XML_Element, attribute: str, value) -> None:
         write_int(element, attribute, value)
     elif isinstance(value, str):
         write_string(element, attribute, value)
-    elif isinstance(value, (list, tuple, bpy.types.bpy_prop_array, mathutils.Color)):
+    elif isinstance(value, (list, tuple, bpy.types.bpy_prop_array, mathutils.Color, mathutils.Vector)):
         write_vector(element, attribute, tuple(value))
     else:
         logger.warning(f"No xml attribute writing function for attribute of type '{type(value)}'")
