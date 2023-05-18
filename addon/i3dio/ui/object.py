@@ -55,6 +55,20 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'day_of_year_end': {'name': 'dayOfYearEnd', 'default': 0},
         'weather_required_mask': {'name': 'weatherRequiredMask', 'default': '0', 'type': 'HEX'},
         'weather_prevent_mask': {'name': 'weatherPreventMask', 'default': '0', 'type': 'HEX'},
+        'joint': {'name': 'joint', 'default': False},
+        'projection': {'name': 'projection', 'default': False},
+        'projection_distance': {'name': 'projDistance', 'default': 0.01},
+        'projection_angle': {'name': 'projAngle', 'default': 0.01},
+        'x_axis_drive': {'name': 'xAxisDrive', 'default': False},
+        'y_axis_drive': {'name': 'yAxisDrive', 'default': False},
+        'z_axis_drive': {'name': 'zAxisDrive', 'default': False},
+        'drive_position': {'name': 'drivePos', 'default': False},
+        'drive_force_limit': {'name': 'driveForceLimit', 'default': 100000.0},
+        'drive_spring': {'name': 'driveSpring', 'default': 1.0},
+        'drive_damping': {'name': 'driveDamping', 'default': 0.01},
+        'breakable_joint': {'name': 'breakableJoint', 'default': False},
+        'joint_break_force': {'name': 'jointBreakForce', 'default': 0.0},
+        'joint_break_torque': {'name': 'jointBreakTorque', 'default': 0.0},
     }
 
     visibility: BoolProperty(
@@ -294,6 +308,91 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=i3d_map['weather_prevent_mask']['default']
     )    
 
+    joint: BoolProperty(
+        name="Joint",
+        description="Enable use of joint",
+        default=i3d_map['joint']['default']
+    )
+    projection: BoolProperty(
+        name="Enable joint projection",
+        description="Enables use of joint",
+        default=i3d_map['projection']['default']
+    )
+    x_axis_drive: BoolProperty(
+        name="X Axis Drive",
+        description="Enable x axis drive",
+        default=i3d_map['x_axis_drive']['default']
+    )
+    y_axis_drive: BoolProperty(
+        name="Y Axis Drive",
+        description="Enable y axis drive",
+        default=i3d_map['y_axis_drive']['default']
+    )
+    z_axis_drive: BoolProperty(
+        name="Z Axis Drive",
+        description="Enable z axis drive",
+        default=i3d_map['z_axis_drive']['default']
+    )
+    drive_position: BoolProperty(
+        name="Drive Position",
+        description="Enable drive position",
+        default=i3d_map['drive_position']['default']
+    )
+    projection_distance: FloatProperty(
+        name="Projection Distance",
+        description="Projection distance",
+        default=i3d_map['projection_distance']['default'],
+        min=0,
+        max=i3d_max
+    )
+    projection_angle: FloatProperty(
+        name="Projection Angle",
+        description="Projection angle",
+        default=i3d_map['projection_angle']['default'],
+        min=0,
+        max=i3d_max
+    )
+    drive_force_limit: FloatProperty(
+        name="Drive Force Limit",
+        description="Drive Force Limit",
+        default=i3d_map['drive_force_limit']['default'],
+        min=0,
+        max=i3d_max
+    )
+    drive_spring: FloatProperty(
+        name="Drive Spring",
+        description="Drive Spring",
+        default=i3d_map['drive_spring']['default'],
+        min=0,
+        max=i3d_max
+    )
+    drive_damping: FloatProperty(
+        name="Drive Damping",
+        description="Drive Damping",
+        default=i3d_map['drive_damping']['default'],
+        min=0,
+        max=i3d_max
+    )
+    breakable_joint: BoolProperty(
+        name="Breakable",
+        description="Breakable joint",
+        default=i3d_map['breakable_joint']['default']
+    )
+    joint_break_force: FloatProperty(
+        name="Break Force",
+        description="Joint break force",
+        default=i3d_map['joint_break_force']['default'],
+        min=0,
+        max=i3d_max
+    )
+    joint_break_torque: FloatProperty(
+        name="Break Torque",
+        description="Joint break torque",
+        default=i3d_map['joint_break_torque']['default'],
+        min=0,
+        max=i3d_max
+    )
+
 
 @register
 class I3D_IO_PT_object_attributes(Panel):
@@ -497,6 +596,50 @@ class I3D_IO_PT_merge_group_attributes(Panel):
 
         row = layout.row()
         row.prop(obj.i3d_merge_group, 'group_id')
+
+
+@register
+class I3D_IO_PT_joint_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = 'Joint'
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'EMPTY'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = context.object
+
+        layout.prop(obj.i3d_attributes, 'joint')
+
+        properties = [
+            ('projection',),
+            ('x_axis_drive',),
+            ('y_axis_drive',),
+            ('z_axis_drive',),
+            ('drive_position',),
+            ('projection_distance',),
+            ('projection_angle',),
+            ('drive_force_limit',),
+            ('drive_spring',),
+            ('drive_damping',),
+            ('breakable_joint',),
+            ('joint_break_force',),
+            ('joint_break_torque',)
+        ]
+
+        for prop in properties:
+            row = layout.row()
+            row.prop(obj.i3d_attributes, prop[0])
+            if obj.i3d_attributes.joint is False:
+                row.enabled = False
+                obj.i3d_attributes.property_unset(prop[0])
 
 
 @register
