@@ -188,6 +188,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
 
     def execute(self, context):
         status = exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
+
         if status['success']:
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
         else:
@@ -201,10 +202,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                         "see https://stjerneidioten.github.io/"
                         "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder")
 
-        if bpy.context.scene.i3dio.binarize_i3d == True:
-            logger.debug("Starting Binarize")
-            exporter._binarize_i3d(self.filepath)
-            logger.debug("Finished Binarize")
         return {'FINISHED'}
         
     
@@ -265,7 +262,7 @@ class I3D_IO_PT_export_options(Panel):
         if bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path == '':
             row.enabled = False
         else:
-            row.enabled = True
+            row.enabled = True            
         
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
