@@ -1,6 +1,5 @@
 import bpy
-import time
-import logging
+
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -23,7 +22,7 @@ from .. import (
         xml_i3d
 )
 
-logger = logging.getLogger(__name__)
+
 
 classes = []
 
@@ -202,8 +201,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                         "see https://stjerneidioten.github.io/"
                         "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder")
 
-        return {'FINISHED'}
-        
+        return {'FINISHED'}        
     
     def draw(self, context):
         pass
