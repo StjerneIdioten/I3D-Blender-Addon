@@ -2,7 +2,6 @@ from __future__ import annotations  # Enables python 4.0 annotation typehints fx
 from typing import List
 import sys
 import os
-import subprocess
 import time
 import logging
 import bpy
