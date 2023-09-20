@@ -508,7 +508,7 @@ class I3D_IO_PT_visibility_condition_attributes(Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.object is not None and context.object.type == 'MESH'
+        return context.object is not None
 
     def draw(self, context):
         layout = self.layout
