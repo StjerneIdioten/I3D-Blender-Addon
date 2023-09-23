@@ -10,11 +10,13 @@ from bpy.props import (
     PointerProperty,
     FloatProperty,
     IntProperty,
-    CollectionProperty,
+    CollectionProperty,    
+    FloatVectorProperty,
 )
 
 classes = []
 
+from ..xml_i3d import i3d_max
 
 def register(cls):
     classes.append(cls)
@@ -30,6 +32,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'is_occluder': {'name': 'occluder', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
         'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
+        'nav_mesh_mask': {'name': 'buildNavMeshMask', 'default': '0', 'type': 'HEX'},
         'decal_layer': {'name': 'decalLayer', 'default': 0},
         'fill_volume': {'name': 'name', 'default': False, 'placement': 'IndexedTriangleSet',
                         'type': 'OVERRIDE', 'override': 'fillVolumeShape'}
@@ -75,6 +78,12 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         default=i3d_map['cpu_mesh']['default']
     )
 
+    nav_mesh_mask: StringProperty(
+        name="Nav Mesh Mask (Hex)",
+        description="Build Nav Mesh Mask",
+        default=i3d_map['nav_mesh_mask']['default'],
+    )
+
     decal_layer: IntProperty(
         name="Decal Layer",
         description="Decal",
@@ -89,6 +98,12 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
                     "the IndexedTriangleSet in the i3d file.",
         default=i3d_map['fill_volume']['default']
     )
+
+    bounding_volume_object: PointerProperty(
+        name="Bounding Volume Object",
+        description="The object used to calculate bvCenter and bvRadius. If the bounding volume object shares origin with the original object, then Giants Engine will always ignore the exported values and recalculate them itself",
+        type=bpy.types.Object,
+		)
 
 
 @register
@@ -115,8 +130,30 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "distance_blending")
         layout.prop(obj.i3d_attributes, "is_occluder")
         layout.prop(obj.i3d_attributes, "cpu_mesh")
+        layout.prop(obj.i3d_attributes, "nav_mesh_mask")
         layout.prop(obj.i3d_attributes, "decal_layer")
         layout.prop(obj.i3d_attributes, 'fill_volume')
+
+
+@register
+class I3D_IO_PT_shape_bounding_box(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Bounding Volume"
+    bl_context = 'data'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'MESH'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = bpy.context.active_object.data
+
+        row = layout.row()
+        row.prop(obj.i3d_attributes, 'bounding_volume_object')     
 
 
 def register():
