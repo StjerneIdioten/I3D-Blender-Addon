@@ -253,6 +253,8 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
                            )
 
     def variation_setter(self, value):
+        if self.get('variation') == value:
+            return
         self['variation'] = value
         bpy.ops.i3dio.load_custom_shader_variation()
 
