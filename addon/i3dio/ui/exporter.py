@@ -1,4 +1,5 @@
 import bpy
+
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -22,6 +23,7 @@ from .. import (
 )
 
 
+
 classes = []
 
 
@@ -42,6 +44,13 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
             ('SELECTED_OBJECTS', "Selected Objects", "Export all of the selected objects")
         ],
         default='SELECTED_OBJECTS'
+    )
+
+    binarize_i3d: BoolProperty(
+        name="Binarize i3d",
+        description="Binarizes i3d after Export. "
+                    "Needs to have path to 3dConverter.exe set in Addon Preferences",
+        default=False
     )
 
     keep_collections_as_transformgroups: BoolProperty(
@@ -178,6 +187,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
 
     def execute(self, context):
         status = exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
+
         if status['success']:
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
         else:
@@ -191,7 +201,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                         "see https://stjerneidioten.github.io/"
                         "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder")
 
-        return {'FINISHED'}
+        return {'FINISHED'}        
     
     def draw(self, context):
         pass
@@ -245,6 +255,13 @@ class I3D_IO_PT_export_options(Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
+        row = layout.row()
+        row.prop(bpy.context.scene.i3dio, 'binarize_i3d')
+        if bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path == '':
+            row.enabled = False
+        else:
+            row.enabled = True            
+        
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
 
