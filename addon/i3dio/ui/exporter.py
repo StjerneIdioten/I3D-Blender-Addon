@@ -87,10 +87,11 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
             ('CAMERA', "Camera", "Export cameras"),
             ('LIGHT', "Light", "Export lights"),
             ('MESH', "Mesh", "Export meshes"),
+            ('CURVE', "Curve", "Export curves"),
             ('ARMATURE', "Armatures", "Export armatures, used for skinned meshes")
         ),
         options={'ENUM_FLAG'},
-        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'ARMATURE'},
+        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'CURVE', 'ARMATURE'},
     )
 
     features_to_export: EnumProperty(

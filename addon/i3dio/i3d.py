@@ -38,7 +38,7 @@ class I3D:
         self.scene_root_nodes = []
         self.conversion_matrix = conversion_matrix
 
-        self.shapes: Dict[Union[str, int], IndexedTriangleSet] = {}
+        self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
         self.materials: Dict[Union[str, int], Material] = {}
         self.files: Dict[Union[str, int], File] = {}
         self.merge_groups: Dict[str, MergeGroup] = {}
@@ -170,6 +170,22 @@ class I3D:
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
             return shape_id
         return self.shapes[name].id
+
+    def add_curve(self, evaluated_curve: EvaluatedNurbsCurve, curve_name: Optional[str] = None) -> int:
+        if curve_name is None:
+            name = evaluated_curve.name
+        else:
+            name = curve_name
+
+        if name not in self.shapes:
+            curve_id = self._next_available_id('shape')
+            nurbs_curve = NurbsCurve(curve_id, self, evaluated_curve, curve_name)
+            # Store a reference to the curve from both its name and its curve id
+            self.shapes.update(dict.fromkeys([curve_id, name], nurbs_curve))
+            self.xml_elements['Shapes'].append(nurbs_curve.element)
+            return curve_id
+        return self.shapes[name].id
+
 
     def get_shape_by_id(self, shape_id: int):
         return self.shapes[shape_id]
