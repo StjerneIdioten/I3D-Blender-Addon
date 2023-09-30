@@ -1,6 +1,7 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import List
 import sys
+import os
 import time
 import logging
 import bpy
@@ -72,6 +73,14 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
             _export_selected_objects(i3d)
 
         i3d.export_to_i3d_file()
+
+        if bpy.context.scene.i3dio.binarize_i3d == True:
+            if not bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path.find("i3dConverter.exe") == -1:
+                logger.info(f"Starting Binarization of {filepath}")
+                _binarize_i3d(filepath)
+                logger.info(f"Finished Binarize of {filepath}")
+            else:
+                raise ValueError("The path to the i3dConverter.exe is not set correctly!")
 
         # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
     except Exception:
@@ -226,7 +235,9 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
             _add_object_to_i3d(i3d, child, parent)
     logger.debug(f"[{collection.name}] no more objects to process in collection")
 
-
-
-
-
+def _binarize_i3d(filepath: str):
+    i3dbinarize = bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path
+    gamepath = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path[:-5]
+    if i3dbinarize != '':
+        input_params = (i3dbinarize+' -in "'+filepath+'" -out "'+filepath+'" -gamePath "'+gamepath+'/"')
+        os.system(input_params)

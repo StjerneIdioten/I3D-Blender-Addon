@@ -116,8 +116,11 @@ class Material(Node):
                     file_id = self.i3d.add_file_image(diffuse_image_path)
                     self.xml_elements['Texture'] = xml_i3d.SubElement(self.element, 'Texture')
                     self._write_attribute('fileId', file_id, 'Texture')
-        # Write the diffuse colors
-        self._write_diffuse(diffuse)
+        else:
+            # Write the diffuse colors
+            emission_socket = node.inputs['Emission']
+            if not emission_socket.is_linked:
+                self._write_diffuse(diffuse)
 
     def _emissive_from_nodes(self, node):
         emission_socket = node.inputs['Emission']
