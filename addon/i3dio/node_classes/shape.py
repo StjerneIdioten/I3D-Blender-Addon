@@ -469,10 +469,20 @@ class EvaluatedNurbsCurve:
     def generate_evaluated_curve(self, shape_object: bpy.types.Object, reference_frame: mathutils.Matrix = None):
         self.object = shape_object
 
-        if hasattr(self.object.data, "splines") and len(self.object.data.splines) > 0:
-            self.curve_data = self.object.data
-        else:
-            self.curve_data = None
+        self.curve_data = self.object.to_curve(depsgraph=self.i3d.depsgraph)
+
+        # If a reference is given transform the generated mesh by that frame to place it somewhere else than center of
+        # the mesh origo
+        if reference_frame is not None:
+            self.curve_data.transform(reference_frame.inverted() @ self.object.matrix_world)
+
+        conversion_matrix = self.i3d.conversion_matrix
+        if self.i3d.get_setting('apply_unit_scale'):
+            self.logger.debug(f"applying unit scaling")
+            conversion_matrix = \
+                mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) @ conversion_matrix
+
+        self.curve_data.transform(conversion_matrix)
 
 
 class NurbsCurve(Node):
@@ -536,7 +546,7 @@ class NurbsCurve(Node):
             xml_i3d.SubElement(self.element, 'cv', vertex_attributes)
 
     def populate_xml_element(self):
-        if not self.evaluated_curve_data:
+        if len(self.evaluated_curve_data.curve_data.splines) == 0:
             self.logger.warning(f"has no splines! Export of this curve is aborted.")
             return
 
