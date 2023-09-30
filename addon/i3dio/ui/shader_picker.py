@@ -73,7 +73,7 @@ def clear_shader(context):
 @register
 class I3DLoadCustomShader(bpy.types.Operator):
     """Can load in and generate a custom class for a shader, so settings can be set for export"""
-    bl_idname = 'i3dio.load_shader'
+    bl_idname = 'i3dio.load_custom_shader'
     bl_label = 'Load custom shader'
     bl_description = ''
     bl_options = {'INTERNAL'}
@@ -182,7 +182,7 @@ def texture_element_as_dict(texture):
 class I3DLoadCustomShaderVariation(bpy.types.Operator):
     """This function can load the parameters for a given shader variation, assumes that the source is valid,
        such that this operation will never fail"""
-    bl_idname = 'i3dio.load_shader_variation'
+    bl_idname = 'i3dio.load_custom_shader_variation'
     bl_label = 'Load shader variation'
     bl_description = ''
     bl_options = {'INTERNAL'}
@@ -363,6 +363,7 @@ class I3DMigrateShader(bpy.types.Operator):
                     attr.shader = shader_name
                 elif shader_name in [f.stem for f in matching_files]:
                     attr.shader = shader_custom
+                    attr.custom_shader = str(fs19_support + f"\\{shader_name}.xml")
                 else:
                     if not old_path.exists():
                         self.report({'WARNING'}, f"Could not find the shader file: {old_path}, skipping: {mat.name}")
@@ -398,12 +399,12 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         except KeyError:
             self['custom_shader'] = value
             if self['custom_shader'] != custom_shader_default:
-                bpy.ops.i3dio.load_shader()
+                bpy.ops.i3dio.load_custom_shader()
         else:
             if self['custom_shader'] != value:
                 self['custom_shader'] = value
                 if self['custom_shader'] != custom_shader_default:
-                    bpy.ops.i3dio.load_shader()
+                    bpy.ops.i3dio.load_custom_shader()
 
     def custom_shader_getter(self):
         return self.get('custom_shader', custom_shader_default)
@@ -451,8 +452,8 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
                 # Only run operator if owner_mat is the active material
                 if owner_mat == active_mat:
-                    bpy.ops.i3dio.load_shader()
-                    bpy.ops.i3dio.load_shader_variation()
+                    bpy.ops.i3dio.load_custom_shader()
+                    bpy.ops.i3dio.load_custom_shader_variation()
             else:
                 clear_shader(bpy.context)
 
@@ -489,7 +490,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
         # Only run operator if owner_mat is the active material
         if owner_mat == active_mat:
-            bpy.ops.i3dio.load_shader_variation()
+            bpy.ops.i3dio.load_custom_shader_variation()
 
     def variation_getter(self):
         return self.get('variation', shader_no_variation)
