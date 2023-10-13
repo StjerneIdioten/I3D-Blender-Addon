@@ -41,7 +41,7 @@ class I3D:
         self.shapes: Dict[Union[str, int], IndexedTriangleSet] = {}
         self.materials: Dict[Union[str, int], Material] = {}
         self.files: Dict[Union[str, int], File] = {}
-        self.merge_groups: Dict[str, MergeGroup] = {}
+        self.merge_groups: Dict[int, MergeGroup] = {}
         self.skinned_meshes: Dict[str, SkinnedMeshRootNode] = {}
 
         self.i3d_mapping: List[SceneGraphNode] = []
@@ -72,34 +72,24 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(ShapeNode, mesh_object, parent)
 
-    def add_merge_group_node(self, merge_group_object: bpy.types.Object, parent: SceneGraphNode = None) \
+    def add_merge_group_node(self, merge_group_object: bpy.types.Object, parent: SceneGraphNode = None, is_root: bool = False) \
             -> [SceneGraphNode, None]:
         self.logger.debug("Adding merge group node")
-        merge_group_id = merge_group_object.i3d_merge_group.group_id
-        merge_group_name = xml_i3d.merge_group_prefix + merge_group_id
-        node_to_return: [MergeGroupRoot or MergeGroupRoot] = None
-        if merge_group_name not in self.merge_groups:
-            self.logger.debug("New merge group")
-            merge_group = self.merge_groups[merge_group_name] = MergeGroup(merge_group_name)
-            if merge_group_object.i3d_merge_group.is_root:
+        merge_group = self.merge_groups[merge_group_object.i3d_merge_group_index]
+
+        node_to_return: [MergeGroupRoot or MergeGroupChild] = None
+
+        if is_root:
+            if merge_group.root_node is not None:
+                    self.logger.warning(f"Merge group '{merge_group.name}' already has a root node! "
+                                        f"The object '{merge_group_object.name}' will be ignored for export")
+            else:
                 node_to_return = self._add_node(MergeGroupRoot, merge_group_object, parent)
                 merge_group.set_root(node_to_return)
-            else:
-                node_to_return = self._add_node(MergeGroupChild, merge_group_object, parent)
-                merge_group.add_child(node_to_return)
         else:
-            self.logger.debug("Merge group already exists")
-            merge_group = self.merge_groups[merge_group_name]
-            if merge_group_object.i3d_merge_group.is_root:
-                if merge_group.root_node is not None:
-                    self.logger.warning(f"Merge group '{merge_group_id}' already has a root node! "
-                                        f"The object '{merge_group_object.name}' will be ignored for export")
-                else:
-                    node_to_return = self._add_node(MergeGroupRoot, merge_group_object, parent)
-                    merge_group.set_root(node_to_return)
-            else:
-                node_to_return = self._add_node(MergeGroupChild, merge_group_object, parent)
-                merge_group.add_child(node_to_return)
+            node_to_return = self._add_node(MergeGroupChild, merge_group_object, parent)
+            merge_group.add_child(node_to_return)
+
         return node_to_return
 
     def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]) \

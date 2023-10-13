@@ -43,7 +43,6 @@ bl_info = {
 
 
 def register():
-
     try:
         import lxml
     except ImportError as e:
@@ -77,9 +76,7 @@ def register():
     ui.user_attributes.register()
     ui.mesh.register()
     ui.light.register()
-
     bpy.types.TOPBAR_MT_file_export.append(ui.exporter.menu_func_export)
-
 
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(ui.exporter.menu_func_export)

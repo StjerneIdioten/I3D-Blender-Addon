@@ -18,6 +18,7 @@ from .utility import (BlenderObject, sort_blender_objects_by_name)
 from .i3d import I3D
 from .node_classes.node import SceneGraphNode
 from .node_classes.skinned_mesh import SkinnedMeshRootNode
+from .node_classes.merge_group import MergeGroup
 
 logger = logging.getLogger(__name__)
 logger.debug(f"Loading: {__name__}")
@@ -181,9 +182,11 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                         break
 
             if node is None:
-                if 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group.group_id != "":
-                    # Currently the check for a mergegroup relies solely on whether or not a name is set for it
-                    node = i3d.add_merge_group_node(obj, _parent)
+                if 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group_index != -1:
+                    blender_merge_group = bpy.context.scene.i3dio_merge_groups[obj.i3d_merge_group_index]
+                    if obj.i3d_merge_group_index not in i3d.merge_groups:
+                        i3d.merge_groups[obj.i3d_merge_group_index] = MergeGroup(xml_i3d.merge_group_prefix + blender_merge_group.name)
+                    node = i3d.add_merge_group_node(obj, _parent, blender_merge_group.root is obj)
                 else:
                     # Default to a regular shape node
                     node = i3d.add_shape_node(obj, _parent)

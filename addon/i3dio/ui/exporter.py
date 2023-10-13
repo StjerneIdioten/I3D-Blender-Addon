@@ -31,7 +31,6 @@ def register(cls):
     classes.append(cls)
     return cls
 
-
 @register
 class I3DExportUIProperties(bpy.types.PropertyGroup):
     selection: EnumProperty(
@@ -167,7 +166,6 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         ),
         default='CLEAN'
     )
-
 
 @register
 @orientation_helper(axis_forward='-Z', axis_up='Y')
