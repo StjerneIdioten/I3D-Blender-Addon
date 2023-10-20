@@ -167,6 +167,12 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default='CLEAN'
     )
 
+    object_sorting_prefix: StringProperty(
+        name="Sorting Prefix",
+        description="To allow some form of control over the output ordering of the objects in the I3D file it is possible to have the exporter use anything preceeding this keyin the object name as the means for sorting the objects, while also removing this from the final object name. The key can be anything and even multiple characters to allow as much flexibility as possible. To disable the functionality just set the string to nothing",
+        default=":"
+    )
+
 @register
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class I3D_IO_OT_export(Operator, ExportHelper):
@@ -231,6 +237,7 @@ class I3D_IO_PT_export_main(Panel):
         layout.use_property_decorate = False
 
         layout.prop(bpy.context.scene.i3dio, 'selection')
+        layout.prop(bpy.context.scene.i3dio, 'object_sorting_prefix')
 
 
 @register

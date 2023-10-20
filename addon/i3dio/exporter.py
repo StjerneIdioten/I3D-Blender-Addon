@@ -14,7 +14,7 @@ from . import (
     xml_i3d
 )
 
-from .utility import (BlenderObject, sort_blender_objects_by_name)
+from .utility import (BlenderObject, sort_blender_objects_by_outliner_ordering)
 from .i3d import I3D
 from .node_classes.node import SceneGraphNode
 from .node_classes.skinned_mesh import SkinnedMeshRootNode
@@ -143,7 +143,7 @@ def _export_selected_objects(i3d: I3D):
 def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = True):
     objects_to_export = objects
     if sort_alphabetical:
-        objects_to_export = sort_blender_objects_by_name(objects)
+        objects_to_export = sort_blender_objects_by_outliner_ordering(objects)
     for blender_object in objects_to_export:
         _add_object_to_i3d(i3d, blender_object)
 
@@ -212,7 +212,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         # WARNING: Might be slow due to searching through the entire object list in the blend file:
         # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
         logger.debug(f"[{obj.name}] processing objects children")
-        for child in sort_blender_objects_by_name(obj.children):
+        for child in sort_blender_objects_by_outliner_ordering(obj.children):
             _add_object_to_i3d(i3d, child, node)
         logger.debug(f"[{obj.name}] no more children to process in object")
 
@@ -230,7 +230,7 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
 
     # Then iterate over the objects contained in the collection
     logger.debug(f"[{collection.name}] processing collection objects")
-    for child in sort_blender_objects_by_name(collection.objects):
+    for child in sort_blender_objects_by_outliner_ordering(collection.objects):
         # If a collection consists of an object, which has it's own children objects. These children will also be a
         # a part of the collections objects. Which means that they would be added twice without this check. One for the
         # object itself and one for the collection.
