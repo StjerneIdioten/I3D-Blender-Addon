@@ -1,9 +1,11 @@
+import addon_utils
+import pathlib
+
 import bpy
 from bpy.types import AddonPreferences
 from bpy.props import (StringProperty, EnumProperty)
 
 from .. import xml_i3d
-
 
 def xml_library_callback(scene, context):
     items = [
@@ -41,26 +43,81 @@ class I3D_IO_AddonPreferences(AddonPreferences):
     )
 
     i3d_converter_path: StringProperty(
-        name="i3dConverter.exe",
+        name="Path To Binary I3D Converter",
         description="Path to the i3dConverter.exe",
         subtype='FILE_PATH',
         default=""
     )
 
+    general_tabs: EnumProperty(name="Tabs", items=[("GENERAL", "General", "")], default="GENERAL")
+    converter_mode_tabs: EnumProperty(name="Tabs", items=[("MANUAL", "Manual", ""), ("AUTOMATIC", "Automatic", "")], default="MANUAL")
+
     def draw(self, context):
         layout = self.layout
-        layout.prop(self, 'fs_data_path')
-        layout.prop(self, 'xml_library')
-        layout.label(text="The i3dconverter.exe is not supplied with this exporter.")
-        layout.label(text="You need to download and extract it from the 'Blender Exporter Plugin' from Giants GDN.")
-        layout.prop(self, 'i3d_converter_path')
+
+        col = layout.column(align=True)
+        row = col.row()
+        row.prop(self, "general_tabs", expand=True)
+
+        box = col.box()
+        row = box.row()
+        row.prop(self, 'xml_library')
+
+        row = box.row()
+        row.prop(self, 'fs_data_path')
+
+        c_box = box.box()
+        c_box.label(text="Binary I3D Converter")
+        
+        row = c_box.row()
+        row.prop(self, 'converter_mode_tabs', expand=True)
+
+        match self.converter_mode_tabs:
+            case 'MANUAL':
+                row = c_box.row(align=True)
+                row.prop(self, 'i3d_converter_path')
+                if(next((True for addon in addon_utils.modules() if addon.bl_info.get("name") == "GIANTS I3D Exporter Tools"), False)):
+                    row.operator('i3dio.i3d_converter_path_from_giants_addon', text="", icon="EVENT_G")
+            case 'AUTOMATIC':
+                #row = c_box.row()
+                #row.operator("i3dio.download_i3d_converter", text="Manage Automatic Download")
+                pass
+
+
+class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
+    bl_idname = "i3dio.i3d_converter_path_from_giants_addon"
+    bl_label = "Get I3D converter path from Giants addon"
+    bl_description = "Get the i3d converter path from the Giants exporter addon"
+    bl_options = {'INTERNAL'}
+    
+    def execute(self, context):
+        for addon in addon_utils.modules():
+            if addon.bl_info.get("name") == "GIANTS I3D Exporter Tools":
+                bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path = str(pathlib.PurePath(addon.__file__).parent.joinpath('util/i3dConverter.exe'))
+                break
+        return {"FINISHED"}
+
+
+class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
+    bl_idname = "i3dio.download_i3d_converter"
+    bl_label = "Download I3D Converter"
+    bl_description = "Download I3D Converter"
+    bl_options = {'INTERNAL'}
+
+    def execute(self, context):
+        return {"FINISHED"}
 
 
 def register():
+    bpy.utils.register_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
+    bpy.utils.register_class(I3D_IO_OT_download_i3d_converter)
     bpy.utils.register_class(I3D_IO_AddonPreferences)
+    
     if 'lxml' in xml_i3d.xml_libraries:
         bpy.context.preferences.addons['i3dio'].preferences.xml_library = 'lxml'
 
 
 def unregister():
     bpy.utils.unregister_class(I3D_IO_AddonPreferences)
+    bpy.utils.unregister_class(I3D_IO_OT_download_i3d_converter)
+    bpy.utils.unregister_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
