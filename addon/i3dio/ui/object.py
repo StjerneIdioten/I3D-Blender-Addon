@@ -44,7 +44,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'trigger': {'name': 'trigger', 'default': False},
         'restitution': {'name': 'restitution', 'default': 0.0},
         'static_friction': {'name': 'staticFriction', 'default': 0.5},
-        'dynamic_friction': {'name': 'staticFriction', 'default': 0.5},
+        'dynamic_friction': {'name': 'dynamicFriction', 'default': 0.5},
         'linear_damping': {'name': 'linearDamping', 'default': 0.0},
         'angular_damping': {'name': 'angularDamping', 'default': 0.01},
         'density': {'name': 'density', 'default': 1.0},
