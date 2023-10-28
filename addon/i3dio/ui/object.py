@@ -560,32 +560,12 @@ class I3D_IO_PT_visibility_condition_attributes(Panel):
             obj.i3d_attributes.property_unset('weather_prevent_mask')
 
 @register
-class I3DMergeGroupMemberObject(bpy.types.PropertyGroup):
-    object: PointerProperty(
-        name="Merge Group Member",
-        type=bpy.types.Object,
-		)
-
-@register
 class I3DMergeGroup(bpy.types.PropertyGroup):
-    def add_member(self, member_object):
-        self.members.add().object = member_object
-
-    def remove_member(self, member_object):
-        for idx,member in enumerate(self.members):
-            if member.object is member_object:
-                self.members.remove(idx)
-
     name: StringProperty(
         name='Merge Group Name',
         description='The name of the merge group',
         default='MergeGroup'
     )
-
-    members: CollectionProperty(
-        name="Members",
-        description="Members of the merge group",
-        type=I3DMergeGroupMemberObject)
 
     root: PointerProperty(
         name="Merge Group Root Object",
@@ -630,7 +610,7 @@ class I3D_IO_PT_merge_group_attributes(Panel):
             col = row.column(align=True)
             col.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
             col = row.column(align=True)
-            col.operator('i3dio.remove_merge_group', text="", icon='PANEL_CLOSE')
+            col.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
 
 
 @register
@@ -651,10 +631,13 @@ class I3D_IO_OT_choose_merge_group(bpy.types.Operator):
         obj = context.object
         selected_mg_index = int(self.enum)
         if obj.i3d_merge_group_index != selected_mg_index:
-            context.scene.i3dio_merge_groups[obj.i3d_merge_group_index].remove_member(obj)
-            context.scene.i3dio_merge_groups[selected_mg_index].add_member(obj)
+            old_mg_index = obj.i3d_merge_group_index
             obj.i3d_merge_group_index = selected_mg_index
+            if old_mg_index != -1:
+                remove_merge_group_if_empty(context, old_mg_index)
             context.area.tag_redraw()
+        else:
+            print("same mg")
         return {"FINISHED"}
     
     def invoke(self, context, event):
@@ -678,30 +661,42 @@ class I3D_IO_OT_new_merge_group(bpy.types.Operator):
             name = f"{MERGE_GROUP_DEFAULT_NAME}.{count:03d}"
             count += 1
         mg = context.scene.i3dio_merge_groups.add()
-        if obj.i3d_merge_group_index != -1:
-            context.scene.i3dio_merge_groups[obj.i3d_merge_group_index].remove_member(obj)
+        
         mg.name = name
         mg.root = obj
-        mg.add_member(obj)
+        old_mg_index = obj.i3d_merge_group_index
         obj.i3d_merge_group_index = len(context.scene.i3dio_merge_groups) - 1
+        if old_mg_index != -1:
+            remove_merge_group_if_empty(context, old_mg_index)
         return {'FINISHED'}
     
-    
+def remove_merge_group_if_empty(context, mg_index):
+    mg_member_count = 0
+    objects_in_higher_indexed_merge_groups = []
+    for obj in context.scene.objects:
+        if obj.type == 'MESH' and obj.i3d_merge_group_index != -1:
+            if obj.i3d_merge_group_index == mg_index:
+                mg_member_count += 1
+            else:
+                objects_in_higher_indexed_merge_groups.append(obj)
+    if mg_member_count == 0:
+        context.scene.i3dio_merge_groups.remove(mg_index)
+        for obj in objects_in_higher_indexed_merge_groups[mg_index::]:
+            obj.i3d_merge_group_index -= 1
+    else:
+        print(f"{mg_member_count} members left in '{context.scene.i3dio_merge_groups[mg_index]}'")
+        
 @register
-class I3D_IO_OT_remove_merge_group(bpy.types.Operator):
-    bl_idname = "i3dio.remove_merge_group"
+class I3D_IO_OT_remove_from_merge_group(bpy.types.Operator):
+    bl_idname = "i3dio.remove_from_merge_group"
     bl_label = "Remove From Merge Group"
     bl_description = "Remove this object from it's current merge group"
     bl_options = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        mg_index = context.object.i3d_merge_group_index
-        for member in context.scene.i3dio_merge_groups[mg_index].members:
-            member.object.i3d_merge_group_index = -1
-        context.scene.i3dio_merge_groups.remove(mg_index)
-        for mg in context.scene.i3dio_merge_groups[mg_index::]:
-            for member in mg.members:
-                member.object.i3d_merge_group_index -= 1
+        old_mg_index = context.object.i3d_merge_group_index
+        context.object.i3d_merge_group_index = -1
+        remove_merge_group_if_empty(context, old_mg_index)
         return {'FINISHED'}
 
 @register
@@ -731,20 +726,11 @@ class I3D_IO_OT_select_mg_objects(bpy.types.Operator):
         return context.object.i3d_merge_group_index != -1
 
     def execute(self, context):
-        for member in context.scene.i3dio_merge_groups[context.object.i3d_merge_group_index].members:
-            if member.object is not None:
-                member.object.select_set(True)
-            else:
-                print("Deleted Member Object")
+        for obj in context.scene.objects:
+            mg_index = context.object.i3d_merge_group_index
+            if obj.i3d_merge_group_index == mg_index:
+                obj.select_set(True)
         return {'FINISHED'}
-
-@persistent
-def prune_merge_groups(dummy):
-    for scene in bpy.data.scenes:
-        for mg in scene.i3dio_merge_groups:
-            for idx, member in reversed(list(enumerate(mg.members))):
-                if member.object is None:
-                    mg.members.remove(idx)
 
 @persistent
 def handle_old_merge_groups(dummy):
@@ -761,7 +747,6 @@ def handle_old_merge_groups(dummy):
                         mg = scene.i3dio_merge_groups.add()
                         mg.name = group_id
                         obj.i3d_merge_group_index = len(scene.i3dio_merge_groups) - 1
-                    mg.add_member(obj)
                     if is_root != None and is_root == 1:
                         mg.root = obj
                 del obj['i3d_merge_group']
@@ -854,12 +839,10 @@ def register():
     bpy.types.Object.i3d_merge_group_index = IntProperty(default = -1)
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
-    save_pre.append(prune_merge_groups)
     load_post.append(handle_old_merge_groups)
 
 def unregister():
     load_post.remove(handle_old_merge_groups)
-    save_pre.remove(prune_merge_groups)
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_mapping
     del bpy.types.Object.i3d_merge_group_index
