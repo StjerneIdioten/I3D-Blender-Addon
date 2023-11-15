@@ -165,8 +165,8 @@ class Material(Node):
         r, g, b, a = emission_c
 
         if blender_version >= 4:
-            has_emission = node.inputs['Emission Strength'].default_value == 1.0
-            if has_emission:
+            has_emission = node.inputs['Emission Strength'].default_value == 0.0
+            if not has_emission:
                 self.logger.debug("Write emissiveColor")
                 self._write_emission(emission_c)
         else:
