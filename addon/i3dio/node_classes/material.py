@@ -135,8 +135,9 @@ class Material(Node):
                 self._write_diffuse(diffuse)
 
     def _emissive_from_nodes(self, node):
+        blender_version = utility.blender_version()
         # Blender 4.0 have different input names
-        if utility.blender_version() >= 4:
+        if blender_version >= 4:
             emission_input = 'Emission Color'
         else:
             emission_input = 'Emission'
@@ -162,9 +163,16 @@ class Material(Node):
                     return
             self.logger.debug("Has no Emissivemap")
         r, g, b, a = emission_c
-        if (0, 0, 0, 1) != (r, g, b, a):
-            self.logger.debug("Write emissiveColor")
-            self._write_emission(emission_c)
+
+        if blender_version >= 4:
+            has_emission = node.inputs['Emission Strength'].default_value == 1.0
+            if has_emission:
+                self.logger.debug("Write emissiveColor")
+                self._write_emission(emission_c)
+        else:
+            if (0, 0, 0, 1) != (r, g, b, a):
+                self.logger.debug("Write emissiveColor")
+                self._write_emission(emission_c)
 
     def _resolve_without_nodes(self):
         material = self.blender_material
