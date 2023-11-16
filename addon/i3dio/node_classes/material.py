@@ -164,7 +164,7 @@ class Material(Node):
             self.logger.debug("Has no Emissivemap")
         r, g, b, a = emission_c
 
-        if blender_version >= 4:
+        if bpy.app.version >= (4, 0, 0)
             has_emission = node.inputs['Emission Strength'].default_value == 0.0
             if not has_emission:
                 self.logger.debug("Write emissiveColor")
