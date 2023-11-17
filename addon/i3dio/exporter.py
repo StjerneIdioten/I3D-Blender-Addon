@@ -2,6 +2,7 @@ from __future__ import annotations  # Enables python 4.0 annotation typehints fx
 from typing import List
 import sys
 import os
+import subprocess
 import time
 import logging
 import bpy
@@ -25,7 +26,6 @@ logger.debug(f"Loading: {__name__}")
 
 
 def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
-
     export_data = {}
 
     if bpy.context.scene.i3dio.log_to_file:
@@ -60,7 +60,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
 
         i3d = I3D(name=bpy.path.display_name_from_filepath(filepath),
                   i3d_file_path=filepath,
-                  conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up,).to_4x4(),
+                  conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up, ).to_4x4(),
                   depsgraph=depsgraph)
 
         export_selection = bpy.context.scene.i3dio.selection
@@ -238,9 +238,10 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
             _add_object_to_i3d(i3d, child, parent)
     logger.debug(f"[{collection.name}] no more objects to process in collection")
 
+
 def _binarize_i3d(filepath: str):
     i3dbinarize = bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path
     gamepath = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path[:-5]
     if i3dbinarize != '':
-        input_params = (i3dbinarize+' -in "'+filepath+'" -out "'+filepath+'" -gamePath "'+gamepath+'/"')
-        os.system(input_params)
+        input_params = (os.path.normpath(i3dbinarize) + ' -in "' + filepath + '" -out "' + filepath + '" -gamePath "' + gamepath + '/"')
+        subprocess.call(input_params)
