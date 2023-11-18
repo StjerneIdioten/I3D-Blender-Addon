@@ -135,14 +135,7 @@ class Material(Node):
                 self._write_diffuse(diffuse)
 
     def _emissive_from_nodes(self, node):
-        blender_version = utility.blender_version()
-        # Blender 4.0 have different input names
-        if blender_version >= 4:
-            emission_input = 'Emission Color'
-        else:
-            emission_input = 'Emission'
-
-        emission_socket = node.inputs[emission_input]
+        emission_socket = node.inputs['Emission color' if bpy.app.version >= (4, 0, 0) else 'Emission']
         emission_c = emission_socket.default_value
         emissive_path = None
         if emission_socket.is_linked:
