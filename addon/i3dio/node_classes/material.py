@@ -130,7 +130,7 @@ class Material(Node):
                 emission_input = 'Emission'
 
             # Write the diffuse colors
-            emission_socket = node.inputs[emission_input]
+            emission_socket = node.inputs['Emission Color' if bpy.app.version >= (4, 0, 0) else 'Emission']
             if not emission_socket.is_linked:
                 self._write_diffuse(diffuse)
 
