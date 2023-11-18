@@ -77,7 +77,7 @@ class Material(Node):
 
     def _specular_from_nodes(self, node):
         specular = [1.0 - node.inputs['Roughness'].default_value,
-                    node.inputs['Specular IOR Level' if bpy.app.version >= (4, 0, 0) else 'Specular'].default_value,
+                    node.inputs['Specular IOR Level'].default_value if bpy.app.version >= (4, 0, 0) else node.inputs['Specular'].default_value,
                     node.inputs['Metallic'].default_value]
         self._write_specular(specular)
 
@@ -118,12 +118,12 @@ class Material(Node):
                     self._write_attribute('fileId', file_id, 'Texture')
         else:
             # Write the diffuse colors
-            emission_socket = node.inputs['Emission Color' if bpy.app.version >= (4, 0, 0) else 'Emission']
+            emission_socket = node.inputs['Emission Color'] if bpy.app.version >= (4, 0, 0) else node.inputs['Emission']
             if not emission_socket.is_linked:
                 self._write_diffuse(diffuse)
 
     def _emissive_from_nodes(self, node):
-        emission_socket = node.inputs['Emission color' if bpy.app.version >= (4, 0, 0) else 'Emission']
+        emission_socket = node.inputs['Emission Color'] if bpy.app.version >= (4, 0, 0) else node.inputs['Emission']
         emission_c = emission_socket.default_value
         emissive_path = None
         if emission_socket.is_linked:
@@ -145,15 +145,14 @@ class Material(Node):
             self.logger.debug("Has no Emissivemap")
         r, g, b, a = emission_c
 
-        if bpy.app.version >= (4, 0, 0)
+        if bpy.app.version >= (4, 0, 0):
             has_emission = node.inputs['Emission Strength'].default_value == 0.0
             if not has_emission:
                 self.logger.debug("Write emissiveColor")
                 self._write_emission(emission_c)
         elif (0, 0, 0, 1) != (r, g, b, a):
-
-                self.logger.debug("Write emissiveColor")
-                self._write_emission(emission_c)
+            self.logger.debug("Write emissiveColor")
+            self._write_emission(emission_c)
 
     def _resolve_without_nodes(self):
         material = self.blender_material

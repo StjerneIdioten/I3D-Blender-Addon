@@ -210,8 +210,9 @@ class IndexedTriangleSet(Node):
                 # Add vertex color
                 vertex_color = None
                 if len(mesh.vertex_colors):
-                    # Get the color from the first layer, since only one vertex color layer is supported in GE
-                    vertex_color = mesh.vertex_colors[0].data[loop_index].color
+                    # Get the color from the active layer or first layer, since only one vertex color layer is supported in GE
+                    color_layer = mesh.vertex_colors.active if mesh.vertex_colors.active is not None else mesh.vertex_colors[0]
+                    vertex_color = color_layer.data[loop_index].color
 
                 # Add uvs
                 uvs = []
