@@ -92,7 +92,3 @@ with the use of a regex as detailed in this answer on stackoverflow https://stac
 
 def sort_blender_objects_by_outliner_ordering(objects: List[BlenderObject]) -> List[BlenderObject]:
     return sorted(objects, key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split('(\d+)', s.name)])
-
-
-def blender_version() -> int:
-    return int(bpy.app.version[0])
