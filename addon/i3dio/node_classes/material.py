@@ -83,7 +83,7 @@ class Material(Node):
             specular_input = 'Specular'
 
         specular = [1.0 - node.inputs['Roughness'].default_value,
-                    node.inputs[specular_input].default_value,
+                    node.inputs['Specular IOR Level' if bpy.app.version >= (4, 0, 0) else 'Specular'].default_value
                     node.inputs['Metallic'].default_value]
         self._write_specular(specular)
 
