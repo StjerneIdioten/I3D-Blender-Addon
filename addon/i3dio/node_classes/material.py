@@ -169,8 +169,8 @@ class Material(Node):
             if not has_emission:
                 self.logger.debug("Write emissiveColor")
                 self._write_emission(emission_c)
-        else:
-            if (0, 0, 0, 1) != (r, g, b, a):
+        elif (0, 0, 0, 1) != (r, g, b, a):
+
                 self.logger.debug("Write emissiveColor")
                 self._write_emission(emission_c)
 
