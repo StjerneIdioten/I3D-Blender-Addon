@@ -76,12 +76,6 @@ class Material(Node):
             self.logger.debug(f"Has no Glossmap")
 
     def _specular_from_nodes(self, node):
-        # Blender 4.0 have different input names
-        if utility.blender_version() >= 4:
-            specular_input = 'Specular IOR Level'
-        else:
-            specular_input = 'Specular'
-
         specular = [1.0 - node.inputs['Roughness'].default_value,
                     node.inputs['Specular IOR Level' if bpy.app.version >= (4, 0, 0) else 'Specular'].default_value
                     node.inputs['Metallic'].default_value]
@@ -123,12 +117,6 @@ class Material(Node):
                     self.xml_elements['Texture'] = xml_i3d.SubElement(self.element, 'Texture')
                     self._write_attribute('fileId', file_id, 'Texture')
         else:
-            # Blender 4.0 have different input names
-            if utility.blender_version() >= 4:
-                emission_input = 'Emission Color'
-            else:
-                emission_input = 'Emission'
-
             # Write the diffuse colors
             emission_socket = node.inputs['Emission Color' if bpy.app.version >= (4, 0, 0) else 'Emission']
             if not emission_socket.is_linked:
