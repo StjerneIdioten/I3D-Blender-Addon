@@ -1,7 +1,8 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import List
 import sys
-import os
+from pathlib import PurePath
+import subprocess
 import time
 import logging
 import bpy
@@ -23,9 +24,9 @@ from .node_classes.merge_group import MergeGroup
 logger = logging.getLogger(__name__)
 logger.debug(f"Loading: {__name__}")
 
+BINARIZER_TIMEOUT_IN_SECONDS = 30
 
 def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
-
     export_data = {}
 
     if bpy.context.scene.i3dio.log_to_file:
@@ -60,7 +61,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
 
         i3d = I3D(name=bpy.path.display_name_from_filepath(filepath),
                   i3d_file_path=filepath,
-                  conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up,).to_4x4(),
+                  conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up, ).to_4x4(),
                   depsgraph=depsgraph)
 
         export_selection = bpy.context.scene.i3dio.selection
@@ -76,14 +77,36 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
         i3d.export_to_i3d_file()
 
         if bpy.context.scene.i3dio.binarize_i3d == True:
-            if not bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path.find("i3dConverter.exe") == -1:
-                logger.info(f"Starting Binarization of {filepath}")
-                _binarize_i3d(filepath)
-                logger.info(f"Finished Binarize of {filepath}")
+            logger.info(f'Starting binarization of "{filepath}"')
+            try:
+                i3d_binarize_path = PurePath(None if (path := bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path) == "" else path)
+            except TypeError:
+                logger.error(f"Empty Converter Binary Path")
             else:
-                raise ValueError("The path to the i3dConverter.exe is not set correctly!")
+                try:
+                    # This is under the assumption that the data folder is always in the gamefolder! (Which is usually the case, but imagine having the data folder on a dev machine just for Blender)
+                    game_path = PurePath(None if (path := bpy.context.preferences.addons['i3dio'].preferences.fs_data_path) == "" else path).parent
+                except TypeError:
+                    logger.error(f"Empty Game Path")
+                else:
+                    try:
+                        conversion_result = subprocess.run(args=[str(i3d_binarize_path), '-in', str(filepath), '-out', str(filepath), '-gamePath', str(game_path)], timeout=BINARIZER_TIMEOUT_IN_SECONDS, check=True, text=True, stdout = subprocess.PIPE, stderr=subprocess.STDOUT)
+                    except FileNotFoundError as e:
+                        logger.error(f'Invalid path to i3dConverter.exe: "{i3d_binarize_path}"')
+                    except subprocess.TimeoutExpired as e:
+                        if e.output is not None and "Press any key to continue . . ." in e.output.decode():
+                            logger.error(f'i3dConverter.exe could not run with provided arguments: {e.cmd}')
+                        else:
+                            logger.error(f"i3dConverter.exe took longer than {BINARIZER_TIMEOUT_IN_SECONDS} seconds to run and was cancelled!")
+                    except subprocess.CalledProcessError as e:
+                        logger.error(f"i3dConverter.exe failed to run with error code: {e.returncode}")
+                    else:
+                        if error_messages := [f"\t{error_line}" for error_line in conversion_result.stdout.split('\n', -1) if error_line.startswith("Error:")]:
+                            logger.error("i3dConverter.exe produced errors:\n" + '\n'.join(error_messages))
+                        else:
+                            logger.info(f'Finished binarization of "{filepath}"')
 
-        # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
+    # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
     except Exception:
         logger.exception("Exception that stopped the exporter")
         export_data['success'] = False
@@ -237,10 +260,3 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
         if child.parent is None:
             _add_object_to_i3d(i3d, child, parent)
     logger.debug(f"[{collection.name}] no more objects to process in collection")
-
-def _binarize_i3d(filepath: str):
-    i3dbinarize = bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path
-    gamepath = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path[:-5]
-    if i3dbinarize != '':
-        input_params = (i3dbinarize+' -in "'+filepath+'" -out "'+filepath+'" -gamePath "'+gamepath+'/"')
-        os.system(input_params)
