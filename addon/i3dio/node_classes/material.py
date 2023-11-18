@@ -77,7 +77,7 @@ class Material(Node):
 
     def _specular_from_nodes(self, node):
         specular = [1.0 - node.inputs['Roughness'].default_value,
-                    node.inputs['Specular IOR Level'].default_value if bpy.app.version >= (4, 0, 0) else node.inputs['Specular'].default_value,
+                    node.inputs['Specular IOR Level' if bpy.app.version >= (4, 0, 0) else 'Specular'].default_value,
                     node.inputs['Metallic'].default_value]
         self._write_specular(specular)
 
@@ -118,12 +118,12 @@ class Material(Node):
                     self._write_attribute('fileId', file_id, 'Texture')
         else:
             # Write the diffuse colors
-            emission_socket = node.inputs['Emission Color'] if bpy.app.version >= (4, 0, 0) else node.inputs['Emission']
+            emission_socket = node.inputs['Emission Color' if bpy.app.version >= (4, 0, 0) else 'Emission']
             if not emission_socket.is_linked:
                 self._write_diffuse(diffuse)
 
     def _emissive_from_nodes(self, node):
-        emission_socket = node.inputs['Emission Color'] if bpy.app.version >= (4, 0, 0) else node.inputs['Emission']
+        emission_socket = node.inputs['Emission Color' if bpy.app.version >= (4, 0, 0) else 'Emission']
         emission_c = emission_socket.default_value
         emissive_path = None
         if emission_socket.is_linked:
