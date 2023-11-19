@@ -206,11 +206,13 @@ class IndexedTriangleSet(Node):
             for loop_index in triangle.loops:
                 blender_vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
 
+
                 # Add vertex color
                 vertex_color = None
                 if len(mesh.vertex_colors):
-                    # Get the color from the active layer, since only one vertex color layer is supported in GE
-                    vertex_color = mesh.vertex_colors.active.data[loop_index].color
+                    # Get the color from the active layer or first layer, since only one vertex color layer is supported in GE
+                    color_layer = mesh.vertex_colors.active if mesh.vertex_colors.active is not None else mesh.vertex_colors[0]
+                    vertex_color = color_layer.data[loop_index].color
 
                 # Add uvs
                 uvs = []
