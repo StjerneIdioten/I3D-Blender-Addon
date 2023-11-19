@@ -21,7 +21,7 @@ class MergeGroupRoot(ShapeNode):
 
     def __init__(self, id_: int, merge_group_object: [bpy.types.Object, None], i3d: I3D,
                  parent: [SceneGraphNode or None] = None):
-        self.merge_group_name = xml_i3d.merge_group_prefix + merge_group_object.i3d_merge_group.group_id
+        self.merge_group_name = i3d.merge_groups[merge_group_object.i3d_merge_group_index].name
         self.skin_bind_ids = f"{id_:d} "
         super().__init__(id_=id_, mesh_object=merge_group_object, i3d=i3d, parent=parent)
 

@@ -7,7 +7,7 @@ import bpy
 
 from .node import (Node, SceneGraphNode)
 
-from .. import (debugging, xml_i3d)
+from .. import (debugging, utility, xml_i3d)
 from ..i3d import I3D
 
 
@@ -206,11 +206,13 @@ class IndexedTriangleSet(Node):
             for loop_index in triangle.loops:
                 blender_vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
 
+
                 # Add vertex color
                 vertex_color = None
                 if len(mesh.vertex_colors):
-                    # Get the color from the active layer, since only one vertex color layer is supported in GE
-                    vertex_color = mesh.vertex_colors.active.data[loop_index].color
+                    # Get the color from the active layer or first layer, since only one vertex color layer is supported in GE
+                    color_layer = mesh.vertex_colors.active if mesh.vertex_colors.active is not None else mesh.vertex_colors[0]
+                    vertex_color = color_layer.data[loop_index].color
 
                 # Add uvs
                 uvs = []
@@ -400,6 +402,25 @@ class IndexedTriangleSet(Node):
 
         # Subsets
         self._write_attribute('count', len(self.subsets), 'subsets')
+
+        bounding_volume_object = self.evaluated_mesh.mesh.i3d_attributes.bounding_volume_object
+        if bounding_volume_object is not None:
+            # Calculate the bounding volume center from the corners of the bounding box
+            bv_center = mathutils.Vector([sum(x) for x in zip(*bounding_volume_object.bound_box)]) * 0.125
+            # Transform the bounding volume center to world coordinates
+            bv_center_world = bounding_volume_object.matrix_world @ bv_center
+            # Get the translation offset between the bounding volume center in world coordinates and the data objects world coordinates
+            bv_center_offset = bv_center_world - self.evaluated_mesh.object.matrix_world.to_translation()
+            # Get the bounding volume center in coordinates relative to the data object using it
+            bv_center_relative = self.evaluated_mesh.object.matrix_world.to_3x3().inverted() @ bv_center_offset
+
+            self._write_attribute(
+                "bvCenter",
+                bv_center_relative @ self.i3d.conversion_matrix.inverted(),
+            )
+            self._write_attribute(
+                "bvRadius", max(bounding_volume_object.dimensions) / 2
+            )
 
         # Write subsets
         for _, subset in self.subsets.items():

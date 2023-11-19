@@ -77,7 +77,7 @@ class Material(Node):
 
     def _specular_from_nodes(self, node):
         specular = [1.0 - node.inputs['Roughness'].default_value,
-                    node.inputs['Specular'].default_value,
+                    node.inputs['Specular IOR Level' if bpy.app.version >= (4, 0, 0) else 'Specular'].default_value,
                     node.inputs['Metallic'].default_value]
         self._write_specular(specular)
 
@@ -116,16 +116,25 @@ class Material(Node):
                     file_id = self.i3d.add_file_image(diffuse_image_path)
                     self.xml_elements['Texture'] = xml_i3d.SubElement(self.element, 'Texture')
                     self._write_attribute('fileId', file_id, 'Texture')
-        # Write the diffuse colors
-        self._write_diffuse(diffuse)
+        else:
+            # Write the diffuse colors
+            emission_socket = node.inputs['Emission Color' if bpy.app.version >= (4, 0, 0) else 'Emission']
+            if not emission_socket.is_linked:
+                self._write_diffuse(diffuse)
 
     def _emissive_from_nodes(self, node):
-        emission_socket = node.inputs['Emission']
+        emission_socket = node.inputs['Emission Color' if bpy.app.version >= (4, 0, 0) else 'Emission']
+        emission_c = emission_socket.default_value
+        emissive_path = None
         if emission_socket.is_linked:
             try:
-                emissive_path = emission_socket.links[0].from_node.image.filepath
+                color_connected_node = emission_socket.links[0].from_node
+                if color_connected_node.bl_idname == 'ShaderNodeRGB':
+                    emission_c = color_connected_node.outputs[0].default_value
+                else:
+                    emissive_path = emission_socket.links[0].from_node.image.filepath
             except (AttributeError, IndexError, KeyError):
-                pass
+                self.logger.exception(f"Has an improperly setup Texture")
             else:
                 if emissive_path is not None:
                     self.logger.info("Has Emissivemap")
@@ -133,7 +142,17 @@ class Material(Node):
                     self.xml_elements['Emissive'] = xml_i3d.SubElement(self.element, 'Emissivemap')
                     self._write_attribute('fileId', file_id, 'Emissive')
                     return
-        self.logger.debug("Has no Emissivemap")
+            self.logger.debug("Has no Emissivemap")
+        r, g, b, a = emission_c
+
+        if bpy.app.version >= (4, 0, 0):
+            has_emission = node.inputs['Emission Strength'].default_value == 0.0
+            if not has_emission:
+                self.logger.debug("Write emissiveColor")
+                self._write_emission(emission_c)
+        elif (0, 0, 0, 1) != (r, g, b, a):
+            self.logger.debug("Write emissiveColor")
+            self._write_emission(emission_c)
 
     def _resolve_without_nodes(self):
         material = self.blender_material
@@ -146,6 +165,9 @@ class Material(Node):
 
     def _write_specular(self, specular_color):
         self._write_attribute('specularColor', "{0:.6f} {1:.6f} {2:.6f}".format(*specular_color))
+
+    def _write_emission(self, emission_color):
+        self._write_attribute('emissiveColor', "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*emission_color))
 
     def _write_properties(self):
         # Alpha blending

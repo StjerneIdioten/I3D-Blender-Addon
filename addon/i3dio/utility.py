@@ -8,6 +8,7 @@ import math
 import mathutils
 import bpy
 import os
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,12 @@ def as_fs_relative_path(filepath: str):
 
 
 def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderObject]:
-    sorted_objects = list(objects)  # Create new list from whatever comes in, whether it is an existing list or a tuple
-    sorted_objects.sort(key=lambda x: x.name)  # Sort by name
-    return sorted_objects
+    return sorted(objects, key=lambda x: x.name)
+
+"""
+Blenders outliner does not follow a stricly lexographical ordering, but rather what is called a "natural" ordering.
+This function implements the same ordering as per https://github.com/blender/blender/blob/b0e7a6db56caf6669b6fade1622710d70b96483e/source/blender/blenlib/intern/string.c#L727,
+with the use of a regex as detailed in this answer on stackoverflow https://stackoverflow.com/a/16090640
+"""
+def sort_blender_objects_by_outliner_ordering(objects: List[BlenderObject]) -> List[BlenderObject]:
+    return sorted(objects, key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split('(\d+)', s.name)])
