@@ -33,6 +33,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
                                                                            'mapping': {True: False,
                                                                                        False: True}}},
+        'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
@@ -84,6 +85,12 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Can be found at: Object Properties -> Visibility -> Renders "
                     "(can also be toggled through outliner)",
         default=True
+    )
+
+    rendered_in_viewports: BoolProperty(
+        name="Rendered In Viewports",
+        description="Determines if the object is rendered in Giants Editor viewport",
+        default=i3d_map['rendered_in_viewports']['default']
     )
 
     lod_distance: StringProperty(
@@ -412,8 +419,9 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         obj = bpy.context.active_object
-        
+
         i3d_property(layout, obj.i3d_attributes, 'visibility', obj)
+        i3d_property(layout, obj.i3d_attributes, 'rendered_in_viewports', obj)
         i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'lod_distance', obj)
