@@ -23,6 +23,12 @@ from bpy.props import (
 udim_mapping = {
     '48_ChromeLessShiny.png': {'name': 'Chrome Less Shiny',                         'offset': [0, 6]},
     '49_Fabric.png': {'name': 'Fabric',                                             'offset': [1, 6]},
+    'PLACEHOLDER1': {'name': 'PLACEHOLDER',                                         'offset': [2, 6]},
+    'PLACEHOLDER2': {'name': 'PLACEHOLDER',                                         'offset': [3, 6]},
+    'PLACEHOLDER3': {'name': 'PLACEHOLDER',                                         'offset': [4, 6]},
+    'PLACEHOLDER4': {'name': 'PLACEHOLDER',                                         'offset': [5, 6]},
+    'PLACEHOLDER5': {'name': 'PLACEHOLDER',                                         'offset': [6, 6]},
+    'PLACEHOLDER6': {'name': 'PLACEHOLDER',                                         'offset': [7, 6]},
     '40_ShinyCarPaint.png': {'name': 'Shiny Car Paint',                             'offset': [0, 5]},
     '41_Fabric.png': {'name': 'Fabric',                                             'offset': [1, 5]},
     '42_Wood.png': {'name': 'Wood',                                                 'offset': [2, 5]},
@@ -295,13 +301,16 @@ class I3D_IO_OT_udim_picker_grid_order(Operator):
         grid = layout.grid_flow(row_major=True, columns=8, even_columns=True, even_rows=False)
 
         for udim_id, udim_item in udim_mapping.items():
-            cell = grid.column().box()
-            cell.alignment = 'CENTER'
-            cell.label(text=udim_item['name'])
-            cell.template_icon(icon_value=preview_collections[udim_picker_preview_collection][udim_id].icon_id, scale=3)
-            o = cell.operator('i3dio.udim_mover', text='Select')
-            o.uv_offset = udim_item['offset']
-            o.mode = 'ABSOLUTE'
+            if (not udim_item['name'] == 'PLACEHOLDER'):
+                cell = grid.column().box()
+                cell.alignment = 'CENTER'
+                cell.label(text=udim_item['name'])
+                cell.template_icon(icon_value=preview_collections[udim_picker_preview_collection][udim_id].icon_id, scale=3)
+                o = cell.operator('i3dio.udim_mover', text='Select')
+                o.uv_offset = udim_item['offset']
+                o.mode = 'ABSOLUTE'
+            else:
+                grid.column().label(text='')
 
     def execute(self, context):
         return {'FINISHED'}
