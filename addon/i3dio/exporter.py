@@ -228,6 +228,8 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
             node = i3d.add_light_node(obj, _parent)
         elif obj.type == 'CAMERA':
             node = i3d.add_camera_node(obj, _parent)
+        elif obj.type == 'CURVE':
+            node = i3d.add_shape_node(obj, _parent)
         else:
             raise NotImplementedError(f"Object type: {obj.type!r} is not supported yet")
 
