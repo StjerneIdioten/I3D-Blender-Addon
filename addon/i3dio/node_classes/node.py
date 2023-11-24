@@ -153,6 +153,13 @@ class SceneGraphNode(Node):
         except AttributeError:
             pass
 
+    def _add_reference_file(self):
+        if self.blender_object.i3d_reference_path.reference_path == "":
+            return
+        self.logger.debug(f"Adding reference file")
+        file_id = self.i3d.add_file_reference(self.blender_object.i3d_reference_path.reference_path)
+        self._write_attribute('referenceId', file_id)
+
     @property
     @abstractmethod
     def _transform_for_conversion(self) -> Union[mathutils.Matrix, None]:
@@ -206,6 +213,7 @@ class SceneGraphNode(Node):
         self._write_properties()
         self._write_user_attributes()
         self._add_transform_to_xml_element(self._transform_for_conversion)
+        self._add_reference_file()
 
     def add_child(self, node: SceneGraphNode):
         self.children.append(node)
