@@ -816,16 +816,6 @@ class I3D_IO_PT_joint_attributes(Panel):
 
 
 @register
-class I3DReferencePath(bpy.types.PropertyGroup):
-    reference_path: StringProperty(
-        name="Reference Path",
-        description="Put the path to the .i3d file you want to reference here",
-        default='',
-        subtype='FILE_PATH'
-    )
-
-
-@register
 class I3D_IO_PT_reference_file(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -841,7 +831,7 @@ class I3D_IO_PT_reference_file(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        layout.prop(context.object.i3d_reference_path, 'reference_path')
+        layout.prop(context.object, 'i3d_reference_path')
 
 
 @register
@@ -881,13 +871,18 @@ class I3D_IO_PT_mapping_attributes(Panel):
         row = layout.row()
         row.prop(obj.i3d_mapping, 'mapping_name')
 
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeObjectAttributes)
     bpy.types.Object.i3d_merge_group_index = IntProperty(default = -1)
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
-    bpy.types.Object.i3d_reference_path = PointerProperty(type=I3DReferencePath)
+    bpy.types.Object.i3d_reference_path = StringProperty(
+        name="Reference Path",
+        description="Put the path to the .i3d file you want to reference here",
+        default='',
+        subtype='FILE_PATH')
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
     load_post.append(handle_old_merge_groups)
 

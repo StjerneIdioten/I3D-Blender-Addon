@@ -154,10 +154,10 @@ class SceneGraphNode(Node):
             pass
 
     def _add_reference_file(self):
-        if self.blender_object.i3d_reference_path.reference_path == "":
+        if self.blender_object.i3d_reference_path == "" or not self.blender_object.i3d_reference_path.endswith('.i3d'):
             return
         self.logger.debug(f"Adding reference file")
-        file_id = self.i3d.add_file_reference(self.blender_object.i3d_reference_path.reference_path)
+        file_id = self.i3d.add_file_reference(self.blender_object.i3d_reference_path)
         self._write_attribute('referenceId', file_id)
 
     @property
