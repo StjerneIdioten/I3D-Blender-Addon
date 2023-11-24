@@ -33,6 +33,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
                                                                            'mapping': {True: False,
                                                                                        False: True}}},
+        'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
@@ -57,6 +58,10 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'day_of_year_end': {'name': 'dayOfYearEnd', 'default': 0},
         'weather_required_mask': {'name': 'weatherRequiredMask', 'default': '0', 'type': 'HEX'},
         'weather_prevent_mask': {'name': 'weatherPreventMask', 'default': '0', 'type': 'HEX'},
+        'viewer_spaciality_required_mask': {'name': 'viewerSpacialityRequiredMask', 'default': '0', 'type': 'HEX'},
+        'viewer_spaciality_prevent_mask': {'name': 'viewerSpacialityPreventMask', 'default': '0', 'type': 'HEX'},
+        'render_invisible': {'name': 'renderInvisible', 'default': False},
+        'visible_shader_parameter': {'name': 'visibleShaderParameter', 'default': 1.0},
         'joint': {'name': 'joint', 'default': False},
         'projection': {'name': 'projection', 'default': False},
         'projection_distance': {'name': 'projDistance', 'default': 0.01},
@@ -84,6 +89,12 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Can be found at: Object Properties -> Visibility -> Renders "
                     "(can also be toggled through outliner)",
         default=True
+    )
+
+    rendered_in_viewports: BoolProperty(
+        name="Rendered In Viewports",
+        description="Determines if the object is rendered in Giants Editor viewport",
+        default=i3d_map['rendered_in_viewports']['default']
     )
 
     lod_distance: StringProperty(
@@ -308,7 +319,35 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
                     "Summer = 100 / "
                     "Summer + Sun = 101",
         default=i3d_map['weather_prevent_mask']['default']
-    )    
+    )
+
+    viewer_spaciality_required_mask: StringProperty(
+        name="Viewer Spaciality Required Mask (Hex)",
+        description="The Viewer Spaciality Required Mask as a hexadecimal value.",
+        default=i3d_map['viewer_spaciality_required_mask']['default']
+    )
+
+    viewer_spaciality_prevent_mask: StringProperty(
+        name="Viewer Spaciality Prevent Mask (Hex)",
+        description="The Viewer Spaciality Prevent Mask as a hexadecimal value.",
+        default=i3d_map['viewer_spaciality_prevent_mask']['default']
+    )
+
+    render_invisible: BoolProperty(
+        name="Render Invisible",
+        description='If set, the object is always rendered and "visibility"'
+        'must be controlled in the shader using the visible shader parameter',
+        default=i3d_map['render_invisible']['default']
+    )
+
+    visible_shader_parameter: FloatProperty(
+        name="Visible Shader Parameter",
+        description='This value is applied to the "visibility" shader parameter when the object is visible.'
+        'If conditions are not met, 0 is passed to the shader.',
+        default=i3d_map['visible_shader_parameter']['default'],
+        min=-100,
+        max=100
+    )
 
     joint: BoolProperty(
         name="Joint",
@@ -412,8 +451,9 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         obj = bpy.context.active_object
-        
+
         i3d_property(layout, obj.i3d_attributes, 'visibility', obj)
+        i3d_property(layout, obj.i3d_attributes, 'rendered_in_viewports', obj)
         i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'lod_distance', obj)
@@ -516,48 +556,28 @@ class I3D_IO_PT_visibility_condition_attributes(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        obj = bpy.context.active_object
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'use_parent')
-        
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'minute_of_day_start')
-        if obj.i3d_attributes.use_parent == True:
-            row.enabled = False
+
+        obj = context.active_object
+        i3d_attributes = obj.i3d_attributes
+        use_parent = i3d_attributes.use_parent
 
         row = layout.row()
-        row.prop(obj.i3d_attributes, 'minute_of_day_end')
-        if obj.i3d_attributes.use_parent == True:
-            row.enabled = False
+        row.prop(i3d_attributes, 'use_parent')
 
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'day_of_year_start')
-        if obj.i3d_attributes.use_parent == True:
-            row.enabled = False
+        properties = ['minute_of_day_start', 'minute_of_day_end',
+                      'day_of_year_start', 'day_of_year_end',
+                      'weather_required_mask', 'weather_prevent_mask',
+                      'viewer_spaciality_required_mask', 'viewer_spaciality_prevent_mask',
+                      'render_invisible', 'visible_shader_parameter']
 
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'day_of_year_end')
-        if obj.i3d_attributes.use_parent == True:
-            row.enabled = False
+        for prop in properties:
+            row = layout.row()
+            row.prop(i3d_attributes, prop)
+            row.enabled = not use_parent
 
+            if use_parent:
+                i3d_attributes.property_unset(prop)
 
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'weather_required_mask')
-        if obj.i3d_attributes.use_parent == True:
-            row.enabled = False
-
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'weather_prevent_mask')
-        if obj.i3d_attributes.use_parent == True:
-            row.enabled = False
-
-        if obj.i3d_attributes.use_parent == True:
-            obj.i3d_attributes.property_unset('minute_of_day_start')
-            obj.i3d_attributes.property_unset('minute_of_day_end')
-            obj.i3d_attributes.property_unset('day_of_year_start')
-            obj.i3d_attributes.property_unset('day_of_year_end')
-            obj.i3d_attributes.property_unset('weather_required_mask')
-            obj.i3d_attributes.property_unset('weather_prevent_mask')
 
 @register
 class I3DMergeGroup(bpy.types.PropertyGroup):
@@ -796,6 +816,25 @@ class I3D_IO_PT_joint_attributes(Panel):
 
 
 @register
+class I3D_IO_PT_reference_file(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = 'Reference File'
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'EMPTY'
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        layout.prop(context.object, 'i3d_reference_path')
+
+
+@register
 class I3DMappingData(bpy.types.PropertyGroup):
     is_mapped: BoolProperty(
         name="Add to mapping",
@@ -832,18 +871,25 @@ class I3D_IO_PT_mapping_attributes(Panel):
         row = layout.row()
         row.prop(obj.i3d_mapping, 'mapping_name')
 
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeObjectAttributes)
     bpy.types.Object.i3d_merge_group_index = IntProperty(default = -1)
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
+    bpy.types.Object.i3d_reference_path = StringProperty(
+        name="Reference Path",
+        description="Put the path to the .i3d file you want to reference here",
+        default='',
+        subtype='FILE_PATH')
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
     load_post.append(handle_old_merge_groups)
 
 def unregister():
     load_post.remove(handle_old_merge_groups)
     del bpy.types.Scene.i3dio_merge_groups
+    del bpy.types.Object.i3d_reference_path
     del bpy.types.Object.i3d_mapping
     del bpy.types.Object.i3d_merge_group_index
     del bpy.types.Object.i3d_attributes

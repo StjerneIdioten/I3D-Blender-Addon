@@ -2,7 +2,7 @@ import math
 import mathutils
 import collections
 import logging
-from typing import (OrderedDict, Optional, List, Dict, ChainMap)
+from typing import (OrderedDict, Optional, List, Dict, ChainMap, Union)
 import bpy
 
 from .node import (Node, SceneGraphNode)
@@ -431,25 +431,160 @@ class IndexedTriangleSet(Node):
         self.material_indexes = self.material_indexes.strip()
 
 
+class ControlVertex:
+    def __init__(self, position):
+        self._position = position
+        self._str = ''
+        self._make_hash_string()
+
+    def _make_hash_string(self):
+        self._str = f"{self._position}"
+
+    def __str__(self):
+        return self._str
+
+    def __hash__(self):
+        return hash(self._str)
+
+    def __eq__(self, other):
+        return f"{self!s}" == f'{other!s}'
+
+    def position_for_xml(self):
+        return "{0:.6f} {1:.6f} {2:.6f}".format(*self._position)
+
+
+class EvaluatedNurbsCurve:
+    def __init__(self, i3d: I3D, shape_object: bpy.types.Object, name: str = None,
+                 reference_frame: mathutils.Matrix = None):
+        if name is None:
+            self.name = shape_object.data.name
+        else:
+            self.name = name
+        self.i3d = i3d
+        self.object = None
+        self.curve_data = None
+        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
+                                                  {'object_name': self.name})
+        self.control_vertices = []
+        self.generate_evaluated_curve(shape_object, reference_frame)
+
+    def generate_evaluated_curve(self, shape_object: bpy.types.Object, reference_frame: mathutils.Matrix = None):
+        self.object = shape_object
+
+        self.curve_data = self.object.to_curve(depsgraph=self.i3d.depsgraph)
+
+        # If a reference is given transform the generated mesh by that frame to place it somewhere else than center of
+        # the mesh origo
+        if reference_frame is not None:
+            self.curve_data.transform(reference_frame.inverted() @ self.object.matrix_world)
+
+        conversion_matrix = self.i3d.conversion_matrix
+        if self.i3d.get_setting('apply_unit_scale'):
+            self.logger.debug(f"applying unit scaling")
+            conversion_matrix = \
+                mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) @ conversion_matrix
+
+        self.curve_data.transform(conversion_matrix)
+
+
+class NurbsCurve(Node):
+    ELEMENT_TAG = 'NurbsCurve'
+    NAME_FIELD_NAME = 'name'
+    ID_FIELD_NAME = 'shapeId'
+
+    def __init__(self, id_: int, i3d: I3D, evaluated_curve_data: EvaluatedNurbsCurve, shape_name: Optional[str] = None):
+        self.id: int = id_
+        self.i3d: I3D = i3d
+        self.evaluated_curve_data: EvaluatedNurbsCurve = evaluated_curve_data
+        self.control_vertex: OrderedDict[ControlVertex, int] = collections.OrderedDict()
+        self.spline_type = None
+        self.spline_form = None
+        if shape_name is None:
+            self.shape_name = self.evaluated_curve_data.name
+        else:
+            self.shape_name = shape_name
+        super().__init__(id_, i3d, None)
+
+    @property
+    def name(self):
+        return self.shape_name
+
+    @property
+    def element(self):
+        return self.xml_elements['node']
+
+    @element.setter
+    def element(self, value):
+        self.xml_elements['node'] = value
+
+    def process_spline(self, spline):
+        if spline.type == 'BEZIER':
+            points = spline.bezier_points
+            self.spline_type = "cubic"
+        elif spline.type == 'NURBS':
+            points = spline.points
+            self.spline_type = "cubic"
+        elif spline.type == 'POLY':
+            points = spline.points
+            self.spline_type = "linear"
+        else:
+            self.logger.warning(f"{spline.type} is not supported! Export of this curve is aborted.")
+            return
+
+        for loop_index, point in enumerate(points):
+            ctrl_vertex = ControlVertex(point.co.xyz)
+            self.control_vertex[ctrl_vertex] = loop_index
+
+        self.spline_form = "closed" if spline.use_cyclic_u else "open"
+
+    def populate_from_evaluated_nurbscurve(self):
+        spline = self.evaluated_curve_data.curve_data.splines[0]
+        self.process_spline(spline)
+
+    def write_control_vertices(self):
+        for control_vertex in list(self.control_vertex.keys()):
+            vertex_attributes = {'c': control_vertex.position_for_xml()}
+
+            xml_i3d.SubElement(self.element, 'cv', vertex_attributes)
+
+    def populate_xml_element(self):
+        if len(self.evaluated_curve_data.curve_data.splines) == 0:
+            self.logger.warning(f"has no splines! Export of this curve is aborted.")
+            return
+
+        self.populate_from_evaluated_nurbscurve()
+        if self.spline_type:
+            self._write_attribute('type', self.spline_type, 'node')
+        if self.spline_form:
+            self._write_attribute('form', self.spline_form, 'node')
+        self.logger.debug(f"Has '{len(self.control_vertex)}' control vertices")
+        self.write_control_vertices()
+
+
 class ShapeNode(SceneGraphNode):
     ELEMENT_TAG = 'Shape'
 
-    def __init__(self, id_: int, mesh_object: [bpy.types.Object, None], i3d: I3D,
-                 parent: [SceneGraphNode or None] = None):
+    def __init__(self, id_: int, shape_object: Optional[bpy.types.Object], i3d: I3D,
+                 parent: Optional[SceneGraphNode] = None):
         self.shape_id = None
-        super().__init__(id_=id_, blender_object=mesh_object, i3d=i3d, parent=parent)
+        super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent)
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
         return self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
 
     def add_shape(self):
-        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object))
-        self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
+        if self.blender_object.type == 'CURVE':
+            self.shape_id = self.i3d.add_curve(EvaluatedNurbsCurve(self.i3d, self.blender_object))
+            self.xml_elements['NurbsCurve'] = self.i3d.shapes[self.shape_id].element
+        else:
+            self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object))
+            self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):
         self.add_shape()
         self.logger.debug(f"has shape ID '{self.shape_id}'")
         self._write_attribute('shapeId', self.shape_id)
-        self._write_attribute('materialIds', self.i3d.shapes[self.shape_id].material_indexes)
+        if self.blender_object.type == 'MESH':
+            self._write_attribute('materialIds', self.i3d.shapes[self.shape_id].material_indexes)
         super().populate_xml_element()

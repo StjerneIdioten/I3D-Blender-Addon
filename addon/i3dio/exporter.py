@@ -90,7 +90,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
                     logger.error(f"Empty Game Path")
                 else:
                     try:
-                        conversion_result = subprocess.run(args=[str(i3d_binarize_path), '-in', str(filepath), '-out', str(filepath), '-gamePath', str(game_path)], timeout=BINARIZER_TIMEOUT_IN_SECONDS, check=True, text=True, stdout = subprocess.PIPE, stderr=subprocess.STDOUT)
+                        conversion_result = subprocess.run(args=[str(i3d_binarize_path), '-in', str(filepath), '-out', str(filepath), '-gamePath', f"{game_path}/"], timeout=BINARIZER_TIMEOUT_IN_SECONDS, check=True, text=True, stdout = subprocess.PIPE, stderr=subprocess.STDOUT)
                     except FileNotFoundError as e:
                         logger.error(f'Invalid path to i3dConverter.exe: "{i3d_binarize_path}"')
                     except subprocess.TimeoutExpired as e:
@@ -228,6 +228,8 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
             node = i3d.add_light_node(obj, _parent)
         elif obj.type == 'CAMERA':
             node = i3d.add_camera_node(obj, _parent)
+        elif obj.type == 'CURVE':
+            node = i3d.add_shape_node(obj, _parent)
         else:
             raise NotImplementedError(f"Object type: {obj.type!r} is not supported yet")
 

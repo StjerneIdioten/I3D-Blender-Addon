@@ -86,10 +86,11 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
             ('CAMERA', "Camera", "Export cameras"),
             ('LIGHT', "Light", "Export lights"),
             ('MESH', "Mesh", "Export meshes"),
+            ('CURVE', "Curve", "Export curves"),
             ('ARMATURE', "Armatures", "Export armatures, used for skinned meshes")
         ),
         options={'ENUM_FLAG'},
-        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'ARMATURE'},
+        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'CURVE', 'ARMATURE'},
     )
 
     features_to_export: EnumProperty(
@@ -156,15 +157,6 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
                     "contain an '<i3dMapping> somewhere in the file",
         subtype='FILE_PATH',
         default=''
-    )
-
-    i3d_mapping_overwrite_mode: EnumProperty(
-        name="Overwrite Mode",
-        description="Determine how the i3d mapping is updated",
-        items=(
-            ('CLEAN', "Clean", "Deletes any existing i3d mappings"),
-        ),
-        default='CLEAN'
     )
 
     object_sorting_prefix: StringProperty(
@@ -324,12 +316,6 @@ class I3D_IO_PT_export_files(Panel):
         row.enabled = bpy.context.scene.i3dio.copy_files
         row.alignment = 'RIGHT'
         row.prop(bpy.context.scene.i3dio, 'file_structure', )
-
-        box = layout.box()
-        row = box.row()
-        row.label(text='I3D Mapping Mode')
-        column = box.column()
-        column.props_enum(bpy.context.scene.i3dio, 'i3d_mapping_overwrite_mode')
 
 
 @register
