@@ -23,7 +23,7 @@ class MergeGroupRoot(ShapeNode):
                  parent: [SceneGraphNode or None] = None):
         self.merge_group_name = i3d.merge_groups[merge_group_object.i3d_merge_group_index].name
         self.skin_bind_ids = f"{id_:d} "
-        super().__init__(id_=id_, mesh_object=merge_group_object, i3d=i3d, parent=parent)
+        super().__init__(id_=id_, shape_object=merge_group_object, i3d=i3d, parent=parent)
 
     # Override default shape behaviour to use the merge group mesh name instead of the blender objects name
     def add_shape(self):
