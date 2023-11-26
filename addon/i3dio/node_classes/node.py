@@ -213,7 +213,8 @@ class SceneGraphNode(Node):
         self._write_properties()
         self._write_user_attributes()
         self._add_transform_to_xml_element(self._transform_for_conversion)
-        self._add_reference_file()
+        if not isinstance(self.blender_object, bpy.types.Collection):
+            self._add_reference_file()
 
     def add_child(self, node: SceneGraphNode):
         self.children.append(node)
