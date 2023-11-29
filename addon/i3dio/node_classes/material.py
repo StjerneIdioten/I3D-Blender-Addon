@@ -174,11 +174,16 @@ class Material(Node):
             self._write_attribute('alphaBlending', True)
 
     def _export_shader_settings(self):
+        data_path = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path
         shader_settings = self.blender_material.i3d_attributes
-        if shader_settings.source != shader_picker.shader_unselected_default_text:
-            shader_file_id = self.i3d.add_file_shader(shader_settings.source)
+        if shader_settings.shader != shader_picker.shader_default:
+            shader_path = data_path + "shaders\\" + shader_settings.shader + ".xml"
+            if shader_settings.shader == shader_picker.shader_custom and shader_settings.custom_shader != '':
+                shader_path = shader_settings.custom_shader
+            shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
-            if shader_settings.source.endswith("mirrorShader.xml"):
+
+            if shader_settings.shader == "mirrorShader":
                 params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
                 xml_i3d.SubElement(self.element, 'Reflectionmap', params)
 
