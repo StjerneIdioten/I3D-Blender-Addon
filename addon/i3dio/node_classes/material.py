@@ -31,9 +31,8 @@ class Material(Node):
     def element(self, value):
         self.xml_elements['node'] = value
 
-    @property
-    def tangent(self):
-        return self.xml_elements.get('Normalmap', None)
+    def is_normalmapped(self):
+        return 'Normalmap' in self.xml_elements
 
     def populate_xml_element(self):
         if self.blender_material.use_nodes:
