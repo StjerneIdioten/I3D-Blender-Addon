@@ -131,7 +131,8 @@ class EvaluatedMesh:
         # Calculates triangles from mesh polygons
         self.mesh.calc_loop_triangles()
         # Recalculates normals after the scaling has messed with them
-        self.mesh.calc_normals_split()
+        if bpy.app.version < (4, 1, 0):
+            self.mesh.calc_normals_split()
 
     # On hold for the moment, it seems to be triggered at random times in the middle of an export which messes with
     # everything. Further investigation is needed.
