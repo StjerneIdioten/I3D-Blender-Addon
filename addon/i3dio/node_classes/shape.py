@@ -266,7 +266,7 @@ class IndexedTriangleSet(Node):
                 self.triangles[-1].append(vertex_index)
             subset.number_of_indices += 3
         self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
-        return (subset.number_of_vertices, subset.number_of_indices)
+        return subset.first_vertex + subset.number_of_vertices, subset.first_index + subset.number_of_indices
 
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh
