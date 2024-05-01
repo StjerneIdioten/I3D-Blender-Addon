@@ -53,6 +53,7 @@ class Material(Node):
             self.logger.warning(f"Uses nodes but Principled BSDF node is not found!")
 
         gloss_node = self.blender_material.node_tree.nodes.get('Glossmap')
+        specular_socket = main_node.inputs['Specular IOR Level' if bpy.app.version >= (4, 0, 0) else 'Specular']
         if gloss_node is not None:
             try:
                 if bpy.app.version < (3, 3, 0):
@@ -71,6 +72,18 @@ class Material(Node):
                 file_id = self.i3d.add_file_image(gloss_image_path)
                 self.xml_elements['Glossmap'] = xml_i3d.SubElement(self.element, 'Glossmap')
                 self._write_attribute('fileId', file_id, 'Glossmap')
+        elif specular_socket.is_linked:
+            connected_node = specular_socket.links[0].from_node
+            if connected_node.type == "TEX_IMAGE":
+                if connected_node.image is None:
+                    self.logger.error(f"Specular node has no image")
+                else:
+                    self.logger.debug(f"Has Glossmap '{utility.as_fs_relative_path(connected_node.image.filepath)}'")
+                    file_id = self.i3d.add_file_image(connected_node.image.filepath)
+                    self.xml_elements['Glossmap'] = xml_i3d.SubElement(self.element, 'Glossmap')
+                    self._write_attribute('fileId', file_id, 'Glossmap')
+            else:
+                self.logger.debug(f"Specular node is not a TEX_IMAGE node")
         else:
             self.logger.debug(f"Has no Glossmap")
 
