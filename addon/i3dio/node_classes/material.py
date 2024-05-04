@@ -183,7 +183,7 @@ class Material(Node):
 
     def _write_properties(self):
         # Alpha blending
-        if self.blender_material.blend_method in ['CLIP', 'HASHED', 'BLEND']:
+        if self.blender_material.i3d_attributes.alpha_blending:
             self._write_attribute('alphaBlending', True)
 
     def _export_shader_settings(self):
