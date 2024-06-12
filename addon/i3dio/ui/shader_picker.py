@@ -289,6 +289,24 @@ def populate_shader_cache():
         shader_files = [shader_file.stem for shader_file in shader_dir.glob('*.xml')]
         SHADER_CACHE = [(shader, shader, "Shader") for shader in shader_files]
 
+#def handle_old_merge_groups(dummy):
+#    for scene in bpy.data.scenes:
+#        for obj in scene.objects:
+#            if (old_mg := obj.get('i3d_merge_group')) != None:
+#                group_id = old_mg.get('group_id')
+#                is_root = old_mg.get('is_root')
+#                if group_id != None and group_id != "":
+#                    if (mg_idx := scene.i3dio_merge_groups.find(group_id)) != -1:
+#                        mg = scene.i3dio_merge_groups[mg_idx]
+#                        obj.i3d_merge_group_index = mg_idx
+#                    else:
+#                        mg = scene.i3dio_merge_groups.add()
+#                        mg.name = group_id
+#                        obj.i3d_merge_group_index = len(scene.i3dio_merge_groups) - 1
+#                    if is_root != None and is_root == 1:
+#                        mg.root = obj
+#                del obj['i3d_merge_group']
+
 @persistent
 def handle_old_shader_format(file):
     if not file:
@@ -299,101 +317,37 @@ def handle_old_shader_format(file):
     data_path = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path
     fs19_support = Path(data_path) / "fs19Support" / "shaders"
 
-    def extract_parameters_data(attr) -> list:
-        data = []
-        for param in attr.shader_parameters:
-            param_data = {
-                "name": param.name,
-                "type": param.type
-            }
-            if param.type == 'float':
-                param_data["data_float_1"] = param.data_float_1
-            elif param.type == 'float2':
-                param_data["data_float_2"] = list(param.data_float_2)
-            elif param.type == 'float3':
-                param_data["data_float_3"] = list(param.data_float_3)
-            elif param.type == 'float4':
-                param_data["data_float_4"] = list(param.data_float_4)
-
-            data.append(param_data)
-        return data
-
-    def extract_textures_data(attr) -> list:
-        return [{"name": texture.name, "source": texture.source, "default_source": texture.default_source}
-                for texture in attr.shader_textures]
-
-    def apply_parameters_data(attr, old_parameters_data):
-        for old_param in old_parameters_data:
-            param = attr.shader_parameters.add()
-            param.name = old_param['name']
-            param.type = old_param['type']
-
-            if old_param['type'] == 'float':
-                param.data_float_1 = old_param['data_float_1']
-            elif old_param['type'] == 'float2':
-                param.data_float_2 = old_param['data_float_2']
-            elif old_param['type'] == 'float3':
-                param.data_float_3 = old_param['data_float_3']
-            elif old_param['type'] == 'float4':
-                param.data_float_4 = old_param['data_float_4']
-
-    def apply_textures_data(attr, old_textures_data):
-        for old_texture_data in old_textures_data:
-            new_texture = attr.shader_textures.add()
-            new_texture.name = old_texture_data["name"]
-            new_texture.source = old_texture_data["source"]
-            new_texture.default_source = old_texture_data["default_source"]
-
     populate_shader_cache()
-
     for mat in bpy.data.materials:
-        if mat.i3d_attributes.source:
+        if (source := mat.i3d_attributes.get('source')) != None:
                 attr = mat.i3d_attributes
-
-                # Need to collect all old data first, or else it will be lost when it assign the shader,
-                # because the operator will clear the variation and parameter data
-                old_path = Path(attr.source)
-
+                old_path = Path(source)
                 shader_name = old_path.stem
-                old_variation = attr.variation
-                old_parameters_data = extract_parameters_data(attr)
-                old_textures_data = extract_textures_data(attr)
 
                 matching_files = list(fs19_support.glob(f"{shader_name}*.xml"))
 
                 allowed_values = [item[0] for item in SHADER_CACHE]
                 if shader_name in allowed_values:
+                    print(f"Allowed Shader: {shader_name}")
                     attr.shader = shader_name
                 elif shader_name in [f.stem for f in matching_files]:
+                    print(f"Old Shader: {shader_name}")
                     attr.shader = shader_custom
                     attr.custom_shader = str(fs19_support + f"\\{shader_name}.xml")
                 else:
+                    print(f"Custom Shader: {shader_name}")
                     if not old_path.exists():
-                        # Could not find the shader file: {old_path}, skipping: {mat.name}
+                        print(f"Shader doesn't exist: {shader_name}")
+                        mat.i3d_attributes.shader_parameters.clear()
+                        mat.i3d_attributes.shader_textures.clear()
                         continue
                     attr.shader = shader_custom
                     attr.custom_shader = str(old_path)
-
-                attr.variation = old_variation
-
-                # Clear old shader parameters and textures (or else we will end up with duplicates in the panel)
-                mat.i3d_attributes.shader_parameters.clear()
-                mat.i3d_attributes.shader_textures.clear()
-
-                # Reapply shader parameters & textures
-                apply_parameters_data(attr, old_parameters_data)
-                apply_textures_data(attr, old_textures_data)
     return
 
 
 @register
 class I3DMaterialShader(bpy.types.PropertyGroup):
-    # NOTE Keep this internaly to set old values to the new shader enum
-    source: StringProperty(name='Shader Source',
-                           description='Path to the shader',
-                           subtype='FILE_PATH',
-                           )
-
     def custom_shader_setter(self, value):
         try:
             self['custom_shader']
