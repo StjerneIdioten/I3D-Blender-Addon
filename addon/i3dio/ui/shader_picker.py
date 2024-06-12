@@ -12,6 +12,8 @@ from bpy.props import (
 from .. import xml_i3d
 from pathlib import Path
 
+from bpy.app.handlers import (persistent, load_post)
+
 classes = []
 
 # A module value to represent what the field shows when a shader is not selected
@@ -276,16 +278,28 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
 
         return {'FINISHED'}
 
+def populate_shader_cache():
+        global SHADER_CACHE
+        data_path = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path
+        shader_dir = Path(data_path) / 'shaders' if data_path else ''
 
-@register
-class I3DMigrateShader(bpy.types.Operator):
-    """This function migrate the old shader source property to the new shader enum"""
-    bl_idname = 'i3dio.migrate_shader'
-    bl_label = 'Migrate shader on all materials'
-    bl_description = 'Migration of the old shader source property to the new shader enum on all materials in scene'
-    bl_options = {'REGISTER', 'UNDO'}
+        if shader_dir == '' or not shader_dir.exists():
+            return False
 
-    def extract_parameters_data(self, attr) -> list:
+        shader_files = [shader_file.stem for shader_file in shader_dir.glob('*.xml')]
+        SHADER_CACHE = [(shader, shader, "Shader") for shader in shader_files]
+
+@persistent
+def handle_old_shader_format(file):
+    if not file:
+        return
+    global SHADER_CACHE
+
+    # TODO: Could be "not set"
+    data_path = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path
+    fs19_support = Path(data_path) / "fs19Support" / "shaders"
+
+    def extract_parameters_data(attr) -> list:
         data = []
         for param in attr.shader_parameters:
             param_data = {
@@ -304,12 +318,11 @@ class I3DMigrateShader(bpy.types.Operator):
             data.append(param_data)
         return data
 
-    def extract_textures_data(self, attr) -> list:
+    def extract_textures_data(attr) -> list:
         return [{"name": texture.name, "source": texture.source, "default_source": texture.default_source}
                 for texture in attr.shader_textures]
 
-    def apply_parameters_data(self, attr, old_parameters_data):
-        print(old_parameters_data)
+    def apply_parameters_data(attr, old_parameters_data):
         for old_param in old_parameters_data:
             param = attr.shader_parameters.add()
             param.name = old_param['name']
@@ -324,27 +337,17 @@ class I3DMigrateShader(bpy.types.Operator):
             elif old_param['type'] == 'float4':
                 param.data_float_4 = old_param['data_float_4']
 
-    def apply_textures_data(self, attr, old_textures_data):
+    def apply_textures_data(attr, old_textures_data):
         for old_texture_data in old_textures_data:
             new_texture = attr.shader_textures.add()
             new_texture.name = old_texture_data["name"]
             new_texture.source = old_texture_data["source"]
             new_texture.default_source = old_texture_data["default_source"]
 
-    def execute(self, context):
-        global SHADER_CACHE
-        data_path = context.preferences.addons['i3dio'].preferences.fs_data_path
-        if not data_path or not Path(data_path).exists():
-            self.report({'ERROR'}, "The data path is invalid or inaccessible.")
-            return {'CANCELLED'}
+    populate_shader_cache()
 
-        fs19_support = Path(data_path) / "fs19Support" / "shaders"
-        if not fs19_support.exists():
-            self.report({'ERROR'}, f"Could not find the fs19Support folder ({fs19_support})")
-            return {'CANCELLED'}
-
-        for mat in bpy.data.materials:
-            if mat.i3d_attributes.source:
+    for mat in bpy.data.materials:
+        if mat.i3d_attributes.source:
                 attr = mat.i3d_attributes
 
                 # Need to collect all old data first, or else it will be lost when it assign the shader,
@@ -353,8 +356,8 @@ class I3DMigrateShader(bpy.types.Operator):
 
                 shader_name = old_path.stem
                 old_variation = attr.variation
-                old_parameters_data = self.extract_parameters_data(attr)
-                old_textures_data = self.extract_textures_data(attr)
+                old_parameters_data = extract_parameters_data(attr)
+                old_textures_data = extract_textures_data(attr)
 
                 matching_files = list(fs19_support.glob(f"{shader_name}*.xml"))
 
@@ -366,7 +369,7 @@ class I3DMigrateShader(bpy.types.Operator):
                     attr.custom_shader = str(fs19_support + f"\\{shader_name}.xml")
                 else:
                     if not old_path.exists():
-                        self.report({'WARNING'}, f"Could not find the shader file: {old_path}, skipping: {mat.name}")
+                        # Could not find the shader file: {old_path}, skipping: {mat.name}
                         continue
                     attr.shader = shader_custom
                     attr.custom_shader = str(old_path)
@@ -378,11 +381,9 @@ class I3DMigrateShader(bpy.types.Operator):
                 mat.i3d_attributes.shader_textures.clear()
 
                 # Reapply shader parameters & textures
-                self.apply_parameters_data(attr, old_parameters_data)
-                self.apply_textures_data(attr, old_textures_data)
-
-        self.report({'INFO'}, "Shader migration complete")
-        return {'FINISHED'}
+                apply_parameters_data(attr, old_parameters_data)
+                apply_textures_data(attr, old_textures_data)
+    return
 
 
 @register
@@ -421,19 +422,11 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     def shader_items_update(self, context):
         """ Returns a list of all shader files in the FS shader directory """
         global SHADER_CACHE
-        if SHADER_CACHE:
-            return STATIC_ITEMS + SHADER_CACHE
-
-        data_path = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path
-
-        shader_dir = Path(data_path) / 'shaders' if data_path else ''
-
-        if shader_dir == '' or not shader_dir.exists():
-            return [('No shaders found', 'No shaders found', "No shaders found")]
-
-        shader_files = [shader_file.stem for shader_file in shader_dir.glob('*.xml')]
-        SHADER_CACHE = [(shader, shader, "Shader") for shader in shader_files]
+        if not SHADER_CACHE:
+            if not populate_shader_cache():
+                return [('No shaders found', 'No shaders found', "No shaders found")]
         return STATIC_ITEMS + SHADER_CACHE
+
 
     def shader_setter(self, selected_index):
         # To get the name of the shader instead of index
@@ -527,8 +520,6 @@ class I3D_IO_PT_shader(Panel):
         layout.use_property_decorate = False
         material = bpy.context.active_object.active_material
 
-        layout.operator("i3dio.migrate_shader")
-
         layout.prop(material.i3d_attributes, 'shader')
         if material.i3d_attributes.shader == shader_custom:
             layout.prop(material.i3d_attributes, 'custom_shader')
@@ -601,9 +592,11 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Material.i3d_attributes = PointerProperty(type=I3DMaterialShader)
+    load_post.append(handle_old_shader_format)
 
 
 def unregister():
+    load_post.remove(handle_old_shader_format)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     del bpy.types.Material.i3d_attributes
