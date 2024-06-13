@@ -22,11 +22,7 @@ shader_custom = 'Custom'
 custom_shader_default = ''
 shader_no_variation = 'None'
 shader_parameter_max_decimals = 3  # 0-6 per blender properties documentation
-SHADER_CACHE = None
-STATIC_ITEMS = [
-    (shader_default, 'Select a shader', "Select a shader"),
-    (shader_custom, 'Load Custom Shader', "Load a custom shader")
-]
+SHADER_CACHE = []
 
 
 def register(cls):
@@ -280,6 +276,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
 
 def populate_shader_cache():
         global SHADER_CACHE
+
         data_path = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path
         shader_dir = Path(data_path) / 'shaders' if data_path else ''
 
@@ -357,7 +354,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         if not SHADER_CACHE:
             if not populate_shader_cache():
                 return [('No shaders found', 'No shaders found', "No shaders found")]
-        return STATIC_ITEMS + SHADER_CACHE
+        return SHADER_CACHE
 
 
     def shader_setter(self, selected_index):
@@ -451,37 +448,16 @@ class I3D_IO_PT_shader(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        material = bpy.context.active_object.active_material
+        material = context.object.active_material
 
-        layout.prop(material.i3d_attributes, 'shader')
-        if material.i3d_attributes.shader == shader_custom:
-            layout.prop(material.i3d_attributes, 'custom_shader')
-        if material.i3d_attributes.variations:
-            layout.prop(material.i3d_attributes, 'variation')
+        row = layout.row(align = True)
+        row.use_property_decorate = False
+        row.prop(material.i3d_attributes, 'shader', text="")
+        row.prop(material.i3d_attributes, 'variation', text="")
 
-
-@register
-class I3D_IO_PT_shader_parameters(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = "Parameters"
-    bl_context = 'material'
-    bl_parent_id = 'I3D_IO_PT_shader'
-
-    @classmethod
-    def poll(cls, context):
-        try:
-            is_active = bool(context.object.active_material.i3d_attributes.shader_parameters)
-        except AttributeError:
-            is_active = False
-        return is_active
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = False
-        layout.use_property_decorate = False
         column = layout.column(align=True)
-        parameters = bpy.context.active_object.active_material.i3d_attributes.shader_parameters
+        column.use_property_split = False
+        parameters = material.i3d_attributes.shader_parameters
         for parameter in parameters:
             if parameter.type == 'float':
                 property_type = 'data_float_1'
@@ -491,34 +467,11 @@ class I3D_IO_PT_shader_parameters(Panel):
                 property_type = 'data_float_3'
             else:
                 property_type = 'data_float_4'
-
             column.row(align=True).prop(parameter, property_type, text=parameter.name)
-
-
-@register
-class I3D_IO_PT_shader_textures(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = "Textures"
-    bl_context = 'material'
-    bl_parent_id = 'I3D_IO_PT_shader'
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = False
-        layout.use_property_decorate = False
-        column = layout.column(align=True)
-        textures = bpy.context.active_object.active_material.i3d_attributes.shader_textures
+        column.separator()
+        textures = material.i3d_attributes.shader_textures
         for texture in textures:
             column.row(align=True).prop(texture, 'source', text=texture.name)
-
-    @classmethod
-    def poll(cls, context):
-        try:
-            is_active = bool(context.object.active_material.i3d_attributes.shader_textures)
-        except AttributeError:
-            is_active = False
-        return is_active
 
 
 def register():
