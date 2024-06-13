@@ -289,24 +289,6 @@ def populate_shader_cache():
         shader_files = [shader_file.stem for shader_file in shader_dir.glob('*.xml')]
         SHADER_CACHE = [(shader, shader, "Shader") for shader in shader_files]
 
-#def handle_old_merge_groups(dummy):
-#    for scene in bpy.data.scenes:
-#        for obj in scene.objects:
-#            if (old_mg := obj.get('i3d_merge_group')) != None:
-#                group_id = old_mg.get('group_id')
-#                is_root = old_mg.get('is_root')
-#                if group_id != None and group_id != "":
-#                    if (mg_idx := scene.i3dio_merge_groups.find(group_id)) != -1:
-#                        mg = scene.i3dio_merge_groups[mg_idx]
-#                        obj.i3d_merge_group_index = mg_idx
-#                    else:
-#                        mg = scene.i3dio_merge_groups.add()
-#                        mg.name = group_id
-#                        obj.i3d_merge_group_index = len(scene.i3dio_merge_groups) - 1
-#                    if is_root != None and is_root == 1:
-#                        mg.root = obj
-#                del obj['i3d_merge_group']
-
 @persistent
 def handle_old_shader_format(file):
     if not file:
@@ -328,16 +310,12 @@ def handle_old_shader_format(file):
 
                 allowed_values = [item[0] for item in SHADER_CACHE]
                 if shader_name in allowed_values:
-                    print(f"Allowed Shader: {shader_name}")
                     attr.shader = shader_name
                 elif shader_name in [f.stem for f in matching_files]:
-                    print(f"Old Shader: {shader_name}")
                     attr.shader = shader_custom
                     attr.custom_shader = str(fs19_support + f"\\{shader_name}.xml")
                 else:
-                    print(f"Custom Shader: {shader_name}")
                     if not old_path.exists():
-                        print(f"Shader doesn't exist: {shader_name}")
                         mat.i3d_attributes.shader_parameters.clear()
                         mat.i3d_attributes.shader_textures.clear()
                         continue
@@ -383,26 +361,27 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
 
     def shader_setter(self, selected_index):
-        # To get the name of the shader instead of index
         selected_shader = self.shader_items_update(bpy.context)[selected_index][0]
-        if self.get('shader') != selected_index:
+        existing_shader = self.get('shader')
+        if existing_shader != selected_index:
             self['shader'] = selected_index
 
-            # Storing the name of the shader (might be useful)
-            self['shader_name'] = selected_shader
+            if existing_shader is not None:
+                # Storing the name of the shader (might be useful)
+                self['shader_name'] = selected_shader
 
-            if selected_shader not in [shader_custom, shader_default]:
-                # Ensure that materials generated through the API don't modify the scene's
-                # active object or its material.
-                owner_mat = self.id_data if isinstance(self.id_data, bpy.types.Material) else None
-                active_mat = bpy.context.active_object.active_material if bpy.context.active_object else None
+                if selected_shader not in [shader_custom, shader_default]:
+                    # Ensure that materials generated through the API don't modify the scene's
+                    # active object or its material.
+                    owner_mat = self.id_data if isinstance(self.id_data, bpy.types.Material) else None
+                    active_mat = bpy.context.active_object.active_material if bpy.context.active_object else None
 
-                # Only run operator if owner_mat is the active material
-                if owner_mat == active_mat:
-                    bpy.ops.i3dio.load_custom_shader()
-                    bpy.ops.i3dio.load_custom_shader_variation()
-            else:
-                clear_shader(bpy.context)
+                    # Only run operator if owner_mat is the active material
+                    if owner_mat == active_mat:
+                        bpy.ops.i3dio.load_custom_shader()
+                        bpy.ops.i3dio.load_custom_shader_variation()
+                else:
+                    clear_shader(bpy.context)
 
     def shader_getter(self):
         default_index = next((index for index, (key, _, _) in
