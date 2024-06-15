@@ -13,6 +13,7 @@ from .. import xml_i3d
 from pathlib import Path
 
 from bpy.app.handlers import (persistent, load_post)
+from collections import namedtuple
 
 classes = []
 
@@ -20,10 +21,10 @@ classes = []
 shader_default = 'None'
 shader_custom = 'Custom'
 custom_shader_default = ''
-shader_no_variation = 'None'
+shader_no_variations = 'No Variations'
 shader_parameter_max_decimals = 3  # 0-6 per blender properties documentation
-SHADER_CACHE = []
-
+SHADERS_ENUM_ITEMS = []
+SHADERS = []
 
 def register(cls):
     classes.append(cls)
@@ -117,7 +118,7 @@ class I3DLoadCustomShader(bpy.types.Operator):
             else:
                 attributes.variations.clear()
                 base_variation = attributes.variations.add()
-                base_variation.name = shader_no_variation
+                base_variation.name = shader_no_variations
                 attributes.variation = base_variation.name
 
                 variations = root.find('Variations')
@@ -240,7 +241,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                         group = grouped_textures.setdefault(group_name, [])
                         group.append(texture_element_as_dict(texture))
 
-            if attributes.variation != shader_no_variation:
+            if attributes.variation != shader_no_variations:
                 variations = root.find('Variations')
                 variation = variations.find(f"./Variation[@name='{attributes.variation}']")
                 parameter_groups = ['mandatory'] + variation.attrib.get('groups', '').split()
@@ -274,50 +275,35 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
 
         return {'FINISHED'}
 
-def populate_shader_cache():
-        global SHADER_CACHE
 
-        data_path = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path
-        shader_dir = Path(data_path) / 'shaders' if data_path else ''
+def load_shaders():
+    global SHADERS, SHADERS_ENUM_ITEMS
+    shader_dir = Path(bpy.context.preferences.addons['i3dio'].preferences.fs_data_path) / 'shaders'
+    if shader_dir.exists():
+        SHADERS = locate_shaders_in_directory(shader_dir)
+    SHADERS_ENUM_ITEMS = [(shader.stem, shader.stem, str(shader)) for shader in SHADERS]
 
-        if shader_dir == '' or not shader_dir.exists():
-            return False
 
-        shader_files = [shader_file.stem for shader_file in shader_dir.glob('*.xml')]
-        SHADER_CACHE = [(shader, shader, "Shader") for shader in shader_files]
+def locate_shaders_in_directory(dir: Path):
+    return [shader_path for shader_path in dir.glob('*.xml')]
+
 
 @persistent
 def handle_old_shader_format(file):
+    global SHADERS
+    load_shaders()
+
     if not file:
         return
-    global SHADER_CACHE
-
-    # TODO: Could be "not set"
-    data_path = bpy.context.preferences.addons['i3dio'].preferences.fs_data_path
-    fs19_support = Path(data_path) / "fs19Support" / "shaders"
-
-    populate_shader_cache()
+    
     for mat in bpy.data.materials:
         if (source := mat.i3d_attributes.get('source')) != None:
                 attr = mat.i3d_attributes
-                old_path = Path(source)
-                shader_name = old_path.stem
+                shader_path = Path(source)
 
-                matching_files = list(fs19_support.glob(f"{shader_name}*.xml"))
-
-                allowed_values = [item[0] for item in SHADER_CACHE]
-                if shader_name in allowed_values:
-                    attr.shader = shader_name
-                elif shader_name in [f.stem for f in matching_files]:
-                    attr.shader = shader_custom
-                    attr.custom_shader = str(fs19_support + f"\\{shader_name}.xml")
-                else:
-                    if not old_path.exists():
-                        mat.i3d_attributes.shader_parameters.clear()
-                        mat.i3d_attributes.shader_textures.clear()
-                        continue
-                    attr.shader = shader_custom
-                    attr.custom_shader = str(old_path)
+                if shader_path in SHADERS:
+                    attr.shader = shader_path.stem
+                # Handle shader that doesn't exist anymore
     return
 
 
@@ -347,15 +333,11 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
                                   get=custom_shader_getter
                                   )
 
-    # New code setup
     def shader_items_update(self, context):
-        """ Returns a list of all shader files in the FS shader directory """
-        global SHADER_CACHE
-        if not SHADER_CACHE:
-            if not populate_shader_cache():
-                return [('No shaders found', 'No shaders found', "No shaders found")]
-        return SHADER_CACHE
-
+        global SHADERS
+        if not SHADERS:
+            return [('NO_SHADERS', 'No Shaders', "No valid shaders were found")]
+        return SHADERS_ENUM_ITEMS
 
     def shader_setter(self, selected_index):
         selected_shader = self.shader_items_update(bpy.context)[selected_index][0]
@@ -416,7 +398,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
             bpy.ops.i3dio.load_custom_shader_variation()
 
     def variation_getter(self):
-        return self.get('variation', shader_no_variation)
+        return self.get('variation', 0)
 
     variation: EnumProperty(name='Variation',
                             description='The shader variation',
