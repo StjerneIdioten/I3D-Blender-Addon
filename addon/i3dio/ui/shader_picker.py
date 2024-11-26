@@ -18,9 +18,9 @@ from collections import namedtuple
 classes = []
 
 # A module value to represent what the field shows when a shader is not selected
-shader_no_variations = 'No Variations'
+shader_no_variations = 'NO_VARIATIONS'
 shader_parameter_max_decimals = 3  # 0-6 per blender properties documentation
-SHADERS = []
+SHADERS = {}
 SHADER_ENUM_ITEMS_DEFAULT = ('NO_SHADER', 'no shader', 'No Shader Selected')
 SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
 VARIATIONS_ENUM_ITEMS_DEFAULT = ('NO_VARIATIONS', 'no variation', 'No Variation Selected')
@@ -52,11 +52,6 @@ class I3DShaderTexture(bpy.types.PropertyGroup):
                            default=''
                            )
     default_source: StringProperty()
-
-
-@register
-class I3DShaderVariation(bpy.types.PropertyGroup):
-    name: StringProperty(default='Error')
 
 
 def clear_shader(context):
@@ -295,13 +290,13 @@ def load_shader(path: Path):
     return shader
         
 
-def load_shaders():
+def populate_shader_cache():
     global SHADERS, SHADERS_ENUM_ITEMS
     shader_dir = Path(bpy.context.preferences.addons['i3dio'].preferences.fs_data_path) / 'shaders'
     if shader_dir.exists():
-        SHADERS = [load_shader(path) for path in locate_shaders_in_directory(shader_dir)]
+        SHADERS = {path.stem:load_shader(path) for path in locate_shaders_in_directory(shader_dir)}
     SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
-    SHADERS_ENUM_ITEMS.extend([(shader.path.stem, shader.path.stem, str(shader.path)) for shader in SHADERS])
+    SHADERS_ENUM_ITEMS.extend([(shader[0], shader[0], str(shader[1].path)) for shader in SHADERS.items()])
 
 
 def locate_shaders_in_directory(dir: Path):
@@ -311,7 +306,6 @@ def locate_shaders_in_directory(dir: Path):
 @persistent
 def handle_old_shader_format(file):
     global SHADERS
-    load_shaders()
 
     if not file:
         return
@@ -320,11 +314,30 @@ def handle_old_shader_format(file):
         if (source := mat.i3d_attributes.get('source')) != None:
                 attr = mat.i3d_attributes
                 shader_path = Path(source)
-
-                if shader_path in (s.path for s in SHADERS):
+                
+                if shader_path in (s.path for s in SHADERS.values()):
                     attr.shader = shader_path.stem
                 # Handle shader that doesn't exist anymore
+                print(f"{attr.get('variations')[attr.get('variation')].get('name')}")
+               
+        else:
+            print("Has no source")
+            if (variation := mat.i3d_attributes.get('variation_name')) != None:
+                print(f"V: {variation}")
     return
+
+
+def update_shader(idx):
+    global SHADERS
+    attributes = bpy.context.object.active_material.i3d_attributes
+    # Clear existing
+    attributes.variations.clear()
+    attributes.shader_parameters.clear()
+    attributes.shader_textures.clear()
+    # Load variations
+    attributes.variation = shader_no_variations
+    for v in SHADERS.values()[idx].variations:
+        pass
 
 
 @register
@@ -335,11 +348,10 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     def shader_setter(self, selected_index):
         existing_shader = self.get('shader')
-        print(f"Shader: {existing_shader} -> {selected_index}")
         if existing_shader != selected_index:
             self['shader'] = selected_index
             if existing_shader is not None:
-                clear_shader(bpy.context)
+                update_shader()
 
     def shader_getter(self):
         return self.get('shader', 0)
@@ -353,12 +365,13 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
                          get=shader_getter,
                          set=shader_setter,
                          )
+    shader_name: StringProperty(name='NO_SHADER')
 
     def variation_items_update(self, context):
         items = [VARIATIONS_ENUM_ITEMS_DEFAULT]
-        if self.variations:
-            for variation in self.variations:
-                items.append((f'{variation.name}', f'{variation.name}', f"The shader variation '{variation.name}'"))
+        #if self.shader is not None or self.shader != 'NO_SHADER':
+        #    for variation in SHADERS.variations:
+        #        items.append((f'{variation.name}', f'{variation.name}', f"The shader variation '{variation.name}'"))
         return items
 
     def variation_setter(self, value):
@@ -366,17 +379,10 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
             return
         self['variation'] = value
 
-        # Ensure that materials generated through the API don't modify the scene's active object or its material.
-        owner_mat = self.id_data if isinstance(self.id_data, bpy.types.Material) else None
-        active_mat = bpy.context.active_object.active_material if bpy.context.active_object else None
-
-        # Only run operator if owner_mat is the active material
-        if owner_mat == active_mat:
-            bpy.ops.i3dio.load_custom_shader_variation()
-
     def variation_getter(self):
         return self.get('variation', 0)
 
+    variations_enum = []
     variation: EnumProperty(name='Variation',
                             description='The shader variation',
                             default=0,
@@ -386,8 +392,8 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
                             get=variation_getter,
                             set=variation_setter
                             )
+    variation_name: StringProperty(name='NO_VARIATION')
 
-    variations: CollectionProperty(type=I3DShaderVariation)
     shader_parameters: CollectionProperty(type=I3DShaderParameter)
     shader_textures: CollectionProperty(type=I3DShaderTexture)
 
@@ -438,6 +444,7 @@ def register():
         bpy.utils.register_class(cls)
     bpy.types.Material.i3d_attributes = PointerProperty(type=I3DMaterialShader)
     load_post.append(handle_old_shader_format)
+    populate_shader_cache()
 
 
 def unregister():

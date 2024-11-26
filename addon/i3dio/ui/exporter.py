@@ -4,7 +4,8 @@ from bpy.props import (
     StringProperty,
     BoolProperty,
     EnumProperty,
-    PointerProperty
+    PointerProperty,
+    CollectionProperty
 )
 
 from bpy_extras.io_utils import (
@@ -30,6 +31,17 @@ classes = []
 def register(cls):
     classes.append(cls)
     return cls
+
+
+@register
+class I3DShaderSearchPath(bpy.types.PropertyGroup):
+    path: StringProperty(
+            name="Search Path",
+            description="Folder to search for shaders",
+            subtype='FILE_PATH',
+            default=''
+        )
+
 
 @register
 class I3DExportUIProperties(bpy.types.PropertyGroup):
@@ -164,6 +176,14 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         description="To allow some form of control over the output ordering of the objects in the I3D file it is possible to have the exporter use anything preceeding this keyin the object name as the means for sorting the objects, while also removing this from the final object name. The key can be anything and even multiple characters to allow as much flexibility as possible. To disable the functionality just set the string to nothing",
         default=":"
     )
+
+    shader_extra_paths: CollectionProperty(
+        type=I3DShaderSearchPath,
+        name="Extra Shader Search Paths",
+        description="A list of extra paths for the exporter to search for valid shader files. The paths will be stored relative to the .blend file in an attempt to keep them portable."
+    )
+
+
 
 @register
 @orientation_helper(axis_forward='-Z', axis_up='Y')
