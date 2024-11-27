@@ -37,7 +37,7 @@ udim_mapping = {
     '45_CircularBrushed.png': {'name': 'Circular Brushed',                          'offset': [5, 5]},
     '46_RubberPatterned.png': {'name': 'Rubber Patterned',                          'offset': [6, 5]},
     '47_GrayPlasticShiny.png': {'name': 'Gray Plastic Shiny',                       'offset': [7, 5]},
-    '32_GraphiteBlackPaintedMetal.png': {'name': 'Graphite Black Painted Metal',    'offset': [0, 5]},
+    '32_GraphiteBlackPaintedMetal.png': {'name': 'Graphite Black Painted Metal',    'offset': [0, 4]},
     '33_HalfMetalNoise.png': {'name': 'Half Metal Noise',                           'offset': [1, 4]},
     '34_GrayShinyPlastic.png': {'name': 'Gray Shiny Plastic',                       'offset': [2, 4]},
     '35_Gold.png': {'name': 'Gold',                                                 'offset': [3, 4]},
