@@ -1,6 +1,7 @@
 import bpy
 from bpy.types import (Panel)
 from bpy.props import (
+    BoolProperty,
     StringProperty,
     PointerProperty,
     EnumProperty,
@@ -269,6 +270,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
                             set=variation_setter
                             )
 
+    alpha_blending: BoolProperty(name='Alpha Blending', default=False, description='Enable alpha blending for this material')
     variations: CollectionProperty(type=I3DShaderVariation)
     shader_parameters: CollectionProperty(type=I3DShaderParameter)
     shader_textures: CollectionProperty(type=I3DShaderTexture)
@@ -290,6 +292,8 @@ class I3D_IO_PT_shader(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         material = bpy.context.active_object.active_material
+
+        layout.prop(material.i3d_attributes, 'alpha_blending')
 
         layout.prop(material.i3d_attributes, 'source')
         if material.i3d_attributes.variations:
