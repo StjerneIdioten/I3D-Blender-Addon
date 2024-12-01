@@ -194,6 +194,8 @@ class IndexedTriangleSet(Node):
 
     def process_subset(self, mesh: bpy.types.Mesh, subset: SubSet, triangle_offset: int = 0) -> tuple[int, int]:
         self.logger.debug(f"Processing subset: {subset}")
+
+        zero_weight_vertices = set()
         for triangle in subset.triangles[triangle_offset:]:
 
             # Add a new empty container for the vertex indexes of the triangle
@@ -249,9 +251,7 @@ class IndexedTriangleSet(Node):
                                 break
 
                     if len(blend_ids) == 0:
-                        self.logger.warning("Has a vertex with 0.0 weight to all bones. "
-                                            "This will confuse GE and results in the mesh showing up as just a "
-                                            "wireframe. Please correct by assigning some weight to all vertices")
+                        zero_weight_vertices.add(blender_vertex.index)
 
                     if len(blend_ids) < 4:
                         padding = [0]*(4-len(blend_ids))
@@ -275,6 +275,12 @@ class IndexedTriangleSet(Node):
 
                 self.triangles[-1].append(vertex_index)
             subset.number_of_indices += 3
+
+        if zero_weight_vertices:
+            self.logger.warning(f"Has {len(zero_weight_vertices)} vertices with 0.0 weight to all bones. "
+                                "This will confuse GE and result in the mesh showing up as just a wireframe. "
+                                "Please correct by assigning some weight to all vertices.")
+
         self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
         return subset.first_vertex + subset.number_of_vertices, subset.first_index + subset.number_of_indices
 
