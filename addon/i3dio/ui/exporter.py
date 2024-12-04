@@ -18,10 +18,9 @@ from bpy.types import (
 )
 
 from .. import (
-        exporter,
-        xml_i3d
+    exporter,
+    xml_i3d
 )
-
 
 
 classes = []
@@ -31,8 +30,30 @@ def register(cls):
     classes.append(cls)
     return cls
 
+
 @register
-class I3DExportUIProperties(bpy.types.PropertyGroup):
+@orientation_helper(axis_forward='-Z', axis_up='Y')
+class I3D_IO_OT_export(Operator, ExportHelper):
+    """Save i3d file"""
+    bl_idname = "export_scene.i3d"
+    bl_label = "Export I3D"
+    bl_options = {'UNDO', 'PRESET'}  # 'PRESET' enables the preset dialog for saving settings as preset
+
+    filename_ext = xml_i3d.file_ending
+    filter_glob: StringProperty(default=f"*{xml_i3d.file_ending}",
+                                options={'HIDDEN'},
+                                maxlen=255,
+                                )
+
+    # List of operator properties, the attributes will be assigned
+    # to the class instance from the operator settings before calling.
+
+    collection: StringProperty(
+        name="Source Collection",
+        description="Export only objects from this collection (and its children)",
+        default="",
+    )
+
     selection: EnumProperty(
         name="Export",
         description="Select which part of the scene to export",
@@ -161,25 +182,23 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
 
     object_sorting_prefix: StringProperty(
         name="Sorting Prefix",
-        description="To allow some form of control over the output ordering of the objects in the I3D file it is possible to have the exporter use anything preceeding this keyin the object name as the means for sorting the objects, while also removing this from the final object name. The key can be anything and even multiple characters to allow as much flexibility as possible. To disable the functionality just set the string to nothing",
+        description="To allow some form of control over the output ordering of the objects in the I3D file it is "
+        "possible to have the exporter use anything preceeding this keyin the object name as the means for "
+        "sorting the objects, while also removing this from the final object name. "
+        "The key can be anything and even multiple characters to allow as much flexibility as possible. "
+        "To disable the functionality just set the string to nothing",
         default=":"
     )
 
-@register
-@orientation_helper(axis_forward='-Z', axis_up='Y')
-class I3D_IO_OT_export(Operator, ExportHelper):
-    """Save i3d file"""
-    bl_idname = "export_scene.i3d"
-    bl_label = "Export I3D"
-    bl_options = {'PRESET'}  # 'PRESET' enables the preset dialog for saving settings as preset
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False  # No animation.
 
-    filename_ext = xml_i3d.file_ending
-    filter_glob: StringProperty(default=f"*{xml_i3d.file_ending}",
-                                options={'HIDDEN'},
-                                maxlen=255,
-                                )
+        is_file_browser = context.space_data.type == 'FILE_BROWSER'
 
-    # Add remaining properties from original addon as they get implemented
+        export_main(layout, self, is_file_browser)
+        export_options(layout, self, is_file_browser)
 
     def execute(self, context):
         status = exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
@@ -191,15 +210,63 @@ class I3D_IO_OT_export(Operator, ExportHelper):
 
         # Since it is single threaded, this warning wouldn't be sent before the exported starts exporting.
         # So it can't come before the export and it drowns if the export time comes after it.
-        if bpy.context.preferences.addons['i3dio'].preferences.fs_data_path == '':
+        if context.preferences.addons['i3dio'].preferences.fs_data_path == '':
             self.report({'WARNING'},
                         "FS Data folder path is not set, "
                         "see https://stjerneidioten.github.io/"
                         "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder")
 
-        return {'FINISHED'}        
-    
-    def draw(self, context):
+        return {'FINISHED'}
+
+
+def export_main(layout, operator, is_file_browser):
+    if is_file_browser:
+        layout.prop(operator, 'selection')
+    layout.prop(operator, 'object_sorting_prefix')
+
+
+def export_options(layout, operator, is_file_browser):
+    header, body = layout.panel("I3D_export_options", default_closed=False)
+    header.label(text="Export Options")
+    if body:
+        body.use_property_split = False
+        col = body.column()
+        col.enabled = bool(bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path)
+        col.prop(operator, 'binarize_i3d')
+
+        col = body.column()
+        col.prop(operator, 'keep_collections_as_transformgroups')
+        col.prop(operator, 'apply_modifiers')
+        col.prop(operator, 'apply_unit_scale')
+        col.prop(operator, 'alphabetic_uvs')
+
+        box = body.box()
+        row = box.row()
+        row.label(text='Object types to export:')
+        column = box.column()
+        column.props_enum(operator, 'object_types_to_export')
+
+        box = body.box()
+        row = box.row()
+        row.label(text='Features to enable:')
+        column = box.column()
+        column.props_enum(operator, 'features_to_export')
+        row = box.row()
+        row.prop(operator, 'collapse_armatures')
+
+        body.prop(operator, "axis_forward")
+        body.prop(operator, "axis_up")
+
+
+@register
+class IO_FH_i3d(bpy.types.FileHandler):
+    bl_idname = "IO_FH_i3d"
+    bl_label = "I3D"
+    bl_export_operator = "export_scene.i3d"
+    bl_file_extensions = ".i3d"
+
+    @classmethod
+    def poll_drop(cls, context):
         pass
 
 
@@ -208,88 +275,6 @@ def menu_func_export(self, context):
     self.layout.operator(I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
 
 
-@register
-class I3D_IO_PT_export_main(Panel):
-    bl_space_type = 'FILE_BROWSER'
-    bl_region_type = 'TOOL_PROPS'
-    bl_label = ""
-    bl_parent_id = 'FILE_PT_operator'
-    bl_options = {'HIDE_HEADER'}
-
-    @classmethod
-    def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == 'EXPORT_SCENE_OT_i3d'
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-
-        layout.prop(bpy.context.scene.i3dio, 'selection')
-        layout.prop(bpy.context.scene.i3dio, 'object_sorting_prefix')
-
-
-@register
-class I3D_IO_PT_export_options(Panel):
-    bl_space_type = 'FILE_BROWSER'
-    bl_region_type = 'TOOL_PROPS'
-    bl_label = "Export Options"
-    bl_parent_id = 'FILE_PT_operator'
-
-    @classmethod
-    def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == 'EXPORT_SCENE_OT_i3d'
-
-    def draw(self, context):
-        layout = self.layout
-
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        row = layout.row()
-        row.prop(bpy.context.scene.i3dio, 'binarize_i3d')
-        if bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path == '':
-            row.enabled = False
-        else:
-            row.enabled = True            
-        
-        row = layout.row()
-        row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
-
-        row = layout.row()
-        row.prop(bpy.context.scene.i3dio, 'apply_modifiers')
-
-        row = layout.row()
-        row.prop(bpy.context.scene.i3dio, 'apply_unit_scale')
-
-        row = layout.row()
-        row.prop(bpy.context.scene.i3dio, 'alphabetic_uvs')
-
-        box = layout.box()
-        row = box.row()
-        row.label(text='Object types to export')
-        column = box.column()
-        column.props_enum(bpy.context.scene.i3dio, 'object_types_to_export')
-
-        box = layout.box()
-        row = box.row()
-        row.label(text='Features to enable')
-        column = box.column()
-        column.props_enum(bpy.context.scene.i3dio, 'features_to_export')
-        row = box.row()
-        row.prop(bpy.context.scene.i3dio, 'collapse_armatures')
-
-        layout.prop(operator, "axis_forward")
-        layout.prop(operator, "axis_up")
-
-
-@register
 class I3D_IO_PT_export_files(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -318,7 +303,6 @@ class I3D_IO_PT_export_files(Panel):
         row.prop(bpy.context.scene.i3dio, 'file_structure', )
 
 
-@register
 class I3D_IO_PT_export_debug(Panel):
     bl_space_type = 'FILE_BROWSER'
     bl_region_type = 'TOOL_PROPS'
@@ -339,7 +323,6 @@ class I3D_IO_PT_export_debug(Panel):
         layout.prop(bpy.context.scene.i3dio, 'log_to_file')
 
 
-@register
 class I3D_IO_PT_i3d_mapping_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -358,10 +341,10 @@ class I3D_IO_PT_i3d_mapping_attributes(Panel):
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
-    bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
+    # bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
 
 
 def unregister():
-    del bpy.types.Scene.i3dio
+    # del bpy.types.Scene.i3dio
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
