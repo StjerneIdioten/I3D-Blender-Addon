@@ -64,6 +64,11 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
                   conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up, ).to_4x4(),
                   depsgraph=depsgraph)
 
+        # Log export settings
+        logger.info("Exporter settings:")
+        for setting, value in i3d.settings.items():
+            logger.info(f"  {setting}: {value}")
+
         export_selection = bpy.context.scene.i3dio.selection
         if export_selection == 'ALL':
             _export_active_scene_master_collection(i3d)
