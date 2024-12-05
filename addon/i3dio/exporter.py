@@ -71,15 +71,27 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
         for setting, value in i3d.settings.items():
             logger.info(f"  {setting}: {value}")
 
-        export_selection = operator.selection
-        if export_selection == 'ALL':
-            _export_active_scene_master_collection(i3d)
-        elif export_selection == 'ACTIVE_COLLECTION':
-            _export_active_collection(i3d)
-        elif export_selection == 'ACTIVE_OBJECT':
-            _export_active_object(i3d)
-        elif export_selection == 'SELECTED_OBJECTS':
-            _export_selected_objects(i3d)
+        # Handle case when export is triggered from a collection
+        source_collection = None
+        if operator.collection:
+            source_collection = bpy.data.collections.get(operator.collection)
+            if not source_collection:
+                operator.report({'ERROR'}, f"Collection '{operator.collection}' was not found")
+                return None
+
+        if source_collection:
+            logger.info(f"Exporting through collection '{source_collection.name}'")
+            _export_collection_content(i3d, source_collection)
+        else:
+            match operator.selection:
+                case 'ALL':
+                    _export_active_scene_master_collection(i3d)
+                case 'ACTIVE_COLLECTION':
+                    _export_active_collection(i3d)
+                case 'ACTIVE_OBJECT':
+                    _export_active_object(i3d)
+                case 'SELECTED_OBJECTS':
+                    _export_selected_objects(i3d)
 
         i3d.export_to_i3d_file()
 
