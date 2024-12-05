@@ -32,6 +32,17 @@ def register(cls):
 
 
 @register
+class I3DExportUIProperties(bpy.types.PropertyGroup):
+    i3d_mapping_file_path: StringProperty(
+        name="XML File",
+        description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
+                    "contain an '<i3dMapping> somewhere in the file",
+        subtype='FILE_PATH',
+        default=''
+    )
+
+
+@register
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class I3D_IO_OT_export(Operator, ExportHelper):
     """Save i3d file"""
@@ -172,14 +183,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         default=True
     )
 
-    i3d_mapping_file_path: StringProperty(
-        name="XML File",
-        description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
-                    "contain an '<i3dMapping> somewhere in the file",
-        subtype='FILE_PATH',
-        default=''
-    )
-
     object_sorting_prefix: StringProperty(
         name="Sorting Prefix",
         description="To allow some form of control over the output ordering of the objects in the I3D file it is "
@@ -201,7 +204,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         export_options(layout, self)
         export_files(layout, self)
         export_debug(layout, self)
-        export_mapping(layout, self)
 
     def execute(self, context):
         settings = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
@@ -282,14 +284,6 @@ def export_debug(layout, operator):
         body.prop(operator, 'log_to_file')
 
 
-def export_mapping(layout, operator):
-    header, body = layout.panel("I3D_export_mapping", default_closed=False)
-    header.label(text="Mapping Options")
-    if body:
-        body.use_property_split = False
-        body.prop(operator, 'i3d_mapping_file_path')
-
-
 @register
 class IO_FH_i3d(bpy.types.FileHandler):
     bl_idname = "IO_FH_i3d"
@@ -302,6 +296,22 @@ class IO_FH_i3d(bpy.types.FileHandler):
         pass
 
 
+@register
+class I3D_IO_PT_i3d_mapping_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Mapping Options"
+    bl_context = 'scene'
+
+    @classmethod
+    def poll(cls, context):
+        return True
+
+    def draw(self, context):
+        layout = self.layout
+        layout.prop(context.scene.i3dio, 'i3d_mapping_file_path')
+
+
 # File -> Export item
 def menu_func_export(self, context):
     self.layout.operator(I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
@@ -311,7 +321,10 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
 
+    bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
+
 
 def unregister():
+    del bpy.types.Scene.i3dio
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
