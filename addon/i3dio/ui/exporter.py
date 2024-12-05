@@ -193,6 +193,39 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         default=":"
     )
 
+    scene_key = "i3dio_export_settings"
+
+    def save_settings_to_scene(self, context):
+        # Save the settings to the scene property since properties are no longer stored directly in scene
+        # This is done to allow the settings to be saved between sessions
+        ACCEPTED_PROPERTIES = [
+            "collection",
+            "selection",
+            "binarize_i3d",
+            "keep_collections_as_transformgroups",
+            "apply_modifiers",
+            "apply_unit_scale",
+            "alphabetic_uvs",
+            "object_types_to_export",
+            "features_to_export",
+            "collapse_armatures",
+            "copy_files",
+            "overwrite_files",
+            "file_structure",
+            "verbose_output",
+            "log_to_file",
+            "object_sorting_prefix",
+        ]
+        export_props = {}
+        for prop in ACCEPTED_PROPERTIES:
+            if hasattr(self, prop):
+                value = getattr(self, prop)
+                if isinstance(value, set):
+                    export_props[prop] = list(value)
+                else:
+                    export_props[prop] = value
+        context.scene[self.scene_key] = export_props
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -205,7 +238,24 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         export_files(layout, self)
         export_debug(layout, self)
 
+    def invoke(self, context, event):
+        # To load the settings from the scene property to the operator
+        settings = context.scene.get(self.scene_key, {})
+        if settings:
+            for key, value in settings.items():
+                if hasattr(self, key):
+                    current_value = getattr(self, key)
+                    if isinstance(current_value, set) and isinstance(value, list):
+                        setattr(self, key, set(value))
+                    else:
+                        setattr(self, key, value)
+        return ExportHelper.invoke(self, context, event)
+
     def execute(self, context):
+        if context.space_data.type == 'TOPBAR':
+            # Save settings to scene prop if exported through file browser
+            self.save_settings_to_scene(context)
+
         settings = self.as_keywords(ignore=("filepath", "filter_glob"))
         status = exporter.export_blend_to_i3d(self, self.filepath, self.axis_forward, self.axis_up, settings)
 
