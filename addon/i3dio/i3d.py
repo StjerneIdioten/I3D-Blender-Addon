@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class I3D:
     """A special node which is the root node for the entire I3D file. It essentially represents the i3d file"""
     def __init__(self, name: str, i3d_file_path: str, conversion_matrix: mathutils.Matrix,
-                 depsgraph: bpy.types.Depsgraph, operator):
+                 depsgraph: bpy.types.Depsgraph, settings: Dict):
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': name})
         self._ids = {
@@ -46,11 +46,7 @@ class I3D:
 
         self.i3d_mapping: List[SceneGraphNode] = []
 
-        # Save all settings for the current run unto the I3D to abstract it from the nodes themselves
-        self.settings = {}
-        for prop_name in dir(operator):
-            if not prop_name.startswith("_"):  # Skip private attributes
-                self.settings[prop_name] = getattr(operator, prop_name)
+        self.settings = settings
 
         self.depsgraph = depsgraph
 
@@ -265,11 +261,11 @@ class I3D:
     def export_to_i3d_file(self) -> None:
         xml_i3d.export_to_i3d_file(self.xml_elements['Root'], self.paths['i3d_file_path'])
 
-        if self.settings['i3d_mapping_file_path'] != '':
+        if bpy.context.scene.i3dio.i3d_mapping_file_path != '':
             self.export_i3d_mapping()
 
     def export_i3d_mapping(self) -> None:
-        with open(bpy.path.abspath(self.settings['i3d_mapping_file_path']), 'r+') as xml_file:
+        with open(bpy.path.abspath(bpy.context.scene.i3dio.i3d_mapping_file_path), 'r+') as xml_file:
             vehicle_xml = []
             i3d_mapping_idx = None
             i3d_mapping_end_found = False

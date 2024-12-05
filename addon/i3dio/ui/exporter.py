@@ -206,8 +206,8 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         export_debug(layout, self)
 
     def execute(self, context):
-        settings = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
-        status = exporter.export_blend_to_i3d(self, self.filepath, self.axis_forward, self.axis_up)
+        settings = self.as_keywords(ignore=("filepath", "filter_glob"))
+        status = exporter.export_blend_to_i3d(self, self.filepath, self.axis_forward, self.axis_up, settings)
 
         if status['success']:
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")

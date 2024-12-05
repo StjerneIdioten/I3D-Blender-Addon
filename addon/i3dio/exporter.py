@@ -26,7 +26,8 @@ logger.debug(f"Loading: {__name__}")
 
 BINARIZER_TIMEOUT_IN_SECONDS = 30
 
-def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up) -> dict:
+
+def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings) -> dict:
     export_data = {}
 
     if operator.log_to_file:
@@ -63,14 +64,14 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up) -> dict:
                   i3d_file_path=filepath,
                   conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up, ).to_4x4(),
                   depsgraph=depsgraph,
-                  operator=operator)
+                  settings=settings)
 
         # Log export settings
         logger.info("Exporter settings:")
         for setting, value in i3d.settings.items():
             logger.info(f"  {setting}: {value}")
 
-        export_selection = bpy.context.scene.i3dio.selection
+        export_selection = operator.selection
         if export_selection == 'ALL':
             _export_active_scene_master_collection(i3d)
         elif export_selection == 'ACTIVE_COLLECTION':
@@ -82,7 +83,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up) -> dict:
 
         i3d.export_to_i3d_file()
 
-        if bpy.context.scene.i3dio.binarize_i3d == True:
+        if operator.binarize_i3d:
             logger.info(f'Starting binarization of "{filepath}"')
             try:
                 i3d_binarize_path = PurePath(None if (path := bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path) == "" else path)
