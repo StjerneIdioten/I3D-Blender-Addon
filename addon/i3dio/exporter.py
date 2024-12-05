@@ -26,10 +26,10 @@ logger.debug(f"Loading: {__name__}")
 
 BINARIZER_TIMEOUT_IN_SECONDS = 30
 
-def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
+def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up) -> dict:
     export_data = {}
 
-    if bpy.context.scene.i3dio.log_to_file:
+    if operator.log_to_file:
         # Remove the file ending from path and append log specific naming
         filename = filepath[0:len(filepath) - len(xml_i3d.file_ending)] + debugging.export_log_file_ending
         log_file_handler = logging.FileHandler(filename, mode='w')
@@ -47,7 +47,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
     logger.info(f"Exported using '{xml_i3d.xml_current_library}'")
     logger.info(f"Exporting to {filepath}")
 
-    if bpy.context.scene.i3dio.verbose_output:
+    if operator.verbose_output:
         debugging.addon_console_handler.setLevel(logging.DEBUG)
     else:
         debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
@@ -62,7 +62,8 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
         i3d = I3D(name=bpy.path.display_name_from_filepath(filepath),
                   i3d_file_path=filepath,
                   conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up, ).to_4x4(),
-                  depsgraph=depsgraph)
+                  depsgraph=depsgraph,
+                  operator=operator)
 
         # Log export settings
         logger.info("Exporter settings:")

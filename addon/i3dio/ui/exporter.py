@@ -198,10 +198,14 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         is_file_browser = context.space_data.type == 'FILE_BROWSER'
 
         export_main(layout, self, is_file_browser)
-        export_options(layout, self, is_file_browser)
+        export_options(layout, self)
+        export_files(layout, self)
+        export_debug(layout, self)
+        export_mapping(layout, self)
 
     def execute(self, context):
-        status = exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
+        settings = self.as_keywords(ignore=("axis_forward", "axis_up", "filter_glob"))
+        status = exporter.export_blend_to_i3d(self, self.filepath, self.axis_forward, self.axis_up)
 
         if status['success']:
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
@@ -225,7 +229,7 @@ def export_main(layout, operator, is_file_browser):
     layout.prop(operator, 'object_sorting_prefix')
 
 
-def export_options(layout, operator, is_file_browser):
+def export_options(layout, operator):
     header, body = layout.panel("I3D_export_options", default_closed=False)
     header.label(text="Export Options")
     if body:
@@ -258,6 +262,34 @@ def export_options(layout, operator, is_file_browser):
         body.prop(operator, "axis_up")
 
 
+def export_files(layout, operator):
+    header, body = layout.panel("I3D_export_files", default_closed=False)
+    header.label(text="File Options")
+    if body:
+        body.use_property_split = False
+        body.prop(operator, 'copy_files')
+        body.prop(operator, 'overwrite_files')
+        body.enabled = operator.copy_files
+        body.prop(operator, 'file_structure')
+
+
+def export_debug(layout, operator):
+    header, body = layout.panel("I3D_export_debug", default_closed=False)
+    header.label(text="Debug Options")
+    if body:
+        body.use_property_split = False
+        body.prop(operator, 'verbose_output')
+        body.prop(operator, 'log_to_file')
+
+
+def export_mapping(layout, operator):
+    header, body = layout.panel("I3D_export_mapping", default_closed=False)
+    header.label(text="Mapping Options")
+    if body:
+        body.use_property_split = False
+        body.prop(operator, 'i3d_mapping_file_path')
+
+
 @register
 class IO_FH_i3d(bpy.types.FileHandler):
     bl_idname = "IO_FH_i3d"
@@ -275,76 +307,11 @@ def menu_func_export(self, context):
     self.layout.operator(I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
 
 
-class I3D_IO_PT_export_files(Panel):
-    bl_space_type = 'FILE_BROWSER'
-    bl_region_type = 'TOOL_PROPS'
-    bl_label = "File Options"
-    bl_parent_id = 'FILE_PT_operator'
-
-    @classmethod
-    def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == 'EXPORT_SCENE_OT_i3d'
-
-    def draw(self, context):
-        layout = self.layout
-
-        row = layout.row()
-        row.prop(bpy.context.scene.i3dio, 'copy_files')
-        row = layout.row()
-        row.prop(bpy.context.scene.i3dio, 'overwrite_files')
-        row.enabled = bpy.context.scene.i3dio.copy_files
-
-        row = layout.row()
-        row.enabled = bpy.context.scene.i3dio.copy_files
-        row.alignment = 'RIGHT'
-        row.prop(bpy.context.scene.i3dio, 'file_structure', )
-
-
-class I3D_IO_PT_export_debug(Panel):
-    bl_space_type = 'FILE_BROWSER'
-    bl_region_type = 'TOOL_PROPS'
-    bl_label = "Debug Options"
-    bl_parent_id = 'FILE_PT_operator'
-
-    @classmethod
-    def poll(cls, context):
-        sfile = context.space_data
-        operator = sfile.active_operator
-
-        return operator.bl_idname == 'EXPORT_SCENE_OT_i3d'
-
-    def draw(self, context):
-        layout = self.layout
-
-        layout.prop(bpy.context.scene.i3dio, 'verbose_output')
-        layout.prop(bpy.context.scene.i3dio, 'log_to_file')
-
-
-class I3D_IO_PT_i3d_mapping_attributes(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = "I3D Mapping Options"
-    bl_context = 'scene'
-
-    @classmethod
-    def poll(cls, context):
-        return True
-
-    def draw(self, context):
-        layout = self.layout
-        layout.prop(bpy.context.scene.i3dio, 'i3d_mapping_file_path')
-
-
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
-    # bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
 
 
 def unregister():
-    # del bpy.types.Scene.i3dio
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
