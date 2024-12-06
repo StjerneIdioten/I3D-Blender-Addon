@@ -261,11 +261,11 @@ class I3D:
     def export_to_i3d_file(self) -> None:
         xml_i3d.export_to_i3d_file(self.xml_elements['Root'], self.paths['i3d_file_path'])
 
-        if bpy.context.scene.i3dio.i3d_mapping_file_path != '':
+        if self.settings['i3d_mapping_file_path'] != '':
             self.export_i3d_mapping()
 
     def export_i3d_mapping(self) -> None:
-        with open(bpy.path.abspath(bpy.context.scene.i3dio.i3d_mapping_file_path), 'r+') as xml_file:
+        with open(bpy.path.abspath(self.settings['i3d_mapping_file_path']), 'r+') as xml_file:
             vehicle_xml = []
             i3d_mapping_idx = None
             i3d_mapping_end_found = False

@@ -80,7 +80,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
                 return None
 
         if source_collection:
-            logger.info(f"Exporting through collection '{source_collection.name}'")
+            logger.info(f"Exporting using Blender's collection export feature. Collection: '{source_collection.name}'")
             _export_collection_content(i3d, source_collection)
         else:
             match operator.selection:

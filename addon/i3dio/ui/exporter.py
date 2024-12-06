@@ -33,6 +33,7 @@ def register(cls):
 
 @register
 class I3DExportUIProperties(bpy.types.PropertyGroup):
+    # Used when exporting through the file browser
     i3d_mapping_file_path: StringProperty(
         name="XML File",
         description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
@@ -193,13 +194,22 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         default=":"
     )
 
+    i3d_mapping_file_path: StringProperty(
+        name="XML File",
+        description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
+                    "contain an '<i3dMapping> somewhere in the file",
+        subtype='FILE_PATH',
+        default=''
+    )
+
     scene_key = "i3dio_export_settings"
 
     def save_settings_to_scene(self, context):
         # Save the settings to the scene property since properties are no longer stored directly in scene
         # This is done to allow the settings to be saved between sessions
+        # Do not save collection prop since then we can use that as check if it was exported through file browser
+        # Use i3d_mapping_file_path from context.scene.i3dio instead of self.i3d_mapping_file_path
         ACCEPTED_PROPERTIES = [
-            "collection",
             "selection",
             "binarize_i3d",
             "keep_collections_as_transformgroups",
@@ -237,6 +247,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         export_options(layout, self)
         export_files(layout, self)
         export_debug(layout, self)
+        export_i3d_mapping(layout, self, is_file_browser)
 
     def invoke(self, context, event):
         # To load the settings from the scene property to the operator
@@ -252,11 +263,15 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         return ExportHelper.invoke(self, context, event)
 
     def execute(self, context):
-        if context.space_data.type == 'TOPBAR':
-            # Save settings to scene prop if exported through file browser
+        # If not exporting a collection, save settings to scene props for file browser exports.
+        # Also save i3d_mapping_file_path from context.scene.i3dio to avoid multiple checks later.
+        if not self.collection:
             self.save_settings_to_scene(context)
+            settings = self.as_keywords(ignore=("filepath", "filter_glob"))
+            settings['i3d_mapping_file_path'] = context.scene.i3dio.i3d_mapping_file_path
+        else:
+            settings = self.as_keywords(ignore=("filepath", "filter_glob"))
 
-        settings = self.as_keywords(ignore=("filepath", "filter_glob"))
         status = exporter.export_blend_to_i3d(self, self.filepath, self.axis_forward, self.axis_up, settings)
 
         if status['success']:
@@ -332,6 +347,15 @@ def export_debug(layout, operator):
         body.use_property_split = False
         body.prop(operator, 'verbose_output')
         body.prop(operator, 'log_to_file')
+
+
+def export_i3d_mapping(layout, operator, is_file_browser):
+    header, body = layout.panel("I3D_export_i3d_mapping", default_closed=False)
+    header.label(text="I3D Mapping Options")
+    if body:
+        body.use_property_split = False
+        prop_source = bpy.context.scene.i3dio if is_file_browser else operator
+        body.prop(prop_source, 'i3d_mapping_file_path')
 
 
 @register
