@@ -53,18 +53,15 @@ class Material(Node):
             self.logger.warning(f"Uses nodes but Principled BSDF node is not found!")
 
         gloss_node = self.blender_material.node_tree.nodes.get('Glossmap')
-        specular_socket = main_node.inputs['Specular IOR Level' if bpy.app.version >= (4, 0, 0) else 'Specular']
+        specular_socket = main_node.inputs['Specular IOR Level']
         if gloss_node is not None:
             try:
-                if bpy.app.version < (3, 3, 0):
-                    gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
+                if gloss_node.type == "SEPARATE_COLOR":
+                    gloss_image_path = gloss_node.inputs['Color'].links[0].from_node.image.filepath
+                elif gloss_node.type == "TEX_IMAGE":
+                    gloss_image_path = gloss_node.image.filepath
                 else:
-                    if gloss_node.type == "SEPARATE_COLOR":
-                        gloss_image_path = gloss_node.inputs['Color'].links[0].from_node.image.filepath
-                    elif gloss_node.type == "TEX_IMAGE":
-                        gloss_image_path = gloss_node.image.filepath
-                    else:
-                        raise AttributeError(f"Has an improperly setup Glossmap")
+                    raise AttributeError(f"Has an improperly setup Glossmap")
             except (AttributeError, IndexError, KeyError):
                 self.logger.exception(f"Has an improperly setup Glossmap")
             else:
@@ -89,7 +86,7 @@ class Material(Node):
 
     def _specular_from_nodes(self, node):
         specular = [1.0 - node.inputs['Roughness'].default_value,
-                    node.inputs['Specular IOR Level' if bpy.app.version >= (4, 0, 0) else 'Specular'].default_value,
+                    node.inputs['Specular IOR Level'].default_value,
                     node.inputs['Metallic'].default_value]
         self._write_specular(specular)
 
@@ -130,12 +127,12 @@ class Material(Node):
                     self._write_attribute('fileId', file_id, 'Texture')
         else:
             # Write the diffuse colors
-            emission_socket = node.inputs['Emission Color' if bpy.app.version >= (4, 0, 0) else 'Emission']
+            emission_socket = node.inputs['Emission Color']
             if not emission_socket.is_linked:
                 self._write_diffuse(diffuse)
 
     def _emissive_from_nodes(self, node):
-        emission_socket = node.inputs['Emission Color' if bpy.app.version >= (4, 0, 0) else 'Emission']
+        emission_socket = node.inputs['Emission Color']
         emission_c = emission_socket.default_value
         emissive_path = None
         if emission_socket.is_linked:
@@ -155,14 +152,9 @@ class Material(Node):
                     self._write_attribute('fileId', file_id, 'Emissive')
                     return
             self.logger.debug("Has no Emissivemap")
-        r, g, b, a = emission_c
 
-        if bpy.app.version >= (4, 0, 0):
-            has_emission = node.inputs['Emission Strength'].default_value == 0.0
-            if not has_emission:
-                self.logger.debug("Write emissiveColor")
-                self._write_emission(emission_c)
-        elif (0, 0, 0, 1) != (r, g, b, a):
+        has_emission = node.inputs['Emission Strength'].default_value == 0.0
+        if not has_emission:
             self.logger.debug("Write emissiveColor")
             self._write_emission(emission_c)
 
