@@ -86,17 +86,57 @@ class SkinnedMeshRootNode(TransformGroupNode):
         for child_bone in bone_object.children:
             self._add_bone(child_bone, current_bone)
 
+    @staticmethod
+    def _find_node_by_blender_object(root_nodes, target_object):
+        """Recursively find a node in the scene graph by its Blender object."""
+        for root_node in root_nodes:
+            if root_node.blender_object == target_object:
+                return root_node
+            if child_result := SkinnedMeshRootNode._find_node_by_blender_object(root_node.children, target_object):
+                return child_result
+        return None
+
+    @staticmethod
+    def _get_new_bone_parent(armature_object: bpy.types.Armature,
+                             bone: bpy.types.Bone) -> Optional[Union[bpy.types.Object, bpy.types.Bone]]:
+        """Return the target object or bone of the first 'Child Of' constraint for a bone."""
+        pose_bone = armature_object.pose.bones.get(bone.name)
+        if not pose_bone:
+            return None
+
+        child_of_constraint = next((constraint for constraint in pose_bone.constraints
+                                    if constraint.type == 'CHILD_OF'), None)
+        if child_of_constraint and child_of_constraint.target:
+            return child_of_constraint.target
+        return None
+
     def update_bone_parent(self, parent):
+        """Update the parent of each bone based on constraints or fallback to default behavior."""
         for bone in self.bones:
-            if bone.parent == self:
-                self.element.remove(bone.element)
+            new_parent_target = self._get_new_bone_parent(self.blender_object, bone)
+            effective_parent = self._find_node_by_blender_object(self.i3d.scene_root_nodes, new_parent_target) \
+                if new_parent_target else parent
+
+            # Skip reparenting if the bone's parent is another bone in the same armature
+            if bone.parent != self:
+                continue
+
+            self.logger.debug(f"Bone {bone.name} set parent to: "
+                              f"{effective_parent.name if effective_parent else 'Root'}")
+
+            # Remove bone from current parent
+            if bone in self.children:
                 self.children.remove(bone)
-                if parent is not None:
-                    parent.add_child(bone)
-                    parent.element.append(bone.element)
-                else:
-                    self.i3d.scene_root_nodes.append(bone)
-                    self.i3d.xml_elements['Scene'].append(bone.element)
+                self.element.remove(bone.element)
+
+            # Add bone to new parent if found
+            if effective_parent:
+                effective_parent.add_child(bone)
+                effective_parent.element.append(bone.element)
+            else:
+                # If no valid parent is found, add to the root
+                self.i3d.scene_root_nodes.append(bone)
+                self.i3d.xml_elements['Scene'].append(bone.element)
 
 
 class SkinnedMeshShapeNode(ShapeNode):
