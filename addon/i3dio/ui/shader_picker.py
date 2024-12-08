@@ -19,6 +19,14 @@ shader_unselected_default_text = ''
 shader_no_variation = 'None'
 shader_parameter_max_decimals = 3  # 0-6 per blender properties documentation
 
+valid_types = {
+    'float': 'float',
+    'float1': 'float',
+    'float2': 'float2',
+    'float3': 'float3',
+    'float4': 'float4'
+}
+
 
 def register(cls):
     classes.append(cls)
@@ -100,7 +108,7 @@ class I3DLoadCustomShader(bpy.types.Operator):
 def parameter_element_as_dict(parameter):
     parameter_list = []
 
-    if parameter.attrib['type'] == 'float':
+    if parameter.attrib['type'] in ['float', 'float1']:
         type_length = 1
     elif parameter.attrib['type'] == 'float2':
         type_length = 2
@@ -196,7 +204,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                     for parameter in grouped_parameters[group]:
                         param = shader.shader_parameters.add()
                         param.name = parameter['name']
-                        param.type = parameter['type']
+                        param.type = valid_types.get(parameter['type'], None)
                         data = tuple(map(float, parameter['default_value']))
                         if param.type == 'float':
                             param.data_float_1 = data[0]
