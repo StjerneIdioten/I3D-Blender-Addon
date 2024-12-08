@@ -33,7 +33,6 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
                                                                            'mapping': {True: False,
                                                                                        False: True}}},
-        'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
@@ -41,6 +40,8 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'lod_distance': {'name': 'lodDistance', 'default': "Enter your LOD Distances if needed."},
         'collision': {'name': 'collision', 'default': True},
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
+        'collision_filter_group': {'name': 'collisionFilterGroup', 'default': 'ff', 'type': 'HEX'},
+        'collision_filter_mask': {'name': 'collisionFilterMask', 'default': 'ff', 'type': 'HEX'},
         'compound': {'name': 'compound', 'default': False},
         'trigger': {'name': 'trigger', 'default': False},
         'restitution': {'name': 'restitution', 'default': 0.0},
@@ -51,7 +52,6 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'density': {'name': 'density', 'default': 1.0},
         'split_type': {'name': 'splitType', 'default': 0},
         'split_uvs': {'name': 'splitUvs', 'default': (0.0, 0.0, 1.0, 1.0, 1.0)},
-        'use_parent': {'name': 'useParent', 'default': True},
         'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0},
         'minute_of_day_end': {'name': 'minuteOfDayEnd', 'default': 0},
         'day_of_year_start': {'name': 'dayOfYearStart', 'default': 0},
@@ -89,12 +89,6 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Can be found at: Object Properties -> Visibility -> Renders "
                     "(can also be toggled through outliner)",
         default=True
-    )
-
-    rendered_in_viewports: BoolProperty(
-        name="Rendered In Viewports",
-        description="Determines if the object is rendered in Giants Editor viewport",
-        default=i3d_map['rendered_in_viewports']['default']
     )
 
     lod_distance: StringProperty(
@@ -150,9 +144,22 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     )
 
     collision_mask: StringProperty(
-        name="Collision Mask",
-        description="The objects collision mask as a hexadecimal value",
+        name="Collision Mask (deprecated)",
+        description="The objects collision mask as a hexadecimal value, "
+        "deprecated in favor of new filter group and mask",
         default=i3d_map['collision_mask']['default']
+    )
+
+    collision_filter_group: StringProperty(
+        name="Collision Filter Group",
+        description="The objects collision filter group as a hexadecimal value",
+        default=i3d_map['collision_filter_group']['default']
+    )
+
+    collision_filter_mask: StringProperty(
+        name="Collision Filter Mask",
+        description="The objects collision filter mask as a hexadecimal value",
+        default=i3d_map['collision_filter_mask']['default']
     )
 
     compound: BoolProperty(
@@ -265,7 +272,8 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
     use_parent: BoolProperty(
         name="Use Parent",
-        description="Can be found at: Attributes -> Visibility Condition",
+        description="If enabled, use the parent visibility conditions. All properties will export as expected, "
+        "but they will not appear in Giants Editor unless weatherPreventMask is set to a value other than 0",
         default=True
     )
 
@@ -453,7 +461,6 @@ class I3D_IO_PT_object_attributes(Panel):
         obj = bpy.context.active_object
 
         i3d_property(layout, obj.i3d_attributes, 'visibility', obj)
-        i3d_property(layout, obj.i3d_attributes, 'rendered_in_viewports', obj)
         i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'lod_distance', obj)
@@ -552,6 +559,10 @@ class I3D_IO_PT_visibility_condition_attributes(Panel):
     def poll(cls, context):
         return context.object is not None
 
+    def draw_header(self, context):
+        i3d_attr = context.object.i3d_attributes
+        self.layout.prop(i3d_attr, 'use_parent', text='')
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
@@ -561,8 +572,8 @@ class I3D_IO_PT_visibility_condition_attributes(Panel):
         i3d_attributes = obj.i3d_attributes
         use_parent = i3d_attributes.use_parent
 
-        row = layout.row()
-        row.prop(i3d_attributes, 'use_parent')
+        # NOTE: Seems like the only way this will be used in GE is if you set weatherPreventMask to something
+        # "useParent" is not a attribute in GE, its simply just a toggle in their panel
 
         properties = ['minute_of_day_start', 'minute_of_day_end',
                       'day_of_year_start', 'day_of_year_end',
@@ -591,8 +602,9 @@ class I3DMergeGroup(bpy.types.PropertyGroup):
         name="Merge Group Root Object",
         description="The object acting as the root for the merge group",
         type=bpy.types.Object,
-		)
-  
+    )
+
+
 @register
 class I3D_IO_PT_merge_group_attributes(Panel):
     bl_space_type = 'PROPERTIES'
@@ -778,18 +790,21 @@ class I3D_IO_PT_joint_attributes(Panel):
     bl_label = 'Joint'
     bl_context = 'object'
     bl_parent_id = 'I3D_IO_PT_object_attributes'
+    bl_options = {'DEFAULT_CLOSED'}
 
     @classmethod
     def poll(cls, context):
         return context.object is not None and context.object.type == 'EMPTY'
+
+    def draw_header(self, context):
+        i3d_attr = context.object.i3d_attributes
+        self.layout.prop(i3d_attr, 'joint', text='')
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
         obj = context.object
-
-        layout.prop(obj.i3d_attributes, 'joint')
 
         properties = [
             ('projection',),
@@ -816,6 +831,22 @@ class I3D_IO_PT_joint_attributes(Panel):
 
 
 @register
+class I3DReferenceData(bpy.types.PropertyGroup):
+    path: StringProperty(
+        name="Reference Path",
+        description="The path to the .i3d file you want to reference",
+        default='',
+        subtype='FILE_PATH'
+    )
+
+    runtime_loaded: BoolProperty(
+        name="Runtime Loaded",
+        description="If checked, the reference file will be loaded at runtime",
+        default=False
+    )
+
+
+@register
 class I3D_IO_PT_reference_file(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -831,7 +862,12 @@ class I3D_IO_PT_reference_file(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        layout.prop(context.object, 'i3d_reference_path')
+        reference = context.object.i3d_reference
+
+        layout.prop(reference, 'path')
+        row = layout.row()
+        row.enabled = reference.path != '' and reference.path.endswith('.i3d')
+        row.prop(reference, 'runtime_loaded')
 
 
 @register
@@ -847,6 +883,7 @@ class I3DMappingData(bpy.types.PropertyGroup):
         description="If this is left empty the name of the object itself will be used",
         default=''
     )
+
 
 @register
 class I3D_IO_PT_mapping_attributes(Panel):
@@ -876,20 +913,17 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeObjectAttributes)
-    bpy.types.Object.i3d_merge_group_index = IntProperty(default = -1)
+    bpy.types.Object.i3d_merge_group_index = IntProperty(default=-1)
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
-    bpy.types.Object.i3d_reference_path = StringProperty(
-        name="Reference Path",
-        description="Put the path to the .i3d file you want to reference here",
-        default='',
-        subtype='FILE_PATH')
+    bpy.types.Object.i3d_reference = PointerProperty(type=I3DReferenceData)
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
     load_post.append(handle_old_merge_groups)
+
 
 def unregister():
     load_post.remove(handle_old_merge_groups)
     del bpy.types.Scene.i3dio_merge_groups
-    del bpy.types.Object.i3d_reference_path
+    del bpy.types.Object.i3d_reference
     del bpy.types.Object.i3d_mapping
     del bpy.types.Object.i3d_merge_group_index
     del bpy.types.Object.i3d_attributes
