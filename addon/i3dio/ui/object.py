@@ -19,6 +19,8 @@ from bpy.props import (
 from .helper_functions import i3d_property
 from ..xml_i3d import i3d_max
 
+from .collision_data import COLLISIONS_ENUM_LIST, COLLISIONS
+
 classes = []
 
 
@@ -39,7 +41,6 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'rigid_body_type': {'default': 'none'},
         'lod_distance': {'name': 'lodDistance', 'default': "Enter your LOD Distances if needed."},
         'collision': {'name': 'collision', 'default': True},
-        'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
         'collision_filter_group': {'name': 'collisionFilterGroup', 'default': 'ff', 'type': 'HEX'},
         'collision_filter_mask': {'name': 'collisionFilterMask', 'default': 'ff', 'type': 'HEX'},
         'compound': {'name': 'compound', 'default': False},
@@ -147,13 +148,39 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Collision Mask (deprecated)",
         description="The objects collision mask as a hexadecimal value, "
         "deprecated in favor of new filter group and mask",
-        default=i3d_map['collision_mask']['default']
+        default="ff"
+    )
+
+    def collision_preset_items(self, _context) -> list[tuple[str, str, str]]:
+        return COLLISIONS_ENUM_LIST
+
+    def collision_preset_update(self, _context) -> None:
+        preset_name = self.collisions_preset
+
+        if preset_name == "NONE":
+            self.collision_filter_group = self.i3d_map['collision_filter_group']['default']
+            self.collision_filter_mask = self.i3d_map['collision_filter_mask']['default']
+            return
+
+        if preset_name in COLLISIONS['presets']:
+            preset = COLLISIONS['presets'][preset_name]
+
+            self.collision_filter_group = preset.group_hex
+            self.collision_filter_mask = preset.mask_hex
+
+    collisions_preset: EnumProperty(
+        name="Collision Preset",
+        description="Select a collision preset",
+        items=collision_preset_items,
+        default=0,
+        options=set(),
+        update=collision_preset_update
     )
 
     collision_filter_group: StringProperty(
         name="Collision Filter Group",
         description="The objects collision filter group as a hexadecimal value",
-        default=i3d_map['collision_filter_group']['default']
+        default=i3d_map['collision_filter_group']['default'],
     )
 
     collision_filter_mask: StringProperty(
@@ -563,10 +590,13 @@ def draw_rigid_body_attributes(layout, i3d_attributes) -> None:
 
         panel.prop(i3d_attributes, 'collision')
         collision_mask_row = panel.row()
-        collision_mask_row.enabled = False
+        collision_mask_row.enabled = True
         collision_mask_row.prop(i3d_attributes, 'collision_mask')
-        panel.prop(i3d_attributes, 'collision_filter_group')
-        panel.prop(i3d_attributes, 'collision_filter_mask')
+        box = panel.box()
+        box.prop(i3d_attributes, 'collisions_preset')
+        box.prop(i3d_attributes, 'collision_filter_group')
+        box.prop(i3d_attributes, 'collision_filter_mask')
+        panel.separator(factor=2, type='LINE')
         panel.prop(i3d_attributes, 'trigger')
         panel.prop(i3d_attributes, 'restitution')
         panel.prop(i3d_attributes, 'static_friction')
@@ -592,7 +622,8 @@ def draw_rigid_body_attributes(layout, i3d_attributes) -> None:
             row_split_type.enabled = False
             row_split_type_presets.enabled = False
             split_uvs_col.enabled = False
-            _unset_rigidbody_properties(i3d_attributes)
+            i3d_attributes.property_unset('split_type')
+            i3d_attributes.property_unset('split_uvs')
         elif i3d_attributes.split_type == 0:
             split_uvs_col.enabled = False
             i3d_attributes.property_unset('split_uvs')
