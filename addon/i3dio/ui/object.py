@@ -3,7 +3,7 @@ from bpy.types import (
     Panel
 )
 
-from bpy.app.handlers import (persistent, save_pre, load_post)
+from bpy.app.handlers import (persistent, load_post)
 
 from bpy.props import (
     StringProperty,
@@ -132,7 +132,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
             ('static', 'Static', "Inanimate object with infinite mass"),
             ('dynamic', 'Dynamic', "Object moves with physics"),
             ('kinematic', 'Kinematic', "Object moves without physics"),
-            ('compoundChild', 'Compound Child', "Uses the collision of the object higher in the hierarchy marked with the 'compound' option")
+            ('compoundChild', 'Compound Child', "Uses the collision of a higher-level object marked as 'compound'")
         ],
         default=i3d_map['rigid_body_type']['default']
     )
@@ -444,150 +444,34 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
 
 @register
-class I3D_IO_PT_object_attributes(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = "I3D Object Attributes"
-    bl_context = 'object'
+class I3DMappingData(bpy.types.PropertyGroup):
+    is_mapped: BoolProperty(
+        name="Add to mapping",
+        description="If checked this object will be mapped to the i3d mapping of the xml file",
+        default=False
+    )
 
-    @classmethod
-    def poll(cls, context):
-        return context.object is not None
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        obj = bpy.context.active_object
-
-        i3d_property(layout, obj.i3d_attributes, 'visibility', obj)
-        i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
-        i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
-        i3d_property(layout, obj.i3d_attributes, 'lod_distance', obj)
-
-@register
-class I3D_IO_PT_rigid_body_attributes(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = 'Rigidbody'
-    bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_object_attributes'
-
-    @classmethod
-    def poll(cls, context):
-        return context.object is not None and context.object.type == 'MESH'
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        obj = bpy.context.active_object
-
-        layout.prop(obj.i3d_attributes, 'rigid_body_type')
-
-        if obj.i3d_attributes.rigid_body_type != 'none':
-            row_compound = layout.row()
-            row_compound.prop(obj.i3d_attributes, 'compound')
-
-            if obj.i3d_attributes.rigid_body_type in ('static', 'compoundChild'):
-                row_compound.enabled = False
-                obj.i3d_attributes.property_unset('compound')
-
-            layout.prop(obj.i3d_attributes, 'collision')
-            layout.prop(obj.i3d_attributes, 'collision_mask')
-            layout.prop(obj.i3d_attributes, 'trigger')
-            layout.prop(obj.i3d_attributes, 'restitution')
-            layout.prop(obj.i3d_attributes, 'static_friction')
-            layout.prop(obj.i3d_attributes, 'dynamic_friction')
-            layout.prop(obj.i3d_attributes, 'linear_damping')
-            layout.prop(obj.i3d_attributes, 'angular_damping')
-            layout.prop(obj.i3d_attributes, 'density')
-
-            row_split_type_presets = layout.row()
-            row_split_type_presets.prop(obj.i3d_attributes, 'split_type_presets')
-
-            row_split_type = layout.row()
-            row_split_type.prop(obj.i3d_attributes, 'split_type')
-
-            split_uvs_col = layout.column()
-            split_uvs_col.label(text="Split UVs")
-            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=0, text="Min U")
-            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=1, text="Min V")
-            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=2, text="Max U")
-            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=3, text="Max V")
-            split_uvs_col.prop(obj.i3d_attributes, "split_uvs", index=4, text="UV World Scale")
-
-            if obj.i3d_attributes.rigid_body_type != 'static':
-                row_split_type.enabled = False
-                row_split_type_presets.enabled = False
-                split_uvs_col.enabled = False
-                obj.i3d_attributes.property_unset('split_type')
-                obj.i3d_attributes.property_unset('split_type_presets')
-                obj.i3d_attributes.property_unset('split_uvs')
-            else:
-                if obj.i3d_attributes.split_type == 0:
-                    split_uvs_col.enabled = False
-                    obj.i3d_attributes.property_unset('split_uvs')
-
-        else:
-            # Reset all properties if rigidbody is disabled (This is easier than doing conditional export for now.
-            # Since properties that are defaulted, wont get exported)
-            obj.i3d_attributes.property_unset('compound')
-            obj.i3d_attributes.property_unset('collision')
-            obj.i3d_attributes.property_unset('collision_mask')
-            obj.i3d_attributes.property_unset('trigger')
-            obj.i3d_attributes.property_unset('restitution')
-            obj.i3d_attributes.property_unset('static_friction')
-            obj.i3d_attributes.property_unset('dynamic_friction')
-            obj.i3d_attributes.property_unset('linear_damping')
-            obj.i3d_attributes.property_unset('angular_damping')
-            obj.i3d_attributes.property_unset('density')
-            obj.i3d_attributes.property_unset('split_type')
-            obj.i3d_attributes.property_unset('split_type_presets')
-            obj.i3d_attributes.property_unset('split_uvs')
+    mapping_name: StringProperty(
+        name="Alternative Name",
+        description="If this is left empty the name of the object itself will be used",
+        default=''
+    )
 
 
 @register
-class I3D_IO_PT_visibility_condition_attributes(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = 'Visibility Condition'
-    bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_object_attributes'
+class I3DReferenceData(bpy.types.PropertyGroup):
+    path: StringProperty(
+        name="Reference Path",
+        description="The path to the .i3d file you want to reference",
+        default='',
+        subtype='FILE_PATH'
+    )
 
-    @classmethod
-    def poll(cls, context):
-        return context.object is not None
-
-    def draw_header(self, context):
-        i3d_attr = context.object.i3d_attributes
-        self.layout.prop(i3d_attr, 'use_parent', text='')
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-
-        obj = context.active_object
-        i3d_attributes = obj.i3d_attributes
-        use_parent = i3d_attributes.use_parent
-
-        # NOTE: Seems like the only way this will be used in GE is if you set weatherPreventMask to something
-        # "useParent" is not a attribute in GE, its simply just a toggle in their panel
-
-        properties = ['minute_of_day_start', 'minute_of_day_end',
-                      'day_of_year_start', 'day_of_year_end',
-                      'weather_required_mask', 'weather_prevent_mask',
-                      'viewer_spaciality_required_mask', 'viewer_spaciality_prevent_mask',
-                      'render_invisible', 'visible_shader_parameter']
-
-        for prop in properties:
-            row = layout.row()
-            row.prop(i3d_attributes, prop)
-            row.enabled = not use_parent
-
-            if use_parent:
-                i3d_attributes.property_unset(prop)
+    runtime_loaded: BoolProperty(
+        name="Runtime Loaded",
+        description="If checked, the reference file will be loaded at runtime",
+        default=False
+    )
 
 
 @register
@@ -606,34 +490,178 @@ class I3DMergeGroup(bpy.types.PropertyGroup):
 
 
 @register
-class I3D_IO_PT_merge_group_attributes(Panel):
+class I3D_IO_PT_object_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
-    bl_label = 'Merge Group'
+    bl_label = "I3D Object Attributes"
     bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_object_attributes'
 
     @classmethod
     def poll(cls, context):
-        return context.object is not None and context.object.type == 'MESH'
+        return context.object is not None
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        obj = context.object
+        obj = context.active_object
+        i3d_attributes = obj.i3d_attributes
 
-        row = layout.row(align=True)
-        row.use_property_decorate = False
+        i3d_property(layout, i3d_attributes, 'visibility', obj)
+        i3d_property(layout, i3d_attributes, 'clip_distance', obj)
+        i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
+        i3d_property(layout, i3d_attributes, 'lod_distance', obj)
 
+        if obj.type == 'MESH':
+            draw_rigid_body_attributes(layout, i3d_attributes)
+            draw_merge_group_attributes(layout, obj)
+
+        draw_visibility_condition_attributes(layout, i3d_attributes)
+
+        if obj.type == 'EMPTY':
+            draw_joint_attributes(layout, i3d_attributes)
+
+            header, panel = layout.panel("i3d_reference", default_closed=False)
+            header.label(text="Reference File")
+            if panel:
+                panel.use_property_split = True
+                panel.prop(obj.i3d_reference, 'path')
+                row = panel.row()
+                row.enabled = obj.i3d_reference.path != '' and obj.i3d_reference.path.endswith('.i3d')
+                row.prop(obj.i3d_reference, 'runtime_loaded')
+
+        header, panel = layout.panel("i3d_mapping_attributes", default_closed=False)
+        header.label(text="I3D Mapping")
+        if panel:
+            panel.use_property_split = True
+            panel.prop(obj.i3d_mapping, 'is_mapped')
+            panel.prop(obj.i3d_mapping, 'mapping_name')
+
+
+def draw_rigid_body_attributes(layout, i3d_attributes) -> None:
+    def _unset_rigidbody_properties(attributes) -> None:
+        """Helper function to unset all rigid body-related properties."""
+        for prop in ['compound', 'collision', 'collision_mask', 'trigger', 'restitution',
+                     'static_friction', 'dynamic_friction', 'linear_damping', 'angular_damping',
+                     'density', 'split_type', 'split_type_presets', 'split_uvs']:
+            attributes.property_unset(prop)
+
+    header, panel = layout.panel("i3d_rigid_body_attributes", default_closed=False)
+    header.label(text="Rigidbody")
+    if panel:
+        panel.prop(i3d_attributes, 'rigid_body_type')
+
+        if i3d_attributes.rigid_body_type == 'none':
+            _unset_rigidbody_properties(i3d_attributes)
+            return
+
+        row_compound = panel.row()
+        row_compound.prop(i3d_attributes, 'compound')
+        if i3d_attributes.rigid_body_type in ('static', 'compoundChild'):
+            row_compound.enabled = False
+            i3d_attributes.property_unset('compound')
+
+        panel.prop(i3d_attributes, 'collision')
+        collision_mask_row = panel.row()
+        collision_mask_row.enabled = False
+        collision_mask_row.prop(i3d_attributes, 'collision_mask')
+        panel.prop(i3d_attributes, 'collision_filter_group')
+        panel.prop(i3d_attributes, 'collision_filter_mask')
+        panel.prop(i3d_attributes, 'trigger')
+        panel.prop(i3d_attributes, 'restitution')
+        panel.prop(i3d_attributes, 'static_friction')
+        panel.prop(i3d_attributes, 'dynamic_friction')
+        panel.prop(i3d_attributes, 'linear_damping')
+        panel.prop(i3d_attributes, 'angular_damping')
+        panel.prop(i3d_attributes, 'density')
+
+        # Split type
+        row_split_type_presets = panel.row()
+        row_split_type_presets.prop(i3d_attributes, 'split_type_presets')
+
+        row_split_type = panel.row()
+        row_split_type.prop(i3d_attributes, 'split_type')
+
+        split_uvs_col = panel.column()
+        split_uvs_col.label(text="Split UVs")
+        for index, label in enumerate(["Min U", "Min V", "Max U", "Max V", "UV World Scale"]):
+            split_uvs_col.prop(i3d_attributes, "split_uvs", index=index, text=label)
+
+        # Disable split type and split UVs if rigid body type is static
+        if i3d_attributes.rigid_body_type != 'static':
+            row_split_type.enabled = False
+            row_split_type_presets.enabled = False
+            split_uvs_col.enabled = False
+            _unset_rigidbody_properties(i3d_attributes)
+        elif i3d_attributes.split_type == 0:
+            split_uvs_col.enabled = False
+            i3d_attributes.property_unset('split_uvs')
+
+
+def draw_visibility_condition_attributes(layout, i3d_attributes) -> None:
+    props = ['minute_of_day_start', 'minute_of_day_end', 'day_of_year_start', 'day_of_year_end',
+             'weather_required_mask', 'weather_prevent_mask', 'viewer_spaciality_required_mask',
+             'viewer_spaciality_prevent_mask', 'render_invisible', 'visible_shader_parameter']
+
+    def _unset_visibility_condition_properties(attributes) -> None:
+        """Helper function to unset all visibility condition-related properties."""
+        for prop in props:
+            attributes.property_unset(prop)
+
+    # Turn off for header property
+    layout.use_property_split = False
+    header, panel = layout.panel("i3d_visibility_condition_attributes", default_closed=True)
+    header.prop(i3d_attributes, 'use_parent', text='Visibility Condition')
+    if panel:
+        if i3d_attributes.use_parent:
+            _unset_visibility_condition_properties(i3d_attributes)
+
+        panel.enabled = not i3d_attributes.use_parent
+
+        # NOTE: Seems like the only way this will be used in GE is if you set weatherPreventMask to something
+        # "useParent" is not a attribute in I3D, its simply just a toggle in their panel
+        panel.use_property_split = True
+        for prop in props:
+            panel.prop(i3d_attributes, prop)
+
+
+def draw_joint_attributes(layout, i3d_attributes):
+    layout.use_property_split = False
+    header, panel = layout.panel("i3d_joint_attributes", default_closed=True)
+    header.prop(i3d_attributes, 'joint', text='Joint')
+    if panel:
+        panel.use_property_split = True
+        panel.enabled = i3d_attributes.joint
+        panel.prop(i3d_attributes, 'projection')
+        panel.prop(i3d_attributes, 'projection_distance')
+        panel.prop(i3d_attributes, 'projection_angle')
+        panel.prop(i3d_attributes, 'x_axis_drive')
+        panel.prop(i3d_attributes, 'y_axis_drive')
+        panel.prop(i3d_attributes, 'z_axis_drive')
+        panel.prop(i3d_attributes, 'drive_position')
+        panel.prop(i3d_attributes, 'drive_force_limit')
+        panel.prop(i3d_attributes, 'drive_spring')
+        panel.prop(i3d_attributes, 'drive_damping')
+        panel.prop(i3d_attributes, 'breakable_joint')
+        panel.prop(i3d_attributes, 'joint_break_force')
+        panel.prop(i3d_attributes, 'joint_break_torque')
+
+
+def draw_merge_group_attributes(layout, obj):
+    layout.use_property_split = True
+    header, panel = layout.panel("i3d_merge_group_attributes", default_closed=False)
+    header.label(text="Merge Group")
+    if panel:
+        row = panel.row(align=True)
         row.operator('i3dio.choose_merge_group', text="", icon='DOWNARROW_HLT')
 
         col = row.column(align=True)
-        merge_group_index = obj.i3d_merge_group_index 
+        merge_group_index = obj.i3d_merge_group_index
+
         if merge_group_index == -1:
             col.operator("i3dio.new_merge_group", text="New", icon="ADD")
         else:
-            merge_group = context.scene.i3dio_merge_groups[merge_group_index]
+            merge_group = bpy.context.scene.i3dio_merge_groups[merge_group_index]
             col.prop(merge_group, "name", text="")
             col = row.column(align=True)
             col.operator('i3dio.select_merge_group_root', text="", icon="COLOR_RED")
@@ -654,7 +682,8 @@ class I3D_IO_OT_choose_merge_group(bpy.types.Operator):
     bl_property = "enum"
 
     def get_enum_options(self, context):
-        merge_groups_item_list = sorted([(str(idx), mg.name, "") for idx,mg in enumerate(context.scene.i3dio_merge_groups)],key=lambda x: x[1])
+        merge_groups_item_list = sorted([(str(idx), mg.name, "") for idx, mg in
+                                         enumerate(context.scene.i3dio_merge_groups)], key=lambda x: x[1])
         return merge_groups_item_list
 
     enum: EnumProperty(items=get_enum_options, name="Items")
@@ -671,10 +700,11 @@ class I3D_IO_OT_choose_merge_group(bpy.types.Operator):
         else:
             print("same mg")
         return {"FINISHED"}
-    
+
     def invoke(self, context, event):
         context.window_manager.invoke_search_popup(self)
         return {"RUNNING_MODAL"}
+
 
 @register
 class I3D_IO_OT_new_merge_group(bpy.types.Operator):
@@ -693,7 +723,7 @@ class I3D_IO_OT_new_merge_group(bpy.types.Operator):
             name = f"{MERGE_GROUP_DEFAULT_NAME}.{count:03d}"
             count += 1
         mg = context.scene.i3dio_merge_groups.add()
-        
+
         mg.name = name
         mg.root = obj
         old_mg_index = obj.i3d_merge_group_index
@@ -701,7 +731,8 @@ class I3D_IO_OT_new_merge_group(bpy.types.Operator):
         if old_mg_index != -1:
             remove_merge_group_if_empty(context, old_mg_index)
         return {'FINISHED'}
-    
+
+
 def remove_merge_group_if_empty(context, mg_index):
     mg_member_count = 0
     objects_in_higher_indexed_merge_groups = []
@@ -717,7 +748,8 @@ def remove_merge_group_if_empty(context, mg_index):
             obj.i3d_merge_group_index -= 1
     else:
         print(f"{mg_member_count} members left in '{context.scene.i3dio_merge_groups[mg_index]}'")
-        
+
+
 @register
 class I3D_IO_OT_remove_from_merge_group(bpy.types.Operator):
     bl_idname = "i3dio.remove_from_merge_group"
@@ -730,6 +762,7 @@ class I3D_IO_OT_remove_from_merge_group(bpy.types.Operator):
         context.object.i3d_merge_group_index = -1
         remove_merge_group_if_empty(context, old_mg_index)
         return {'FINISHED'}
+
 
 @register
 class I3D_IO_OT_select_merge_group_root(bpy.types.Operator):
@@ -745,6 +778,7 @@ class I3D_IO_OT_select_merge_group_root(bpy.types.Operator):
     def execute(self, context):
         context.scene.i3dio_merge_groups[context.object.i3d_merge_group_index].root = context.object
         return {'FINISHED'}
+
 
 @register
 class I3D_IO_OT_select_mg_objects(bpy.types.Operator):
@@ -764,14 +798,15 @@ class I3D_IO_OT_select_mg_objects(bpy.types.Operator):
                 obj.select_set(True)
         return {'FINISHED'}
 
+
 @persistent
 def handle_old_merge_groups(dummy):
     for scene in bpy.data.scenes:
         for obj in scene.objects:
-            if (old_mg := obj.get('i3d_merge_group')) != None:
+            if (old_mg := obj.get('i3d_merge_group')) is not None:
                 group_id = old_mg.get('group_id')
                 is_root = old_mg.get('is_root')
-                if group_id != None and group_id != "":
+                if group_id is not None and group_id != "":
                     if (mg_idx := scene.i3dio_merge_groups.find(group_id)) != -1:
                         mg = scene.i3dio_merge_groups[mg_idx]
                         obj.i3d_merge_group_index = mg_idx
@@ -779,134 +814,9 @@ def handle_old_merge_groups(dummy):
                         mg = scene.i3dio_merge_groups.add()
                         mg.name = group_id
                         obj.i3d_merge_group_index = len(scene.i3dio_merge_groups) - 1
-                    if is_root != None and is_root == 1:
+                    if is_root is not None and is_root == 1:
                         mg.root = obj
                 del obj['i3d_merge_group']
-
-@register
-class I3D_IO_PT_joint_attributes(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = 'Joint'
-    bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_object_attributes'
-    bl_options = {'DEFAULT_CLOSED'}
-
-    @classmethod
-    def poll(cls, context):
-        return context.object is not None and context.object.type == 'EMPTY'
-
-    def draw_header(self, context):
-        i3d_attr = context.object.i3d_attributes
-        self.layout.prop(i3d_attr, 'joint', text='')
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        obj = context.object
-
-        properties = [
-            ('projection',),
-            ('x_axis_drive',),
-            ('y_axis_drive',),
-            ('z_axis_drive',),
-            ('drive_position',),
-            ('projection_distance',),
-            ('projection_angle',),
-            ('drive_force_limit',),
-            ('drive_spring',),
-            ('drive_damping',),
-            ('breakable_joint',),
-            ('joint_break_force',),
-            ('joint_break_torque',)
-        ]
-
-        for prop in properties:
-            row = layout.row()
-            row.prop(obj.i3d_attributes, prop[0])
-            if obj.i3d_attributes.joint is False:
-                row.enabled = False
-                obj.i3d_attributes.property_unset(prop[0])
-
-
-@register
-class I3DReferenceData(bpy.types.PropertyGroup):
-    path: StringProperty(
-        name="Reference Path",
-        description="The path to the .i3d file you want to reference",
-        default='',
-        subtype='FILE_PATH'
-    )
-
-    runtime_loaded: BoolProperty(
-        name="Runtime Loaded",
-        description="If checked, the reference file will be loaded at runtime",
-        default=False
-    )
-
-
-@register
-class I3D_IO_PT_reference_file(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = 'Reference File'
-    bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_object_attributes'
-
-    @classmethod
-    def poll(cls, context):
-        return context.object is not None and context.object.type == 'EMPTY'
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        reference = context.object.i3d_reference
-
-        layout.prop(reference, 'path')
-        row = layout.row()
-        row.enabled = reference.path != '' and reference.path.endswith('.i3d')
-        row.prop(reference, 'runtime_loaded')
-
-
-@register
-class I3DMappingData(bpy.types.PropertyGroup):
-    is_mapped: BoolProperty(
-        name="Add to mapping",
-        description="If checked this object will be mapped to the i3d mapping of the xml file",
-        default=False
-    )
-
-    mapping_name: StringProperty(
-        name="Alternative Name",
-        description="If this is left empty the name of the object itself will be used",
-        default=''
-    )
-
-
-@register
-class I3D_IO_PT_mapping_attributes(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = "I3D Mapping"
-    bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_object_attributes'
-
-    @classmethod
-    def poll(cls, context):
-        return context.object is not None
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        obj = bpy.context.active_object
-
-        row = layout.row()
-        row.prop(obj.i3d_mapping, 'is_mapped')
-        row = layout.row()
-        row.prop(obj.i3d_mapping, 'mapping_name')
 
 
 def register():
