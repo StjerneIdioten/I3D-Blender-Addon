@@ -39,7 +39,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
         'rigid_body_type': {'default': 'none'},
-        'lod_distance': {'name': 'lodDistance', 'default': "Enter your LOD Distances if needed."},
+        'lod_distance': {'name': 'lodDistance', 'default': ""},
         'collision': {'name': 'collision', 'default': True},
         'collision_filter_group': {'name': 'collisionFilterGroup', 'default': 'ff', 'type': 'HEX'},
         'collision_filter_mask': {'name': 'collisionFilterMask', 'default': 'ff', 'type': 'HEX'},
@@ -544,7 +544,7 @@ class I3D_IO_PT_object_attributes(Panel):
         i3d_property(layout, i3d_attributes, 'visibility', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
-        i3d_property(layout, i3d_attributes, 'lod_distance', obj)
+        layout.prop(i3d_attributes, 'lod_distance', placeholder="Enter your LOD Distances if needed.")
 
         if obj.type == 'MESH':
             draw_rigid_body_attributes(layout, i3d_attributes)
@@ -569,7 +569,7 @@ class I3D_IO_PT_object_attributes(Panel):
         if panel:
             panel.use_property_split = True
             panel.prop(obj.i3d_mapping, 'is_mapped')
-            panel.prop(obj.i3d_mapping, 'mapping_name')
+            panel.prop(obj.i3d_mapping, 'mapping_name', placeholder="myCube")
 
 
 def draw_rigid_body_attributes(layout, i3d_attributes) -> None:
