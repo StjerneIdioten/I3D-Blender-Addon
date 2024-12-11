@@ -51,6 +51,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'linear_damping': {'name': 'linearDamping', 'default': 0.0},
         'angular_damping': {'name': 'angularDamping', 'default': 0.01},
         'density': {'name': 'density', 'default': 1.0},
+        'solver_iteration_count': {'name': 'solverIterationCount', 'default': 4},
         'split_type': {'name': 'splitType', 'default': 0},
         'split_uvs': {'name': 'splitUvs', 'default': (0.0, 0.0, 1.0, 1.0, 1.0)},
         'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0},
@@ -248,6 +249,12 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=i3d_map['density']['default'],
         min=0,
         max=20
+    )
+
+    solver_iteration_count: IntProperty(
+        name="Solver Iteration Count",
+        description="The number of iterations the physics engine uses to solve the constraints",
+        default=i3d_map['solver_iteration_count']['default'],
     )
 
     split_type: IntProperty(
@@ -568,9 +575,9 @@ class I3D_IO_PT_object_attributes(Panel):
 def draw_rigid_body_attributes(layout, i3d_attributes) -> None:
     def _unset_rigidbody_properties(attributes) -> None:
         """Helper function to unset all rigid body-related properties."""
-        for prop in ['compound', 'collision', 'collision_mask', 'trigger', 'restitution',
+        for prop in ['compound', 'collision', 'trigger', 'restitution',
                      'static_friction', 'dynamic_friction', 'linear_damping', 'angular_damping',
-                     'density', 'split_type', 'split_type_presets', 'split_uvs']:
+                     'density', 'solver_iteration_count', 'split_type', 'split_type_presets', 'split_uvs']:
             attributes.property_unset(prop)
 
     header, panel = layout.panel("i3d_rigid_body_attributes", default_closed=False)
@@ -589,38 +596,42 @@ def draw_rigid_body_attributes(layout, i3d_attributes) -> None:
             i3d_attributes.property_unset('compound')
 
         panel.prop(i3d_attributes, 'collision')
-        collision_mask_row = panel.row()
-        collision_mask_row.enabled = True
-        collision_mask_row.prop(i3d_attributes, 'collision_mask')
-        box = panel.box()
-        box.prop(i3d_attributes, 'collisions_preset')
-        box.prop(i3d_attributes, 'collision_filter_group')
-        box.prop(i3d_attributes, 'collision_filter_mask')
-        panel.separator(factor=2, type='LINE')
         panel.prop(i3d_attributes, 'trigger')
+
+        panel.separator(factor=2, type='LINE')
+        panel.prop(i3d_attributes, 'collisions_preset')
+        panel.prop(i3d_attributes, 'collision_filter_group')
+        panel.prop(i3d_attributes, 'collision_filter_mask')
+        panel.separator(factor=2, type='LINE')
+
         panel.prop(i3d_attributes, 'restitution')
         panel.prop(i3d_attributes, 'static_friction')
         panel.prop(i3d_attributes, 'dynamic_friction')
         panel.prop(i3d_attributes, 'linear_damping')
         panel.prop(i3d_attributes, 'angular_damping')
         panel.prop(i3d_attributes, 'density')
+        panel.prop(i3d_attributes, 'solver_iteration_count')
 
+        panel.separator(factor=2, type='LINE')
         # Split type
-        row_split_type_presets = panel.row()
-        row_split_type_presets.prop(i3d_attributes, 'split_type_presets')
-
-        row_split_type = panel.row()
-        row_split_type.prop(i3d_attributes, 'split_type')
+        row = panel.row(align=True)
+        row.use_property_split = False
+        row.prop(i3d_attributes, "split_type")
+        row.prop(i3d_attributes, "split_type_presets", text="", icon_only=True, icon="NONE")
 
         split_uvs_col = panel.column()
+        split_uvs_col.use_property_split = False
         split_uvs_col.label(text="Split UVs")
-        for index, label in enumerate(["Min U", "Min V", "Max U", "Max V", "UV World Scale"]):
-            split_uvs_col.prop(i3d_attributes, "split_uvs", index=index, text=label)
+        grid = split_uvs_col.grid_flow(row_major=True, columns=2, align=True)
+        grid.prop(i3d_attributes, "split_uvs", index=0, text="Min U")
+        grid.prop(i3d_attributes, "split_uvs", index=2, text="Max U")
+        grid.prop(i3d_attributes, "split_uvs", index=1, text="Min V")
+        grid.prop(i3d_attributes, "split_uvs", index=3, text="Max V")
+        split_uvs_col.prop(i3d_attributes, "split_uvs", index=4, text="UV World Scale")
 
         # Disable split type and split UVs if rigid body type is static
         if i3d_attributes.rigid_body_type != 'static':
-            row_split_type.enabled = False
-            row_split_type_presets.enabled = False
+            row.enabled = False
             split_uvs_col.enabled = False
             i3d_attributes.property_unset('split_type')
             i3d_attributes.property_unset('split_uvs')
