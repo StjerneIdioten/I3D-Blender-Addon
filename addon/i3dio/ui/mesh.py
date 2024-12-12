@@ -24,6 +24,20 @@ def register(cls):
 
 
 @register
+class MeshMaterialSlotName(bpy.types.PropertyGroup):
+    name: StringProperty(
+        name="Name",
+        description="Name of the material slot",
+        default=""
+    )
+    mat_index: IntProperty(
+        name="Material Index",
+        description="Index of the material slot in blender",
+        default=0
+    )
+
+
+@register
 class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     i3d_map = {
         'casts_shadows': {'name': 'castsShadows', 'default': False},
@@ -104,6 +118,8 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         description="The object used to calculate bvCenter and bvRadius. If the bounding volume object shares origin with the original object, then Giants Engine will always ignore the exported values and recalculate them itself",
         type=bpy.types.Object,
 		)
+
+    material_slot_names: CollectionProperty(type=MeshMaterialSlotName)
 
 
 @register

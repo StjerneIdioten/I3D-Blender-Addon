@@ -18,6 +18,7 @@ class SubSet:
         self.first_vertex = 0
         self.number_of_indices = 0
         self.number_of_vertices = 0
+        self.material_slot_name = ''
         self.triangles = []
 
     def as_dict(self):
@@ -25,12 +26,15 @@ class SubSet:
                              'firstVertex': f"{self.first_vertex}",
                              'numIndices': f"{self.number_of_indices}",
                              'numVertices': f"{self.number_of_vertices}"}
+        if self.material_slot_name:
+            subset_attributes['materialSlotName'] = self.material_slot_name
         return subset_attributes
 
     def __str__(self):
         return f'numTriangles="{len(self.triangles)}" ' \
                f'firstIndex="{self.first_index}" firstVertex="{self.first_vertex}" ' \
-               f'numIndices="{self.number_of_indices}" numVertices="{self.number_of_vertices}"'
+               f'numIndices="{self.number_of_indices}" numVertices="{self.number_of_vertices}" ' \
+               f'materialSlotName="{self.material_slot_name}"'
 
     def add_triangle(self, triangle):
         self.triangles.append(triangle)
@@ -194,6 +198,10 @@ class IndexedTriangleSet(Node):
 
         zero_weight_vertices = set()
         for triangle in subset.triangles[triangle_offset:]:
+
+            if len(mesh.i3d_attributes.material_slot_names):
+                subset.material_slot_name = mesh.i3d_attributes.material_slot_names[triangle.material_index].name
+                self.logger.debug(f"Adding material slot name '{subset.material_slot_name}' to subset")
 
             # Add a new empty container for the vertex indexes of the triangle
             self.triangles.append(list())

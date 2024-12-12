@@ -274,6 +274,28 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     shader_textures: CollectionProperty(type=I3DShaderTexture)
 
 
+def sync_active_material_slot_name(mesh):
+    """Synchronize material slot names for the mesh"""
+    if not hasattr(mesh, 'i3d_attributes'):
+        return None
+
+    attributes = mesh.i3d_attributes
+    slot_names = attributes.material_slot_names
+    material_count = len(mesh.materials)
+
+    # Add missing entries
+    while len(slot_names) < material_count:
+        slot = slot_names.add()
+        slot.mat_index = len(slot_names) - 1
+        slot.name = f"MaterialSlot_{slot.mat_index}"
+
+    # Remove excess entries
+    while len(slot_names) > material_count:
+        slot_names.remove(len(slot_names) - 1)
+
+    return slot_names
+
+
 @register
 class I3D_IO_PT_shader(Panel):
     bl_space_type = 'PROPERTIES'
@@ -289,7 +311,11 @@ class I3D_IO_PT_shader(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        material = bpy.context.active_object.active_material
+
+        obj = context.object
+        material = obj.active_material
+
+        layout.prop(material, "i3d_material_slot_name", text="Material Slot Name")
 
         layout.prop(material.i3d_attributes, 'source')
         if material.i3d_attributes.variations:
@@ -357,10 +383,51 @@ class I3D_IO_PT_shader_textures(Panel):
         return is_active
 
 
+def get_material_slot_name(self):
+    obj = bpy.context.object
+    if not obj or not isinstance(obj.data, bpy.types.Mesh):
+        return ""
+    mesh = obj.data
+
+    active_mat_index = obj.active_material_index
+    if active_mat_index < 0 or active_mat_index >= len(mesh.materials):
+        return ""
+
+    attributes = mesh.i3d_attributes
+    if active_mat_index < len(attributes.material_slot_names):
+        return attributes.material_slot_names[active_mat_index].name
+    return ""
+
+
+def set_material_slot_name(self, value):
+    obj = bpy.context.object
+    if not obj or not isinstance(obj.data, bpy.types.Mesh):
+        return
+    mesh = obj.data
+
+    active_mat_index = obj.active_material_index
+    if active_mat_index < 0 or active_mat_index >= len(mesh.materials):
+        return
+
+    attributes = mesh.i3d_attributes
+    while len(attributes.material_slot_names) <= active_mat_index:
+        attributes.material_slot_names.add()
+
+    attributes.material_slot_names[active_mat_index].name = value
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Material.i3d_attributes = PointerProperty(type=I3DMaterialShader)
+
+    # Add a dummy property to the material and set/get materal slot names based on the active material & mesh
+    bpy.types.Material.i3d_material_slot_name = StringProperty(
+        name="Material Slot Name",
+        description="Dummy property for material slot name",
+        get=get_material_slot_name,
+        set=set_material_slot_name
+    )
 
 
 def unregister():
