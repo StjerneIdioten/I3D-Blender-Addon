@@ -544,16 +544,13 @@ class I3D_IO_PT_object_attributes(Panel):
         i3d_property(layout, i3d_attributes, 'visibility', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
-        layout.prop(i3d_attributes, 'lod_distance', placeholder="Enter your LOD Distances if needed.")
 
         if obj.type == 'MESH':
             draw_rigid_body_attributes(layout, i3d_attributes)
             draw_merge_group_attributes(layout, obj)
 
-        draw_visibility_condition_attributes(layout, i3d_attributes)
-
         if obj.type == 'EMPTY':
-            draw_joint_attributes(layout, i3d_attributes)
+            layout.prop(i3d_attributes, 'lod_distance', placeholder="Enter your LOD Distances if needed.")
 
             header, panel = layout.panel("i3d_reference", default_closed=False)
             header.label(text="Reference File")
@@ -564,12 +561,18 @@ class I3D_IO_PT_object_attributes(Panel):
                 row.enabled = obj.i3d_reference.path != '' and obj.i3d_reference.path.endswith('.i3d')
                 row.prop(obj.i3d_reference, 'runtime_loaded')
 
+            draw_joint_attributes(layout, i3d_attributes)
+
         header, panel = layout.panel("i3d_mapping_attributes", default_closed=False)
         header.label(text="I3D Mapping")
         if panel:
             panel.use_property_split = True
             panel.prop(obj.i3d_mapping, 'is_mapped')
-            panel.prop(obj.i3d_mapping, 'mapping_name', placeholder="myCube")
+            row = panel.row()
+            row.enabled = obj.i3d_mapping.is_mapped
+            row.prop(obj.i3d_mapping, 'mapping_name', placeholder="myCube")
+
+        draw_visibility_condition_attributes(layout, i3d_attributes)
 
 
 def draw_rigid_body_attributes(layout, i3d_attributes) -> None:
