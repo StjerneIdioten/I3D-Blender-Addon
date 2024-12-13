@@ -152,6 +152,12 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         type=bpy.types.Object,
     )
 
+    use_vertex_colors: BoolProperty(
+        name="Use Vertex Colors",
+        description="Enable to export vertex colors for this object",
+        default=False
+    )
+
 
 @register
 class I3D_IO_PT_shape_attributes(Panel):
@@ -185,6 +191,8 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "nav_mesh_mask")
         layout.prop(obj.i3d_attributes, "decal_layer")
         layout.prop(obj.i3d_attributes, "vertex_compression_range")
+        layout.prop(obj.i3d_attributes, 'fill_volume')
+        layout.prop(obj.i3d_attributes, 'use_vertex_colors')
 
 
 @register
