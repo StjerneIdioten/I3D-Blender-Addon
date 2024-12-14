@@ -177,6 +177,11 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
 
 
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
+    # Check if the object (and its children) should be ignored
+    if obj.name.lower().endswith('_ignore'):
+        logger.info(f"[{obj.name}] ends with '_ignore', skipping export of this object and its children")
+        return
+
     # Special handling of armature nodes, since they are sort of "extra" compared to how other programs like Maya
     # handles bones. So the option for turning them off is provided.
     _parent = parent
