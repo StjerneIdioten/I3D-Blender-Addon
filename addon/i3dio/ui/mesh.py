@@ -101,9 +101,12 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
 
     bounding_volume_object: PointerProperty(
         name="Bounding Volume Object",
-        description="The object used to calculate bvCenter and bvRadius. If the bounding volume object shares origin with the original object, then Giants Engine will always ignore the exported values and recalculate them itself",
+        description="The object used to calculate bvCenter and bvRadius. "
+        "If the bounding volume object shares origin with the original object, "
+        "then Giants Engine will always ignore the exported values and recalculate them itself",
         type=bpy.types.Object,
-		)
+        poll=lambda self, obj: obj.type == 'MESH' and obj is not bpy.context.object
+    )
 
 
 @register
