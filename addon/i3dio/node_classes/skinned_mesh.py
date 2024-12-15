@@ -92,9 +92,11 @@ class SkinnedMeshRootNode(TransformGroupNode):
                 self.element.remove(bone.element)
                 self.children.remove(bone)
                 if parent is not None:
+                    bone.parent = parent
                     parent.add_child(bone)
                     parent.element.append(bone.element)
                 else:
+                    bone.parent = None
                     self.i3d.scene_root_nodes.append(bone)
                     self.i3d.xml_elements['Scene'].append(bone.element)
 
