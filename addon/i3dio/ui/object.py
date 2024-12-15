@@ -872,6 +872,59 @@ class I3D_IO_PT_mapping_attributes(Panel):
         row.prop(obj.i3d_mapping, 'mapping_name')
 
 
+@register
+class I3DMergeChildren(bpy.types.PropertyGroup):
+    enabled: BoolProperty(
+        name="Enable Merge Children",
+        description="If checked this object will be merged with the parent object",
+        default=False
+    )
+    freeze_translation: BoolProperty(
+        name="Translation",
+        description="If checked the translation of the children will be frozen in place when merged",
+        default=False
+    )
+    freeze_rotation: BoolProperty(
+        name="Rotation",
+        description="If checked the rotation of the children will be frozen in place when merged",
+        default=False
+    )
+    freeze_scale: BoolProperty(
+        name="Scale",
+        description="If checked the scale of the children will be frozen in place when merged",
+        default=False
+    )
+
+
+@register
+class I3D_IO_PT_merge_children_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "Merge Children"
+    bl_context = 'object'
+    bl_parent_id = 'I3D_IO_PT_object_attributes'
+
+    @classmethod
+    def poll(cls, context):
+        return context.object is not None and context.object.type == 'EMPTY'
+
+    def draw_header(self, context):
+        layout = self.layout
+        layout.prop(context.object.i3d_merge_children, 'enabled', text="")
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        obj = context.object
+
+        col = layout.column(heading="Freeze")
+        col.enabled = obj.i3d_merge_children.enabled
+        col.prop(obj.i3d_merge_children, 'freeze_translation')
+        col.prop(obj.i3d_merge_children, 'freeze_rotation')
+        col.prop(obj.i3d_merge_children, 'freeze_scale')
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -884,10 +937,12 @@ def register():
         default='',
         subtype='FILE_PATH')
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
+    bpy.types.Object.i3d_merge_children = PointerProperty(type=I3DMergeChildren)
     load_post.append(handle_old_merge_groups)
 
 def unregister():
     load_post.remove(handle_old_merge_groups)
+    del bpy.types.Object.i3d_merge_children
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_reference_path
     del bpy.types.Object.i3d_mapping
