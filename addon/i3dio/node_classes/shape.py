@@ -211,7 +211,7 @@ class IndexedTriangleSet(Node):
 
                 # Add vertex color
                 vertex_color = None
-                if len(mesh.color_attributes):
+                if mesh.i3d_attributes.use_vertex_colors and len(mesh.color_attributes):
                     # Use the active color layer or fallback to the first (GE supports only one layer)
                     color_layer = mesh.color_attributes.active_color or mesh.color_attributes[0]
 
