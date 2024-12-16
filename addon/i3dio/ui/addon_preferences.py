@@ -124,10 +124,10 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         self.password = ""
 
         # Check if login was successful
-        if '<li id="topmenu1"><a href="index.php?logout=true" accesskey="1" title="">Logout</a></li>' not in request.text:
-            self.report({'WARNING'}, f"Could not login to https://gdn.giants-software.com/index.php with provided credentials!")
+        if not re.search(r'href="index\.php\?logout=true"', request.text):
+            self.report({'WARNING'}, "Could not login to https://gdn.giants-software.com/index.php with provided credentials!")
             return {'CANCELLED'}
-        
+
         # Get download page
         request = session.get('https://gdn.giants-software.com/downloads.php')
 
