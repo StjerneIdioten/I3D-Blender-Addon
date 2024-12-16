@@ -30,7 +30,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
                           'default': 'point',
                           'tracking': {'member_path': 'type',
                                        'mapping': {'POINT': 'point',
-                                                   'SUN': 'point',
+                                                   'SUN': 'directional',
                                                    'SPOT': 'spot',
                                                    'AREA': 'directional'}
                                        }
