@@ -869,6 +869,7 @@ class I3DMappingData(bpy.types.PropertyGroup):
         default=''
     )
 
+
 @register
 class I3D_IO_PT_mapping_attributes(Panel):
     bl_space_type = 'PROPERTIES'
@@ -885,12 +886,35 @@ class I3D_IO_PT_mapping_attributes(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        obj = bpy.context.active_object
+        obj = context.object
 
         row = layout.row()
         row.prop(obj.i3d_mapping, 'is_mapped')
         row = layout.row()
         row.prop(obj.i3d_mapping, 'mapping_name')
+
+
+@register
+class I3D_IO_PT_mapping_bone_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Mapping"
+    bl_context = 'bone'
+
+    @classmethod
+    def poll(cls, context):
+        return context.bone or context.edit_bone
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        bone = context.bone or context.edit_bone
+
+        row = layout.row()
+        row.prop(bone.i3d_mapping, 'is_mapped')
+        row = layout.row()
+        row.prop(bone.i3d_mapping, 'mapping_name')
 
 
 @persistent
@@ -923,8 +947,10 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Object.i3d_attributes = PointerProperty(type=I3DNodeObjectAttributes)
-    bpy.types.Object.i3d_merge_group_index = IntProperty(default = -1)
+    bpy.types.Object.i3d_merge_group_index = IntProperty(default=-1)
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
+    bpy.types.Bone.i3d_mapping = PointerProperty(type=I3DMappingData)
+    bpy.types.EditBone.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.Object.i3d_reference_path = StringProperty(
         name="Reference Path",
         description="Put the path to the .i3d file you want to reference here",
@@ -934,10 +960,13 @@ def register():
     load_post.append(handle_old_merge_groups)
     load_post.append(check_lod_distance)
 
+
 def unregister():
     load_post.remove(handle_old_merge_groups)
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_reference_path
+    del bpy.types.EditBone.i3d_mapping
+    del bpy.types.Bone.i3d_mapping
     del bpy.types.Object.i3d_mapping
     del bpy.types.Object.i3d_merge_group_index
     del bpy.types.Object.i3d_attributes
