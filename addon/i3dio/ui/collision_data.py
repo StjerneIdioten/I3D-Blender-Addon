@@ -195,20 +195,19 @@ def convert_old_collision_masks(dummy) -> None:
 
     for obj in bpy.data.objects:
         if obj.type != 'MESH':
-            print(f"Skipping non-mesh object: {obj.name}")
             continue
 
         if (old_mask_hex := obj.i3d_attributes.get('collision_mask')) is not None:
             try:
                 old_mask_decimal = int(old_mask_hex, 16)  # Convert to decimal
             except ValueError:
-                print(f"Invalid collision mask '{old_mask_hex}' for object '{obj.name}'")
+                print(f"Invalid collision mask '{old_mask_hex}' for object '{obj.name}', skipping.")
                 continue
 
             # Get all matching rules for this mask
             rule = rule_lookup.get(old_mask_decimal)
             if not rule:
-                print(f"No rule found for mask '{old_mask_hex}' for object '{obj.name}'")
+                print(f"No rule found for mask '{old_mask_hex}' for object '{obj.name}', skipping.")
                 continue
 
             is_trigger = getattr(obj.i3d_attributes, 'trigger', False)
@@ -222,6 +221,8 @@ def convert_old_collision_masks(dummy) -> None:
             # Assign the computed values
             obj.i3d_attributes.collision_filter_group = result['group_hex']
             obj.i3d_attributes.collision_filter_mask = result['mask_hex']
+
+            del obj.i3d_attributes['collision_mask']
 
             print(f"Converted collision mask for '{obj.name}': "
                   f"group='{result['group_hex']}', mask='{result['mask_hex']}', trigger={is_trigger}")

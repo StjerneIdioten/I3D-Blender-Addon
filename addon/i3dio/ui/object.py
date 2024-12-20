@@ -145,13 +145,6 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=i3d_map['collision']['default']
     )
 
-    collision_mask: StringProperty(
-        name="Collision Mask (deprecated)",
-        description="The objects collision mask as a hexadecimal value, "
-        "deprecated in favor of new filter group and mask",
-        default="ff"
-    )
-
     def collision_preset_items(self, _context) -> list[tuple[str, str, str]]:
         return COLLISIONS_ENUM_LIST
 
