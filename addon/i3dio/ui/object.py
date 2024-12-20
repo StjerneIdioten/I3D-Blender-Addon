@@ -857,6 +857,14 @@ def handle_old_merge_groups(dummy):
                 del obj['i3d_merge_group']
 
 
+@persistent
+def handle_old_reference_paths(dummy):
+    for obj in bpy.data.objects:
+        if obj.type == 'EMPTY' and (path := obj.get('i3d_reference_path')) is not None:
+            obj.i3d_reference.path = path
+            del obj['i3d_reference_path']
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -866,6 +874,7 @@ def register():
     bpy.types.Object.i3d_reference = PointerProperty(type=I3DReferenceData)
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
     load_post.append(handle_old_merge_groups)
+    load_post.append(handle_old_reference_paths)
 
 
 def unregister():
