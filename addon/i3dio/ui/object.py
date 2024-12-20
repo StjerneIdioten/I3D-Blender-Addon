@@ -39,6 +39,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
         'rigid_body_type': {'default': 'none'},
         'lod_distance': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0)},
+        'lod_blending': {'name': 'lodBlending', 'default': True},
         'collision': {'name': 'collision', 'default': True},
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
         'compound': {'name': 'compound', 'default': False},
@@ -104,6 +105,12 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         size=4,
         default=i3d_map['lod_distance']['default'],
         min=0.0
+    )
+
+    lod_blending: BoolProperty(
+        name="LOD Blending",
+        description="Enable LOD blending",
+        default=i3d_map['lod_blending']['default']
     )
 
     clip_distance: FloatProperty(
@@ -468,6 +475,9 @@ class I3D_IO_PT_object_attributes(Panel):
                 row = panel.row()
                 row.enabled = i > 0 and child_count > i
                 row.prop(obj.i3d_attributes, 'lod_distance', index=i, text=f"Level {i}")
+
+            panel.prop(obj.i3d_attributes, 'lod_blending')
+
 
 @register
 class I3D_IO_PT_rigid_body_attributes(Panel):
