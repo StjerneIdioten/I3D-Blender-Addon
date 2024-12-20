@@ -470,13 +470,13 @@ class I3D_IO_PT_object_attributes(Panel):
             child_count = len(obj.children)
             header, panel = layout.panel('i3d_lod_panel', default_closed=True)
             header.label(text="Level of Detail (LOD)")
+            if panel:
+                for i in range(4):
+                    row = panel.row()
+                    row.enabled = i > 0 and child_count > i
+                    row.prop(obj.i3d_attributes, 'lod_distance', index=i, text=f"Level {i}")
 
-            for i in range(4):
-                row = panel.row()
-                row.enabled = i > 0 and child_count > i
-                row.prop(obj.i3d_attributes, 'lod_distance', index=i, text=f"Level {i}")
-
-            panel.prop(obj.i3d_attributes, 'lod_blending')
+                panel.prop(obj.i3d_attributes, 'lod_blending')
 
 
 @register
