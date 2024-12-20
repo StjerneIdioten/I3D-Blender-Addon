@@ -97,7 +97,9 @@ class SceneGraphNode(Node):
         self.xml_elements: Dict[str, Union[xml_i3d.XML_Element, None]] = {'Node': None}
 
         self._name = self.blender_object.name
-        if (prefix:= bpy.context.scene.i3dio.object_sorting_prefix) != "" and (prefix_index := self._name.find(prefix)) != -1 and prefix_index < (len(self._name) - 1):
+
+        prefix = i3d.settings.get('object_sorting_prefix', "")
+        if prefix and (prefix_index := self._name.find(prefix)) > -1 and prefix_index < len(self._name) - 1:
             self._name = self._name[prefix_index + 1:]
 
         super().__init__(id_, i3d, parent)

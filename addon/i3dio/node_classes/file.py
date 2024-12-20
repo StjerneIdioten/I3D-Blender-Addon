@@ -60,7 +60,7 @@ class File(Node):
 
         if filepath_relative_to_fs[0] == '$':
             self.resolved_path = filepath_relative_to_fs
-        elif bpy.context.scene.i3dio.copy_files:
+        elif self.i3d.settings.get('copy_files', False):
             self._copy_file()
         else:
             self.resolved_path = filepath_relative_to_fs
@@ -71,28 +71,29 @@ class File(Node):
         resolved_directory = ""
         write_directory = self.i3d.paths['i3d_folder']
         self.logger.info(f"is not an FS builtin and will be copied")
-        file_structure = bpy.context.scene.i3dio.file_structure
-        if file_structure == 'FLAT':
-            self.logger.debug(f"will be copied using the 'FLAT' hierarchy structure")
-        elif file_structure == 'MODHUB':
-            self.logger.debug(f"will be copied using the 'MODHUB' hierarchy structure")
-            resolved_directory = type(self).MODHUB_FOLDER
-            write_directory += '\\' + resolved_directory
-        elif file_structure == 'BLENDER':
-            self.logger.debug(f"'will be copied using the 'BLENDER' hierarchy structure")
-            # TODO: Rewrite this to make it more than three levels above the blend file but allow deeper nesting
-            #  ,since current code just counts number of slashes
-            blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
-            # relative steps to avoid copying entire folder structures ny mistake. Defaults to an absolute path.
-            if self.blender_path.count("..\\") <= blender_relative_distance_limit:
-                # Remove blender relative notation and filename
-                resolved_directory = self.blender_path[2:self.blender_path.rfind('\\')]
+
+        match self.i3d.settings.get('file_structure', 'MODHUB'):
+            case 'FLAT':
+                self.logger.debug(f"will be copied using the 'FLAT' hierarchy structure")
+            case 'MODHUB':
+                self.logger.debug(f"will be copied using the 'MODHUB' hierarchy structure")
+                resolved_directory = type(self).MODHUB_FOLDER
                 write_directory += '\\' + resolved_directory
-            else:
-                self.logger.debug(f"'exists more than {blender_relative_distance_limit} folders away "
-                                  f"from .blend file. Defaulting to absolute path and no copying.")
-                self.resolved_path = bpy.path.abspath(self.blender_path)
-                return
+            case 'BLENDER':
+                self.logger.debug(f"'will be copied using the 'BLENDER' hierarchy structure")
+                # TODO: Rewrite this to make it more than three levels above the blend file but allow deeper nesting
+                #  ,since current code just counts number of slashes
+                blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
+                # relative steps to avoid copying entire folder structures ny mistake. Defaults to an absolute path.
+                if self.blender_path.count("..\\") <= blender_relative_distance_limit:
+                    # Remove blender relative notation and filename
+                    resolved_directory = self.blender_path[2:self.blender_path.rfind('\\')]
+                    write_directory += '\\' + resolved_directory
+                else:
+                    self.logger.debug(f"'exists more than {blender_relative_distance_limit} folders away "
+                                    f"from .blend file. Defaulting to absolute path and no copying.")
+                    self.resolved_path = bpy.path.abspath(self.blender_path)
+                    return
 
         self.resolved_path = resolved_directory + '\\' + self.file_name + self.file_extension
 
@@ -100,7 +101,8 @@ class File(Node):
 
             # We write the file if it either doesn't exists or if it exists, but we are allowed to overwrite.
             write_path_full = write_directory + '\\' + self.file_name + self.file_extension
-            if bpy.context.scene.i3dio.overwrite_files or not os.path.exists(write_path_full):
+            overwrite_files = self.i3d.settings.get('overwrite_files', False)
+            if overwrite_files or not os.path.exists(write_path_full):
                 os.makedirs(write_directory, exist_ok=True)
                 try:
                     shutil.copy(bpy.path.abspath(self.blender_path), write_directory)
