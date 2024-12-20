@@ -38,7 +38,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
         'rigid_body_type': {'default': 'none'},
-        'lod_distance': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0)},
+        'lod_distances': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0)},
         'lod_blending': {'name': 'lodBlending', 'default': True},
         'collision': {'name': 'collision', 'default': True},
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
@@ -98,12 +98,12 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=i3d_map['rendered_in_viewports']['default']
     )
 
-    lod_distance: FloatVectorProperty(
+    lod_distances: FloatVectorProperty(
         name="LOD Distance",
         description="Defines the level-of-detail (LOD) distances for rendering. "
         "The first value is always 0, and each subsequent value must be equal to or greater than the previous one.",
         size=4,
-        default=i3d_map['lod_distance']['default'],
+        default=i3d_map['lod_distances']['default'],
         min=0.0
     )
 
@@ -474,7 +474,7 @@ class I3D_IO_PT_object_attributes(Panel):
                 for i in range(4):
                     row = panel.row()
                     row.enabled = i > 0 and child_count > i
-                    row.prop(obj.i3d_attributes, 'lod_distance', index=i, text=f"Level {i}")
+                    row.prop(obj.i3d_attributes, 'lod_distances', index=i, text=f"Level {i}")
 
                 panel.prop(obj.i3d_attributes, 'lod_blending')
 
@@ -896,37 +896,27 @@ class I3D_IO_PT_mapping_attributes(Panel):
 @persistent
 def check_lod_distance(dummy):
     for obj in bpy.data.objects:
-        if obj.type == 'EMPTY':
-            if hasattr(obj, 'i3d_attributes') and 'lod_distance' in obj['i3d_attributes']:
-                current_lod = obj['i3d_attributes']['lod_distance']
-                # Skip if already converted
-                if not isinstance(current_lod, str):
-                    continue
+        if obj.type == 'EMPTY' and 'lod_distance' in obj.get('i3d_attributes', {}):
+            current_lod = obj['i3d_attributes']['lod_distance']
+            try:
+                # Convert old string to list of floats
+                lod_distance_values = [float(x) for x in current_lod.split()]
 
-                # Check for placeholder or empty strings
-                if current_lod in ('', 'Enter your LOD Distances if needed.'):
-                    print(f"LOD distance for {obj.name} is not set.")
-                    continue
+                # Ensure the list has exactly 4 elements, padding with 0.0 for missing values
+                padded_length = len(lod_distance_values)
+                lod_distance_values = (lod_distance_values + [0.0] * 4)[:4]
+                lod_distance_values[0] = I3DNodeObjectAttributes.i3d_map['lod_distances']['default'][0]
 
-                try:
-                    # Convert from string to list of floats
-                    lod_distance_str = current_lod.split()
-                    new_lod_distance = [float(x) for x in lod_distance_str]
-                    new_lod_distance = (new_lod_distance + [0.0] * 4)[:4]
+                # Each value (except the first) must be >= the previous one
+                # Only apply constraints to the original (unpadded) values
+                for i in range(1, padded_length):
+                    if lod_distance_values[i] < lod_distance_values[i - 1]:
+                        lod_distance_values[i] = lod_distance_values[i - 1]
 
-                    # first value should always be 0.0
-                    new_lod_distance[0] = 0.0
-
-                    # Each subsequent value cannot be smaller than the previous one
-                    for i in range(1, len(new_lod_distance)):
-                        if new_lod_distance[i] < new_lod_distance[i - 1]:
-                            new_lod_distance[i] = new_lod_distance[i - 1]
-
-                    obj.i3d_attributes.lod_distance = new_lod_distance
-                    print(f"Converted LOD distance for {obj.name}: {new_lod_distance}")
-
-                except (ValueError, AttributeError) as e:
-                    print(f"Error converting LOD distance for {obj.name}: {e}")
+                obj.i3d_attributes.lod_distances = lod_distance_values
+                del obj['i3d_attributes']['lod_distance']
+            except (ValueError, AttributeError):
+                pass
 
 
 def register():
