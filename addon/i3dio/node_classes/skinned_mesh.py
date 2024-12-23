@@ -159,10 +159,12 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
             # Add bone to new parent if found
             if effective_parent:
+                bone.parent = parent
                 effective_parent.add_child(bone)
                 effective_parent.element.append(bone.element)
             else:
                 # If no valid parent is found, add to the root
+                bone.parent = None
                 self.i3d.scene_root_nodes.append(bone)
                 self.i3d.xml_elements['Scene'].append(bone.element)
 
