@@ -918,7 +918,7 @@ class I3D_IO_PT_mapping_bone_attributes(Panel):
 
 
 @persistent
-def check_lod_distance(dummy):
+def handle_old_lod_distances(dummy):
     for obj in bpy.data.objects:
         if obj.type == 'EMPTY' and 'lod_distance' in obj.get('i3d_attributes', {}):
             current_lod = obj['i3d_attributes']['lod_distance']
@@ -958,10 +958,11 @@ def register():
         subtype='FILE_PATH')
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
     load_post.append(handle_old_merge_groups)
-    load_post.append(check_lod_distance)
+    load_post.append(handle_old_lod_distances)
 
 
 def unregister():
+    load_post.remove(handle_old_lod_distances)
     load_post.remove(handle_old_merge_groups)
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_reference_path
