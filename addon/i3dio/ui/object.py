@@ -434,6 +434,12 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         max=i3d_max
     )
 
+    exclude_from_export: BoolProperty(
+        name="Exclude from Export",
+        description="If checked, this object and its children will be excluded from export",
+        default=False
+    )
+
 
 @register
 class I3D_IO_PT_object_attributes(Panel):
@@ -450,13 +456,16 @@ class I3D_IO_PT_object_attributes(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        obj = bpy.context.active_object
+        obj = context.object
 
         i3d_property(layout, obj.i3d_attributes, 'visibility', obj)
         i3d_property(layout, obj.i3d_attributes, 'rendered_in_viewports', obj)
         i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'lod_distance', obj)
+
+        layout.prop(obj.i3d_attributes, 'exclude_from_export')
+
 
 @register
 class I3D_IO_PT_rigid_body_attributes(Panel):
