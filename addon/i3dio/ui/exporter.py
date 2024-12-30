@@ -247,7 +247,8 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         export_options(layout, self)
         export_files(layout, self)
         export_debug(layout, self)
-        export_i3d_mapping(layout, self, is_file_browser)
+        if not is_file_browser:
+            export_i3d_mapping(layout, self)
 
     def invoke(self, context, event):
         # To load the settings from the scene property to the operator
@@ -349,13 +350,12 @@ def export_debug(layout, operator):
         body.prop(operator, 'log_to_file')
 
 
-def export_i3d_mapping(layout, operator, is_file_browser):
+def export_i3d_mapping(layout, operator):
     header, body = layout.panel("I3D_export_i3d_mapping", default_closed=False)
     header.label(text="I3D Mapping Options")
     if body:
         body.use_property_split = False
-        prop_source = bpy.context.scene.i3dio if is_file_browser else operator
-        body.prop(prop_source, 'i3d_mapping_file_path')
+        body.prop(operator, 'i3d_mapping_file_path')
 
 
 @register
