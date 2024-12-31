@@ -865,6 +865,29 @@ def handle_old_reference_paths(dummy):
             del obj['i3d_reference_path']
 
 
+@register
+class I3D_IO_PT_mapping_bone_attributes(Panel):
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_label = "I3D Mapping"
+    bl_context = 'bone'
+
+    @classmethod
+    def poll(cls, context):
+        return context.bone or context.edit_bone
+
+    def draw(self, context):
+        layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        bone = context.bone or context.edit_bone
+
+        row = layout.row()
+        row.prop(bone.i3d_mapping, 'is_mapped')
+        row = layout.row()
+        row.prop(bone.i3d_mapping, 'mapping_name')
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -872,15 +895,20 @@ def register():
     bpy.types.Object.i3d_merge_group_index = IntProperty(default=-1)
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.Object.i3d_reference = PointerProperty(type=I3DReferenceData)
+    bpy.types.Bone.i3d_mapping = PointerProperty(type=I3DMappingData)
+    bpy.types.EditBone.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
     load_post.append(handle_old_merge_groups)
     load_post.append(handle_old_reference_paths)
+
 
 
 def unregister():
     load_post.remove(handle_old_merge_groups)
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_reference
+    del bpy.types.EditBone.i3d_mapping
+    del bpy.types.Bone.i3d_mapping
     del bpy.types.Object.i3d_mapping
     del bpy.types.Object.i3d_merge_group_index
     del bpy.types.Object.i3d_attributes
