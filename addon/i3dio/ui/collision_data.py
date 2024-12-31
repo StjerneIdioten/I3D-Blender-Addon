@@ -3,6 +3,7 @@ from .. import xml_i3d
 from pathlib import Path
 from bpy.app.handlers import (persistent, load_post)
 from collections import namedtuple
+from .. import __package__ as base_package
 
 
 COLLISIONS = {
@@ -123,7 +124,7 @@ def populate_collision_enum_list() -> None:
 
 def populate_collision_cache() -> None:
     """Populate the COLLISIONS cache from XML files."""
-    data_path = Path(bpy.context.preferences.addons['i3dio'].preferences.fs_data_path)
+    data_path = Path(bpy.context.preferences.addons[base_package].preferences.fs_data_path)
     shared_dir = data_path.parent / 'shared'
     flags_path = shared_dir / 'collisionMaskFlags.xml'
     rules_path = shared_dir / 'collisionMaskConversionRules.xml'
