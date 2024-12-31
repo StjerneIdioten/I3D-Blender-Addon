@@ -531,7 +531,7 @@ class I3D_IO_PT_object_attributes(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        obj = context.active_object
+        obj = context.object
         i3d_attributes = obj.i3d_attributes
 
         i3d_property(layout, i3d_attributes, 'visibility', obj)
