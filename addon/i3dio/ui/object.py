@@ -38,7 +38,8 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
         'rigid_body_type': {'default': 'none'},
-        'lod_distance': {'name': 'lodDistance', 'default': "Enter your LOD Distances if needed."},
+        'lod_distances': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0)},
+        'lod_blending': {'name': 'lodBlending', 'default': True},
         'collision': {'name': 'collision', 'default': True},
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
         'compound': {'name': 'compound', 'default': False},
@@ -97,11 +98,19 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=i3d_map['rendered_in_viewports']['default']
     )
 
-    lod_distance: StringProperty(
+    lod_distances: FloatVectorProperty(
         name="LOD Distance",
-        description="For example:0 100",
-        default=i3d_map['lod_distance']['default'],
-        maxlen=1024
+        description="Defines the level-of-detail (LOD) distances for rendering. "
+        "The first value is always 0, and each subsequent value must be equal to or greater than the previous one.",
+        size=4,
+        default=i3d_map['lod_distances']['default'],
+        min=0.0
+    )
+
+    lod_blending: BoolProperty(
+        name="LOD Blending",
+        description="Enable LOD blending",
+        default=i3d_map['lod_blending']['default']
     )
 
     clip_distance: FloatProperty(
@@ -462,7 +471,19 @@ class I3D_IO_PT_object_attributes(Panel):
         i3d_property(layout, obj.i3d_attributes, 'rendered_in_viewports', obj)
         i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
-        i3d_property(layout, obj.i3d_attributes, 'lod_distance', obj)
+
+        if obj.type == 'EMPTY':
+            child_count = len(obj.children)
+            header, panel = layout.panel('i3d_lod_panel', default_closed=True)
+            header.label(text="Level of Detail (LOD)")
+            if panel:
+                for i in range(4):
+                    row = panel.row()
+                    row.enabled = i > 0 and child_count > i
+                    row.prop(obj.i3d_attributes, 'lod_distances', index=i, text=f"Level {i}")
+
+                panel.prop(obj.i3d_attributes, 'lod_blending')
+
 
         layout.prop(obj.i3d_attributes, 'exclude_from_export')
 
@@ -905,6 +926,32 @@ class I3D_IO_PT_mapping_bone_attributes(Panel):
         row.prop(bone.i3d_mapping, 'mapping_name')
 
 
+@persistent
+def handle_old_lod_distances(dummy):
+    for obj in bpy.data.objects:
+        if obj.type == 'EMPTY' and 'lod_distance' in obj.get('i3d_attributes', {}):
+            current_lod = obj['i3d_attributes']['lod_distance']
+            try:
+                # Convert old string to list of floats
+                lod_distance_values = [float(x) for x in current_lod.split()]
+
+                # Ensure the list has exactly 4 elements, padding with 0.0 for missing values
+                padded_length = len(lod_distance_values)
+                lod_distance_values = (lod_distance_values + [0.0] * 4)[:4]
+                lod_distance_values[0] = I3DNodeObjectAttributes.i3d_map['lod_distances']['default'][0]
+
+                # Each value (except the first) must be >= the previous one
+                # Only apply constraints to the original (unpadded) values
+                for i in range(1, padded_length):
+                    if lod_distance_values[i] < lod_distance_values[i - 1]:
+                        lod_distance_values[i] = lod_distance_values[i - 1]
+
+                obj.i3d_attributes.lod_distances = lod_distance_values
+                del obj['i3d_attributes']['lod_distance']
+            except (ValueError, AttributeError):
+                pass
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
@@ -920,9 +967,11 @@ def register():
         subtype='FILE_PATH')
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
     load_post.append(handle_old_merge_groups)
+    load_post.append(handle_old_lod_distances)
 
 
 def unregister():
+    load_post.remove(handle_old_lod_distances)
     load_post.remove(handle_old_merge_groups)
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_reference_path
