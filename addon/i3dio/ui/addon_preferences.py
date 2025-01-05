@@ -162,10 +162,15 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        wm = bpy.context.window_manager
+        if not bpy.app.online_access:
+            self.report({'ERROR'},
+                        "Online access is disabled. Enable it in System Preferences to download the I3D Converter.")
+            return {'CANCELLED'}
+
+        wm = context.window_manager
         # Width increased to fit the warning about the download freezing the UI
         return wm.invoke_props_dialog(self, width=350)
-        
+
     def draw(self, context):
         layout = self.layout
         row = layout.row()
