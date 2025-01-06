@@ -173,10 +173,16 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
     if sort_alphabetical:
         objects_to_export = sort_blender_objects_by_outliner_ordering(objects)
     for blender_object in objects_to_export:
-        _add_object_to_i3d(i3d, blender_object)
+        _add_object_to_i3d(i3d, blender_object, objects_to_export)
 
-
-def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
+        
+def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, objects_to_export: list = None,
+                       parent: SceneGraphNode = None) -> None:
+    # Check if object should be excluded from export (including its children)
+    if obj.i3d_attributes.exclude_from_export:
+        logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
+        return
+      
     # Special handling of armature nodes, since they are sort of "extra" compared to how other programs like Maya
     # handles bones. So the option for turning them off is provided.
     _parent = parent
@@ -206,8 +212,20 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 for modifier in obj.modifiers:
                     # We only need to find one armature to know it should be an armature node
                     if modifier.type == 'ARMATURE':
-                        node = i3d.add_skinned_mesh_node(obj, _parent)
-                        break
+                        if modifier.object is None:
+                            logger.warning(f"Armature modifier '{modifier.name}' on skinned mesh '{obj.name}' "
+                                           "has no armature object assigned. Exporting as a regular shape instead.")
+                            break
+                        elif modifier.object not in objects_to_export:
+                            logger.warning(
+                                f"Skinned mesh '{obj.name}' references armature '{modifier.object.name}', "
+                                "but the armature is not included in the export hierarchy. "
+                                "Exporting as a regular shape instead."
+                            )
+                            break
+                        else:
+                            node = i3d.add_skinned_mesh_node(obj, _parent)
+                            break
 
             if node is None:
                 if 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group_index != -1:
