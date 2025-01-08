@@ -263,6 +263,8 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Solver Iteration Count",
         description="The number of iterations the physics engine uses to solve the constraints",
         default=i3d_map['solver_iteration_count']['default'],
+        min=1,
+        max=20
     )
 
     split_type: IntProperty(
