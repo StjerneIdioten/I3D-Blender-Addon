@@ -118,3 +118,7 @@ class Image(File):
 
 class Shader(File):
     MODHUB_FOLDER = 'shaders'
+
+
+class Reference(File):
+    MODHUB_FOLDER = 'assets'

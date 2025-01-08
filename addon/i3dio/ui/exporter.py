@@ -1,4 +1,5 @@
 import bpy
+
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -22,13 +23,13 @@ from .. import (
 )
 
 
+
 classes = []
 
 
 def register(cls):
     classes.append(cls)
     return cls
-
 
 @register
 class I3DExportUIProperties(bpy.types.PropertyGroup):
@@ -42,6 +43,13 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
             ('SELECTED_OBJECTS', "Selected Objects", "Export all of the selected objects")
         ],
         default='SELECTED_OBJECTS'
+    )
+
+    binarize_i3d: BoolProperty(
+        name="Binarize i3d",
+        description="Binarizes i3d after Export. "
+                    "Needs to have path to 3dConverter.exe set in Addon Preferences",
+        default=False
     )
 
     keep_collections_as_transformgroups: BoolProperty(
@@ -78,10 +86,11 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
             ('CAMERA', "Camera", "Export cameras"),
             ('LIGHT', "Light", "Export lights"),
             ('MESH', "Mesh", "Export meshes"),
+            ('CURVE', "Curve", "Export curves"),
             ('ARMATURE', "Armatures", "Export armatures, used for skinned meshes")
         ),
         options={'ENUM_FLAG'},
-        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'ARMATURE'},
+        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'CURVE', 'ARMATURE'},
     )
 
     features_to_export: EnumProperty(
@@ -150,15 +159,11 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=''
     )
 
-    i3d_mapping_overwrite_mode: EnumProperty(
-        name="Overwrite Mode",
-        description="Determine how the i3d mapping is updated",
-        items=(
-            ('CLEAN', "Clean", "Deletes any existing i3d mappings"),
-        ),
-        default='CLEAN'
+    object_sorting_prefix: StringProperty(
+        name="Sorting Prefix",
+        description="To allow some form of control over the output ordering of the objects in the I3D file it is possible to have the exporter use anything preceeding this keyin the object name as the means for sorting the objects, while also removing this from the final object name. The key can be anything and even multiple characters to allow as much flexibility as possible. To disable the functionality just set the string to nothing",
+        default=":"
     )
-
 
 @register
 @orientation_helper(axis_forward='-Z', axis_up='Y')
@@ -178,6 +183,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
 
     def execute(self, context):
         status = exporter.export_blend_to_i3d(self.filepath, self.axis_forward, self.axis_up)
+
         if status['success']:
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
         else:
@@ -191,7 +197,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                         "see https://stjerneidioten.github.io/"
                         "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder")
 
-        return {'FINISHED'}
+        return {'FINISHED'}        
     
     def draw(self, context):
         pass
@@ -223,6 +229,7 @@ class I3D_IO_PT_export_main(Panel):
         layout.use_property_decorate = False
 
         layout.prop(bpy.context.scene.i3dio, 'selection')
+        layout.prop(bpy.context.scene.i3dio, 'object_sorting_prefix')
 
 
 @register
@@ -245,6 +252,13 @@ class I3D_IO_PT_export_options(Panel):
         sfile = context.space_data
         operator = sfile.active_operator
 
+        row = layout.row()
+        row.prop(bpy.context.scene.i3dio, 'binarize_i3d')
+        if bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path == '':
+            row.enabled = False
+        else:
+            row.enabled = True            
+        
         row = layout.row()
         row.prop(bpy.context.scene.i3dio, 'keep_collections_as_transformgroups')
 
@@ -302,12 +316,6 @@ class I3D_IO_PT_export_files(Panel):
         row.enabled = bpy.context.scene.i3dio.copy_files
         row.alignment = 'RIGHT'
         row.prop(bpy.context.scene.i3dio, 'file_structure', )
-
-        box = layout.box()
-        row = box.row()
-        row.label(text='I3D Mapping Mode')
-        column = box.column()
-        column.props_enum(bpy.context.scene.i3dio, 'i3d_mapping_overwrite_mode')
 
 
 @register

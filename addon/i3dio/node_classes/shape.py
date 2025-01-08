@@ -2,7 +2,8 @@ import math
 import mathutils
 import collections
 import logging
-from typing import (OrderedDict, Optional, List, Dict, ChainMap)
+from typing import (OrderedDict, Optional, List, Dict, ChainMap, Union)
+from itertools import zip_longest
 import bpy
 
 from .node import (Node, SceneGraphNode)
@@ -12,13 +13,12 @@ from ..i3d import I3D
 
 
 class SubSet:
-    def __init__(self, material_id: int):
+    def __init__(self):
         self.first_index = 0
         self.first_vertex = 0
         self.number_of_indices = 0
         self.number_of_vertices = 0
         self.triangles = []
-        self.material_id = material_id
 
     def as_dict(self):
         subset_attributes = {'firstIndex': f"{self.first_index}",
@@ -28,7 +28,7 @@ class SubSet:
         return subset_attributes
 
     def __str__(self):
-        return f'materialId="{self.material_id}" numTriangles="{len(self.triangles)}" ' \
+        return f'numTriangles="{len(self.triangles)}" ' \
                f'firstIndex="{self.first_index}" firstVertex="{self.first_vertex}" ' \
                f'numIndices="{self.number_of_indices}" numVertices="{self.number_of_vertices}"'
 
@@ -37,8 +37,8 @@ class SubSet:
 
 
 class Vertex:
-    def __init__(self, material_name, position, normal, vertex_color, uvs, blend_ids=None, blend_weights=None):
-        self._material_name = material_name
+    def __init__(self, subset_idx: int, position, normal, vertex_color, uvs, blend_ids=None, blend_weights=None):
+        self._subset_idx = subset_idx
         self._position = position
         self._normal = normal
         self._vertex_color = vertex_color
@@ -49,7 +49,7 @@ class Vertex:
         self._make_hash_string()
 
     def _make_hash_string(self):
-        self._str = f"{self._material_name}{self._position}{self._normal}{self._vertex_color}"
+        self._str = f"{self._subset_idx}{self._position}{self._normal}{self._vertex_color}"
 
         for uv in self._uvs:
             self._str += f"{uv}"
@@ -130,8 +130,6 @@ class EvaluatedMesh:
 
         # Calculates triangles from mesh polygons
         self.mesh.calc_loop_triangles()
-        # Recalculates normals after the scaling has messed with them
-        self.mesh.calc_normals_split()
 
     # On hold for the moment, it seems to be triggered at random times in the middle of an export which messes with
     # everything. Further investigation is needed.
@@ -146,19 +144,18 @@ class IndexedTriangleSet(Node):
     ID_FIELD_NAME = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None,
-                 is_merge_group: bool = False, bone_mapping: ChainMap = None):
+                 is_merge_group: bool = False, bone_mapping: ChainMap = None, tangent = False):
         self.id: int = id_
         self.i3d: I3D = i3d
         self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
         self.vertices: OrderedDict[Vertex, int] = collections.OrderedDict()
         self.triangles: List[List[int]] = list()  # List of lists of vertex indexes
-        self.subsets: OrderedDict[str, SubSet] = collections.OrderedDict()
-        self.material_indexes: str = ''
+        self.subsets: List[SubSet] = []
         self.is_merge_group = is_merge_group
         self.bone_mapping: ChainMap = bone_mapping
         self.bind_index = 0
         self.vertex_group_ids = {}
-        self.tangent = False
+        self.tangent = tangent
         if shape_name is None:
             self.shape_name = self.evaluated_mesh.name
         else:
@@ -183,21 +180,19 @@ class IndexedTriangleSet(Node):
     def element(self, value):
         self.xml_elements['node'] = value
 
-    def process_subsets(self, mesh):
-        for idx, (material_name, subset) in enumerate(self.subsets.items()):
-            self.logger.debug(f"Subset with index [{idx}] based on material '{material_name}'")
+    def process_subsets(self, mesh) -> None:
+        next_vertex = 0
+        next_index = 0
+        for idx, subset in enumerate(self.subsets):
+            self.logger.debug(f"Subset with index {idx}")
+            subset.first_vertex = next_vertex
+            subset.first_index = next_index
+            next_vertex, next_index = self.process_subset(mesh, subset)
 
-            if idx > 0:
-                self.logger.debug(f"Previous subset exists")
-                _, previous_subset = list(self.subsets.items())[idx-1]
-                subset.first_vertex = previous_subset.first_vertex + previous_subset.number_of_vertices
-                subset.first_index = previous_subset.first_index + previous_subset.number_of_indices
-
-            self.process_subset(mesh, material_name)
-
-    def process_subset(self, mesh, material_name: str, triangle_offset: int = 0):
-        subset = self.subsets[material_name]
+    def process_subset(self, mesh: bpy.types.Mesh, subset: SubSet, triangle_offset: int = 0) -> tuple[int, int]:
         self.logger.debug(f"Processing subset: {subset}")
+
+        zero_weight_vertices = set()
         for triangle in subset.triangles[triangle_offset:]:
 
             # Add a new empty container for the vertex indexes of the triangle
@@ -208,9 +203,21 @@ class IndexedTriangleSet(Node):
 
                 # Add vertex color
                 vertex_color = None
-                if len(mesh.vertex_colors):
-                    # Get the color from the active layer, since only one vertex color layer is supported in GE
-                    vertex_color = mesh.vertex_colors.active.data[loop_index].color
+                if mesh.i3d_attributes.use_vertex_colors and len(mesh.color_attributes):
+                    # Use the active color layer or fallback to the first (GE supports only one layer)
+                    color_layer = mesh.color_attributes.active_color or mesh.color_attributes[0]
+
+                    match color_layer.domain:
+                        case 'CORNER':
+                            # Color data is stored per corner/loop
+                            vertex_color = color_layer.data[loop_index].color_srgb
+                        case 'POINT':
+                            # Color data is stored per vertex
+                            color_vertex_index = mesh.loops[loop_index].vertex_index
+                            vertex_color = color_layer.data[color_vertex_index].color_srgb
+                        case _:
+                            self.logger.warning(f"Incompatible color attribute {color_layer.name}: "
+                                                f"domain={color_layer.domain}, data_type={color_layer.data_type}")
 
                 # Add uvs
                 uvs = []
@@ -241,16 +248,14 @@ class IndexedTriangleSet(Node):
                                 break
 
                     if len(blend_ids) == 0:
-                        self.logger.warning("Has a vertex with 0.0 weight to all bones. "
-                                            "This will confuse GE and results in the mesh showing up as just a "
-                                            "wireframe. Please correct by assigning some weight to all vertices")
+                        zero_weight_vertices.add(blender_vertex.index)
 
                     if len(blend_ids) < 4:
                         padding = [0]*(4-len(blend_ids))
                         blend_ids += padding
                         blend_weights += padding
 
-                vertex = Vertex(material_name,
+                vertex = Vertex(triangle.material_index,
                                 blender_vertex.co.xyz,
                                 mesh.loops[loop_index].normal,
                                 vertex_color,
@@ -266,10 +271,15 @@ class IndexedTriangleSet(Node):
                     vertex_index = self.vertices[vertex]
 
                 self.triangles[-1].append(vertex_index)
-
             subset.number_of_indices += 3
 
-        self.logger.debug(f"Has subset '{material_name}' with '{len(subset.triangles)}' triangles and {subset}")
+        if zero_weight_vertices:
+            self.logger.warning(f"Has {len(zero_weight_vertices)} vertices with 0.0 weight to all bones. "
+                                "This will confuse GE and result in the mesh showing up as just a wireframe. "
+                                "Please correct by assigning some weight to all vertices.")
+
+        self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
+        return subset.first_vertex + subset.number_of_vertices, subset.first_index + subset.number_of_indices
 
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh
@@ -278,6 +288,9 @@ class IndexedTriangleSet(Node):
             self.logger.info(f"has no material assigned, assigning default material")
             mesh.materials.append(self.i3d.get_default_material().blender_material)
             self.logger.info(f"assigned default material i3d_default_material")
+        
+        for _ in mesh.materials:
+            self.subsets.append(SubSet())
 
         has_warned_for_empty_slot = False
         for triangle in mesh.loop_triangles:
@@ -289,18 +302,8 @@ class IndexedTriangleSet(Node):
                     has_warned_for_empty_slot = True
                 triangle_material = self.i3d.get_default_material().blender_material
 
-            if triangle_material.name not in self.subsets:
-                self.logger.info(f"Has material {triangle_material.name!r}")
-                # TODO: Figure out why we have to supply the original material instead of the one on the evaluated
-                #  object. The evaluated one still contains references to deleted nodes from the node_tree
-                #  of the material. Although I thought it would be updated?
-                material_id = self.i3d.add_material(triangle_material.original)
-                if self.i3d.materials[material_id].tangent is not None:
-                    self.tangent = True
-                self.subsets[triangle_material.name] = SubSet(material_id)
-
             # Add triangle to subset
-            self.subsets[triangle_material.name].add_triangle(triangle)
+            self.subsets[triangle.material_index].add_triangle(triangle)
 
         self.process_subsets(mesh)
 
@@ -320,23 +323,22 @@ class IndexedTriangleSet(Node):
                                 f"merge groups need to share the same subset!")
             return
         else:
-            if mesh.materials[0].name not in self.subsets:
+            if mesh.materials[0].name != self.evaluated_mesh.mesh.materials[0].name:
                 self.logger.warning(f"Mesh '{mesh.name}' has a different material from merge group root, "
                                     f"which is not allowed!")
                 return
 
-        material_name = mesh.materials[0].name
-        triangle_offset = len(self.subsets[material_name].triangles)
-        vertex_offset = self.subsets[material_name].number_of_vertices
+        triangle_offset = len(self.subsets[-1].triangles)
+        vertex_offset = self.subsets[-1].number_of_vertices
         for triangle in mesh.loop_triangles:
-            self.subsets[material_name].add_triangle(triangle)
+            self.subsets[-1].add_triangle(triangle)
 
         self.bind_index += 1
-        self.process_subset(mesh, material_name, triangle_offset)
+        self.process_subset(mesh, self.subsets[-1], triangle_offset)
         self.write_vertices(vertex_offset)
         self.write_triangles(triangle_offset)
         subset = list(self.xml_elements['subsets'])[0]
-        for key, value in self.subsets[material_name].as_dict().items():
+        for key, value in self.subsets[-1].as_dict().items():
             subset.set(key, value)
 
     def write_vertices(self, offset=0):
@@ -421,33 +423,167 @@ class IndexedTriangleSet(Node):
             )
 
         # Write subsets
-        for _, subset in self.subsets.items():
-            self.material_indexes += f"{subset.material_id} "
+        for subset in self.subsets:
             xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
 
-        # Removes the last whitespace from the string, since an extra will always be added
-        self.material_indexes = self.material_indexes.strip()
+
+class ControlVertex:
+    def __init__(self, position):
+        self._position = position
+        self._str = ''
+        self._make_hash_string()
+
+    def _make_hash_string(self):
+        self._str = f"{self._position}"
+
+    def __str__(self):
+        return self._str
+
+    def __hash__(self):
+        return hash(self._str)
+
+    def __eq__(self, other):
+        return f"{self!s}" == f'{other!s}'
+
+    def position_for_xml(self):
+        return "{0:.6f} {1:.6f} {2:.6f}".format(*self._position)
+
+
+class EvaluatedNurbsCurve:
+    def __init__(self, i3d: I3D, shape_object: bpy.types.Object, name: str = None,
+                 reference_frame: mathutils.Matrix = None):
+        if name is None:
+            self.name = shape_object.data.name
+        else:
+            self.name = name
+        self.i3d = i3d
+        self.object = None
+        self.curve_data = None
+        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
+                                                  {'object_name': self.name})
+        self.control_vertices = []
+        self.generate_evaluated_curve(shape_object, reference_frame)
+
+    def generate_evaluated_curve(self, shape_object: bpy.types.Object, reference_frame: mathutils.Matrix = None):
+        self.object = shape_object
+
+        self.curve_data = self.object.to_curve(depsgraph=self.i3d.depsgraph)
+
+        # If a reference is given transform the generated mesh by that frame to place it somewhere else than center of
+        # the mesh origo
+        if reference_frame is not None:
+            self.curve_data.transform(reference_frame.inverted() @ self.object.matrix_world)
+
+        conversion_matrix = self.i3d.conversion_matrix
+        if self.i3d.get_setting('apply_unit_scale'):
+            self.logger.debug(f"applying unit scaling")
+            conversion_matrix = \
+                mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) @ conversion_matrix
+
+        self.curve_data.transform(conversion_matrix)
+
+
+class NurbsCurve(Node):
+    ELEMENT_TAG = 'NurbsCurve'
+    NAME_FIELD_NAME = 'name'
+    ID_FIELD_NAME = 'shapeId'
+
+    def __init__(self, id_: int, i3d: I3D, evaluated_curve_data: EvaluatedNurbsCurve, shape_name: Optional[str] = None):
+        self.id: int = id_
+        self.i3d: I3D = i3d
+        self.evaluated_curve_data: EvaluatedNurbsCurve = evaluated_curve_data
+        self.control_vertex: OrderedDict[ControlVertex, int] = collections.OrderedDict()
+        self.spline_type = None
+        self.spline_form = None
+        if shape_name is None:
+            self.shape_name = self.evaluated_curve_data.name
+        else:
+            self.shape_name = shape_name
+        super().__init__(id_, i3d, None)
+
+    @property
+    def name(self):
+        return self.shape_name
+
+    @property
+    def element(self):
+        return self.xml_elements['node']
+
+    @element.setter
+    def element(self, value):
+        self.xml_elements['node'] = value
+
+    def process_spline(self, spline):
+        if spline.type == 'BEZIER':
+            points = spline.bezier_points
+            self.spline_type = "cubic"
+        elif spline.type == 'NURBS':
+            points = spline.points
+            self.spline_type = "cubic"
+        elif spline.type == 'POLY':
+            points = spline.points
+            self.spline_type = "linear"
+        else:
+            self.logger.warning(f"{spline.type} is not supported! Export of this curve is aborted.")
+            return
+
+        for loop_index, point in enumerate(points):
+            ctrl_vertex = ControlVertex(point.co.xyz)
+            self.control_vertex[ctrl_vertex] = loop_index
+
+        self.spline_form = "closed" if spline.use_cyclic_u else "open"
+
+    def populate_from_evaluated_nurbscurve(self):
+        spline = self.evaluated_curve_data.curve_data.splines[0]
+        self.process_spline(spline)
+
+    def write_control_vertices(self):
+        for control_vertex in list(self.control_vertex.keys()):
+            vertex_attributes = {'c': control_vertex.position_for_xml()}
+
+            xml_i3d.SubElement(self.element, 'cv', vertex_attributes)
+
+    def populate_xml_element(self):
+        if len(self.evaluated_curve_data.curve_data.splines) == 0:
+            self.logger.warning(f"has no splines! Export of this curve is aborted.")
+            return
+
+        self.populate_from_evaluated_nurbscurve()
+        if self.spline_type:
+            self._write_attribute('type', self.spline_type, 'node')
+        if self.spline_form:
+            self._write_attribute('form', self.spline_form, 'node')
+        self.logger.debug(f"Has '{len(self.control_vertex)}' control vertices")
+        self.write_control_vertices()
 
 
 class ShapeNode(SceneGraphNode):
     ELEMENT_TAG = 'Shape'
 
-    def __init__(self, id_: int, mesh_object: [bpy.types.Object, None], i3d: I3D,
-                 parent: [SceneGraphNode or None] = None):
+    def __init__(self, id_: int, shape_object: Optional[bpy.types.Object], i3d: I3D,
+                 parent: Optional[SceneGraphNode] = None):
         self.shape_id = None
-        super().__init__(id_=id_, blender_object=mesh_object, i3d=i3d, parent=parent)
+        self.tangent = False
+        super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent)
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
         return self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
 
     def add_shape(self):
-        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object))
-        self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
+        if self.blender_object.type == 'CURVE':
+            self.shape_id = self.i3d.add_curve(EvaluatedNurbsCurve(self.i3d, self.blender_object))
+            self.xml_elements['NurbsCurve'] = self.i3d.shapes[self.shape_id].element
+        else:
+            self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), tangent=self.tangent)
+            self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):
+        if self.blender_object.type == 'MESH':
+            m_ids = [self.i3d.add_material(m.material) for m in self.blender_object.material_slots]
+            self._write_attribute('materialIds', ' '.join(map(str, m_ids)) or str(self.i3d.add_material(self.i3d.get_default_material())))
+            self.tangent = any((self.i3d.materials[m_id].is_normalmapped() for m_id in m_ids))
         self.add_shape()
         self.logger.debug(f"has shape ID '{self.shape_id}'")
         self._write_attribute('shapeId', self.shape_id)
-        self._write_attribute('materialIds', self.i3d.shapes[self.shape_id].material_indexes)
         super().populate_xml_element()

@@ -101,9 +101,18 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
 
     bounding_volume_object: PointerProperty(
         name="Bounding Volume Object",
-        description="The object used to calculate bvCenter and bvRadius. If the bounding volume object shares origin with the original object, then Giants Engine will always ignore the exported values and recalculate them itself",
+        description="The object used to calculate bvCenter and bvRadius. "
+        "If the bounding volume object shares origin with the original object, "
+        "then Giants Engine will always ignore the exported values and recalculate them itself",
         type=bpy.types.Object,
-		)
+        poll=lambda self, obj: obj.type == 'MESH' and obj is not bpy.context.object
+    )
+
+    use_vertex_colors: BoolProperty(
+        name="Use Vertex Colors",
+        description="Enable to export vertex colors for this object",
+        default=False
+    )
 
 
 @register
@@ -133,6 +142,7 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "nav_mesh_mask")
         layout.prop(obj.i3d_attributes, "decal_layer")
         layout.prop(obj.i3d_attributes, 'fill_volume')
+        layout.prop(obj.i3d_attributes, 'use_vertex_colors')
 
 
 @register

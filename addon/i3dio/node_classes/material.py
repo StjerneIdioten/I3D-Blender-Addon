@@ -31,9 +31,8 @@ class Material(Node):
     def element(self, value):
         self.xml_elements['node'] = value
 
-    @property
-    def tangent(self):
-        return self.xml_elements.get('Normalmap', None)
+    def is_normalmapped(self):
+        return 'Normalmap' in self.xml_elements
 
     def populate_xml_element(self):
         if self.blender_material.use_nodes:
@@ -54,17 +53,15 @@ class Material(Node):
             self.logger.warning(f"Uses nodes but Principled BSDF node is not found!")
 
         gloss_node = self.blender_material.node_tree.nodes.get('Glossmap')
+        specular_socket = main_node.inputs['Specular IOR Level']
         if gloss_node is not None:
             try:
-                if bpy.app.version < (3, 3, 0):
-                    gloss_image_path = gloss_node.inputs['Image'].links[0].from_node.image.filepath
+                if gloss_node.type == "SEPARATE_COLOR":
+                    gloss_image_path = gloss_node.inputs['Color'].links[0].from_node.image.filepath
+                elif gloss_node.type == "TEX_IMAGE":
+                    gloss_image_path = gloss_node.image.filepath
                 else:
-                    if gloss_node.type == "SEPARATE_COLOR":
-                        gloss_image_path = gloss_node.inputs['Color'].links[0].from_node.image.filepath
-                    elif gloss_node.type == "TEX_IMAGE":
-                        gloss_image_path = gloss_node.image.filepath
-                    else:
-                        raise AttributeError(f"Has an improperly setup Glossmap")
+                    raise AttributeError(f"Has an improperly setup Glossmap")
             except (AttributeError, IndexError, KeyError):
                 self.logger.exception(f"Has an improperly setup Glossmap")
             else:
@@ -72,12 +69,24 @@ class Material(Node):
                 file_id = self.i3d.add_file_image(gloss_image_path)
                 self.xml_elements['Glossmap'] = xml_i3d.SubElement(self.element, 'Glossmap')
                 self._write_attribute('fileId', file_id, 'Glossmap')
+        elif specular_socket.is_linked:
+            connected_node = specular_socket.links[0].from_node
+            if connected_node.type == "TEX_IMAGE":
+                if connected_node.image is None:
+                    self.logger.error(f"Specular node has no image")
+                else:
+                    self.logger.debug(f"Has Glossmap '{utility.as_fs_relative_path(connected_node.image.filepath)}'")
+                    file_id = self.i3d.add_file_image(connected_node.image.filepath)
+                    self.xml_elements['Glossmap'] = xml_i3d.SubElement(self.element, 'Glossmap')
+                    self._write_attribute('fileId', file_id, 'Glossmap')
+            else:
+                self.logger.debug(f"Specular node is not a TEX_IMAGE node")
         else:
             self.logger.debug(f"Has no Glossmap")
 
     def _specular_from_nodes(self, node):
         specular = [1.0 - node.inputs['Roughness'].default_value,
-                    node.inputs['Specular'].default_value,
+                    node.inputs['Specular IOR Level'].default_value,
                     node.inputs['Metallic'].default_value]
         self._write_specular(specular)
 
@@ -116,11 +125,14 @@ class Material(Node):
                     file_id = self.i3d.add_file_image(diffuse_image_path)
                     self.xml_elements['Texture'] = xml_i3d.SubElement(self.element, 'Texture')
                     self._write_attribute('fileId', file_id, 'Texture')
-        # Write the diffuse colors
-        self._write_diffuse(diffuse)
+        else:
+            # Write the diffuse colors
+            emission_socket = node.inputs['Emission Color']
+            if not emission_socket.is_linked:
+                self._write_diffuse(diffuse)
 
     def _emissive_from_nodes(self, node):
-        emission_socket = node.inputs['Emission']
+        emission_socket = node.inputs['Emission Color']
         emission_c = emission_socket.default_value
         emissive_path = None
         if emission_socket.is_linked:
@@ -140,8 +152,9 @@ class Material(Node):
                     self._write_attribute('fileId', file_id, 'Emissive')
                     return
             self.logger.debug("Has no Emissivemap")
-        r, g, b, a = emission_c
-        if (0, 0, 0, 1) != (r, g, b, a):
+
+        has_emission = node.inputs['Emission Strength'].default_value == 0.0
+        if not has_emission:
             self.logger.debug("Write emissiveColor")
             self._write_emission(emission_c)
 
@@ -162,8 +175,11 @@ class Material(Node):
 
     def _write_properties(self):
         # Alpha blending
-        if self.blender_material.blend_method in ['CLIP', 'HASHED', 'BLEND']:
+        if self.blender_material.i3d_attributes.alpha_blending:
             self._write_attribute('alphaBlending', True)
+        # Shading rate
+        if (shading_rate := self.blender_material.i3d_attributes.shading_rate) != '1x1':
+            self._write_attribute('shadingRate', shading_rate)
 
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes

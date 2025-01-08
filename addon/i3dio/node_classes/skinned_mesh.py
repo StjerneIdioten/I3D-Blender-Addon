@@ -23,27 +23,36 @@ class SkinnedMeshBoneNode(TransformGroupNode):
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
+        conversion_matrix: mathutils.Matrix = self.i3d.conversion_matrix
 
         if self.blender_object.parent is None:
             # The bone is parented to the armature directly, and therefore should just use the matrix_local which is in
             # relation to the armature anyway.
-            bone_transform = self.blender_object.matrix_local
+            bone_transform = conversion_matrix @ self.blender_object.matrix_local @ conversion_matrix.inverted()
+
+            # Blender bones are visually pointing along the Z-axis, but internally they use the Y-axis. This creates a
+            # discrepancy when converting to GE's expected orientation. To resolve this, apply a -90-degree rotation
+            # around the X-axis. The translation is extracted first to avoid altering the
+            # bone's position during rotation.
+            rot_fix = mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
+            translation = bone_transform.to_translation()
+            bone_transform = rot_fix @ bone_transform.to_3x3().to_4x4()
+            bone_transform.translation = translation
+
             if self.i3d.settings['collapse_armatures']:
-                bone_transform = self.parent.blender_object.matrix_local @ bone_transform
+                # collapse_armatures deletes the armature object in the I3D,
+                # so we need to mutliply the armature matrix into the root bone
+                armature_obj = self.parent.blender_object
+                armature_matrix = conversion_matrix @ armature_obj.matrix_local @ conversion_matrix.inverted()
+
+                bone_transform = armature_matrix @ bone_transform
         else:
-            # To find the transform of the bone, we take the inverse of its parents transform in armature space and
+            # To find the transform of child bone, we take the inverse of its parents transform in armature space and
             # multiply that with the bones transform in armature space. The new 4x4 matrix gives the position and
             # rotation in relation to the parent bone (of the head, that is)
             bone_transform = self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
 
-        # Blender bones are visually pointing along the Z-axis, but internally they are using Y. To get around this
-        # discrepancy the local matrix has a 90 deg rotation around the X-axis. To make the bone have the expected
-        # orientation in GE, rotate it -90 deg on around X.
-        bone_transform = bone_transform @ mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
-
-        conversion_matrix = self.i3d.conversion_matrix @ bone_transform @ self.i3d.conversion_matrix.inverted()
-
-        return conversion_matrix
+        return bone_transform
 
 
 class SkinnedMeshRootNode(TransformGroupNode):
@@ -83,9 +92,11 @@ class SkinnedMeshRootNode(TransformGroupNode):
                 self.element.remove(bone.element)
                 self.children.remove(bone)
                 if parent is not None:
+                    bone.parent = parent
                     parent.add_child(bone)
                     parent.element.append(bone.element)
                 else:
+                    bone.parent = None
                     self.i3d.scene_root_nodes.append(bone)
                     self.i3d.xml_elements['Scene'].append(bone.element)
 
@@ -99,13 +110,13 @@ class SkinnedMeshShapeNode(ShapeNode):
             if modifier.type == 'ARMATURE':
                 self.armature_nodes.append(i3d.add_armature(modifier.object))
         self.bone_mapping = ChainMap(*[armature.bone_mapping for armature in self.armature_nodes])
-        super().__init__(id_=id_, mesh_object=skinned_mesh_object, i3d=i3d, parent=parent)
+        super().__init__(id_=id_, shape_object=skinned_mesh_object, i3d=i3d, parent=parent)
 
     def add_shape(self):
         # Use a ChainMap to easily combine multiple bone mappings and get around any problems with multiple bones
         # named the same as a ChainMap just gets the bone from the first armature added
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.skinned_mesh_name,
-                                           bone_mapping=self.bone_mapping)
+                                           bone_mapping=self.bone_mapping, tangent=self.tangent)
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):

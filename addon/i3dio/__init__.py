@@ -32,7 +32,7 @@ bl_info = {
     "description": "Exports blender projects into GIANTS I3D format for use in Giants Engine based games such as "
                    "Farming Simulator",
     "version": (0, 0, 0),  # Always (0, 0, 0) since versioning is controlled by the CI
-    "blender": (2, 93, 0),
+    "blender": (4, 2, 0),
     "location": "File > Import-Export",
     "warning": "First Unofficial Alpha Version",
     "support": "COMMUNITY",
@@ -43,7 +43,6 @@ bl_info = {
 
 
 def register():
-
     try:
         import lxml
     except ImportError as e:
@@ -77,9 +76,7 @@ def register():
     ui.user_attributes.register()
     ui.mesh.register()
     ui.light.register()
-
     bpy.types.TOPBAR_MT_file_export.append(ui.exporter.menu_func_export)
-
 
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(ui.exporter.menu_func_export)

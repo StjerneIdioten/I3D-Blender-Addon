@@ -95,7 +95,14 @@ class SceneGraphNode(Node):
         self.children = []
         self.blender_object = blender_object
         self.xml_elements: Dict[str, Union[xml_i3d.XML_Element, None]] = {'Node': None}
+
+        self._name = self.blender_object.name
+        if (prefix:= bpy.context.scene.i3dio.object_sorting_prefix) != "" and (prefix_index := self._name.find(prefix)) != -1 and prefix_index < (len(self._name) - 1):
+            self._name = self._name[prefix_index + 1:]
+
         super().__init__(id_, i3d, parent)
+
+        self.logger.debug(f"New Name: {self._name}")
 
         try:
             self.parent.add_child(self)
@@ -108,7 +115,7 @@ class SceneGraphNode(Node):
 
     @property
     def name(self):
-        return self.blender_object.name
+        return self._name
 
     @property
     def element(self) -> Union[xml_i3d.XML_Element, None]:
@@ -145,6 +152,15 @@ class SceneGraphNode(Node):
             self.i3d.add_user_attributes(self.blender_object.i3d_user_attributes.attribute_list, self.id)
         except AttributeError:
             pass
+
+    def _add_reference_file(self):
+        if 'i3d_reference_path' not in self.blender_object.keys():
+            return
+        elif self.blender_object.i3d_reference_path == "" or not self.blender_object.i3d_reference_path.endswith('.i3d'):
+            return
+        self.logger.debug(f"Adding reference file")
+        file_id = self.i3d.add_file_reference(self.blender_object.i3d_reference_path)
+        self._write_attribute('referenceId', file_id)
 
     @property
     @abstractmethod
@@ -199,6 +215,8 @@ class SceneGraphNode(Node):
         self._write_properties()
         self._write_user_attributes()
         self._add_transform_to_xml_element(self._transform_for_conversion)
+        if not isinstance(self.blender_object, bpy.types.Collection):
+            self._add_reference_file()
 
     def add_child(self, node: SceneGraphNode):
         self.children.append(node)
