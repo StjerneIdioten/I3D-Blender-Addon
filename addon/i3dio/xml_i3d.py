@@ -230,6 +230,7 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
         i3d_name = property_group.i3d_map[prop_key].get('name')
         field_type = property_group.i3d_map[prop_key].get('type')
         i3d_placement = property_group.i3d_map[prop_key].get('placement', 'Node')
+        i3d_default = property_group.i3d_map[prop_key].get('i3d_default')
 
         # Conversion Checks
 
@@ -242,7 +243,9 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
             if utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default)):
                 continue
         # In the case that the value is default, then just ignore it
-        elif value == default:
+        elif i3d_default is not None and value == i3d_default:
+            continue
+        elif i3d_default is None and value == default:
             continue
         # In some cases of enums the i3d_name is actually the enum value itself. It is signaled by not having a name
         elif i3d_name is None:
