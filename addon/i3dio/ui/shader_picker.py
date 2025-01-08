@@ -288,6 +288,21 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         default=False
     )
 
+    shading_rate: EnumProperty(
+        name='Shading Rate',
+        description='Shading Rate',
+        items=[
+            ('1x1', '1x1', '1x1'),
+            ('1x2', '1x2', '1x2'),
+            ('2x1', '2x1', '2x1'),
+            ('2x2', '2x2', '2x2'),
+            ('2x4', '2x4', '2x4'),
+            ('4x2', '4x2', '4x2'),
+            ('4x4', '4x4', '4x4')
+        ],
+        default='1x1'
+    )
+
 
 def sync_active_material_slot_name(mesh):
     """Synchronize material slot names for the mesh"""
@@ -324,14 +339,17 @@ class I3D_IO_PT_material_shader(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = False
+        layout.use_property_split = True
         layout.use_property_decorate = False
         obj = context.object
         material = obj.active_material
 
         layout.prop(material, "i3d_material_slot_name", text="Material Slot Name")
 
+        layout.prop(material.i3d_attributes, 'shading_rate')
         layout.prop(material.i3d_attributes, 'alpha_blending')
+
+        layout.use_property_split = False
         layout.prop(material.i3d_attributes, 'source')
 
         if material.i3d_attributes.variations:
