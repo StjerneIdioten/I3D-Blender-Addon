@@ -186,17 +186,18 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
     objects_to_export = objects
     if sort_alphabetical:
         objects_to_export = sort_blender_objects_by_outliner_ordering(objects)
+    all_objects_to_export = [obj for root_obj in objects for obj in traverse_hierarchy(root_obj)]
     for blender_object in objects_to_export:
-        _add_object_to_i3d(i3d, blender_object, objects_to_export)
+        _add_object_to_i3d(i3d, blender_object, export_candidates=all_objects_to_export)
 
-        
-def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, objects_to_export: list = None,
-                       parent: SceneGraphNode = None) -> None:
+
+def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None,
+                       export_candidates: list = None) -> None:
     # Check if object should be excluded from export (including its children)
     if obj.i3d_attributes.exclude_from_export:
         logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
         return
-      
+
     # Special handling of armature nodes, since they are sort of "extra" compared to how other programs like Maya
     # handles bones. So the option for turning them off is provided.
     _parent = parent
@@ -230,7 +231,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, objects_to_export: list = N
                             logger.warning(f"Armature modifier '{modifier.name}' on skinned mesh '{obj.name}' "
                                            "has no armature object assigned. Exporting as a regular shape instead.")
                             break
-                        elif modifier.object not in objects_to_export:
+                        elif modifier.object not in export_candidates:
                             logger.warning(
                                 f"Skinned mesh '{obj.name}' references armature '{modifier.object.name}', "
                                 "but the armature is not included in the export hierarchy. "
@@ -275,7 +276,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, objects_to_export: list = N
         # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
         logger.debug(f"[{obj.name}] processing objects children")
         for child in sort_blender_objects_by_outliner_ordering(obj.children):
-            _add_object_to_i3d(i3d, child, node)
+            _add_object_to_i3d(i3d, child, node, export_candidates)
         logger.debug(f"[{obj.name}] no more children to process in object")
 
 
@@ -297,5 +298,10 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
         # a part of the collections objects. Which means that they would be added twice without this check. One for the
         # object itself and one for the collection.
         if child.parent is None:
-            _add_object_to_i3d(i3d, child, parent)
+            _add_object_to_i3d(i3d, child, parent, export_candidates=collection.objects)
     logger.debug(f"[{collection.name}] no more objects to process in collection")
+
+
+def traverse_hierarchy(obj: BlenderObject) -> List[BlenderObject]:
+    """Recursively traverses an object hierarchy and returns all objects."""
+    return [obj] + [child for child in obj.children for child in traverse_hierarchy(child)]
