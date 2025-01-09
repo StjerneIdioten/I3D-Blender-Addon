@@ -82,7 +82,9 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
     locked_group: BoolProperty(
         name="Locked Group",
-        description="Locked Group",
+        description="Enable this option to treat the parent object as a 'locked group' in Giants Editor. "
+        "When the hierarchy of an object is collapsed and you select any child object in the viewport, "
+        "the parent object (the locked group) will be selected instead.",
         default=i3d_map['locked_group']['default']
     )
 
