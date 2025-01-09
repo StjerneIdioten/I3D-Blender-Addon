@@ -31,6 +31,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'non_renderable': {'name': 'nonRenderable', 'default': False},        
         'is_occluder': {'name': 'occluder', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
+        'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
         'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
         'nav_mesh_mask': {'name': 'buildNavMeshMask', 'default': '0', 'type': 'HEX'},
         'decal_layer': {'name': 'decalLayer', 'default': 0},
@@ -66,6 +67,12 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         name="Distance Blending",
         description="Distance Blending",
         default=i3d_map['distance_blending']['default']
+    )
+
+    rendered_in_viewports: BoolProperty(
+        name="Rendered In Viewports",
+        description="Determines if the object is rendered in Giants Editor viewport or not",
+        default=i3d_map['rendered_in_viewports']['default']
     )
 
     cpu_mesh: EnumProperty(
@@ -137,6 +144,7 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(obj.i3d_attributes, "receive_shadows")
         layout.prop(obj.i3d_attributes, "non_renderable")
         layout.prop(obj.i3d_attributes, "distance_blending")
+        layout.prop(obj.i3d_attributes, "rendered_in_viewports")
         layout.prop(obj.i3d_attributes, "is_occluder")
         layout.prop(obj.i3d_attributes, "cpu_mesh")
         layout.prop(obj.i3d_attributes, "nav_mesh_mask")
