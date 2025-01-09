@@ -583,7 +583,7 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.separator(type='LINE')
 
         if obj.type == 'EMPTY':
-            draw_reference_file_attributes(layout, obj.i3d_reference_data)
+            draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_level_of_detail_attributes(layout, obj, i3d_attributes)
             draw_joint_attributes(layout, i3d_attributes)
 
@@ -949,7 +949,7 @@ def register():
     bpy.types.Object.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.Bone.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.EditBone.i3d_mapping = PointerProperty(type=I3DMappingData)
-    bpy.types.Object.i3d_reference_data = PointerProperty(type=I3DReferenceData)
+    bpy.types.Object.i3d_reference = PointerProperty(type=I3DReferenceData)
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
     load_post.append(handle_old_merge_groups)
     load_post.append(handle_old_lod_distances)
@@ -961,7 +961,7 @@ def unregister():
     load_post.remove(handle_old_lod_distances)
     load_post.remove(handle_old_merge_groups)
     del bpy.types.Scene.i3dio_merge_groups
-    del bpy.types.Object.i3d_reference_data
+    del bpy.types.Object.i3d_reference
     del bpy.types.EditBone.i3d_mapping
     del bpy.types.Bone.i3d_mapping
     del bpy.types.Object.i3d_mapping
