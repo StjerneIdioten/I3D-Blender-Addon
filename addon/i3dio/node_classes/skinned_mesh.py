@@ -16,6 +16,7 @@ from .. import xml_i3d
 
 import math
 
+
 class SkinnedMeshBoneNode(TransformGroupNode):
     def __init__(self, id_: int, bone_object: bpy.types.Bone,
                  i3d: I3D, parent: SceneGraphNode):
