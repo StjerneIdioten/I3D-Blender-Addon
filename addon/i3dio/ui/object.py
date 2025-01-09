@@ -51,6 +51,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'linear_damping': {'name': 'linearDamping', 'default': 0.0},
         'angular_damping': {'name': 'angularDamping', 'default': 0.01},
         'density': {'name': 'density', 'default': 1.0},
+        'solver_iteration_count': {'name': 'solverIterationCount', 'default': 4},
         'split_type': {'name': 'splitType', 'default': 0},
         'split_uvs': {'name': 'splitUvs', 'default': (0.0, 0.0, 1.0, 1.0, 1.0)},
         'use_parent': {'name': 'useParent', 'default': True},
@@ -231,6 +232,14 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
                     "The higher the number, the heavier the object",
         default=i3d_map['density']['default'],
         min=0,
+        max=20
+    )
+
+    solver_iteration_count: IntProperty(
+        name="Solver Iteration Count",
+        description="The number of iterations the physics engine uses to solve the constraints",
+        default=i3d_map['solver_iteration_count']['default'],
+        min=1,
         max=20
     )
 
@@ -534,6 +543,7 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
             layout.prop(obj.i3d_attributes, 'linear_damping')
             layout.prop(obj.i3d_attributes, 'angular_damping')
             layout.prop(obj.i3d_attributes, 'density')
+            layout.prop(obj.i3d_attributes, 'solver_iteration_count')
 
             row_split_type_presets = layout.row()
             row_split_type_presets.prop(obj.i3d_attributes, 'split_type_presets')
@@ -574,6 +584,7 @@ class I3D_IO_PT_rigid_body_attributes(Panel):
             obj.i3d_attributes.property_unset('linear_damping')
             obj.i3d_attributes.property_unset('angular_damping')
             obj.i3d_attributes.property_unset('density')
+            obj.i3d_attributes.property_unset('solver_iteration_count')
             obj.i3d_attributes.property_unset('split_type')
             obj.i3d_attributes.property_unset('split_type_presets')
             obj.i3d_attributes.property_unset('split_uvs')
