@@ -30,6 +30,7 @@ def register(cls):
 @register
 class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     i3d_map = {
+        'locked_group': {'name': 'lockedgroup', 'default': False},
         'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
                                                                            'mapping': {True: False,
                                                                                        False: True}}},
@@ -78,6 +79,14 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'joint_break_force': {'name': 'jointBreakForce', 'default': 0.0},
         'joint_break_torque': {'name': 'jointBreakTorque', 'default': 0.0},
     }
+
+    locked_group: BoolProperty(
+        name="Locked Group",
+        description="Enable this option to treat the object as a 'locked group' in Giants Editor. "
+        "When the hierarchy is collapsed and you select any of its child objects in the viewport, "
+        "the parent object (the locked group) will be selected instead.",
+        default=i3d_map['locked_group']['default']
+    )
 
     visibility: BoolProperty(
         name="Visibility",
@@ -469,6 +478,7 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.use_property_decorate = False
         obj = context.object
 
+        i3d_property(layout, obj.i3d_attributes, 'locked_group', obj)
         i3d_property(layout, obj.i3d_attributes, 'visibility', obj)
         i3d_property(layout, obj.i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, obj.i3d_attributes, 'min_clip_distance', obj)
@@ -484,7 +494,6 @@ class I3D_IO_PT_object_attributes(Panel):
                     row.prop(obj.i3d_attributes, 'lod_distances', index=i, text=f"Level {i}")
 
                 panel.prop(obj.i3d_attributes, 'lod_blending')
-
 
         layout.prop(obj.i3d_attributes, 'exclude_from_export')
 

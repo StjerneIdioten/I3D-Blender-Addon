@@ -26,9 +26,9 @@ def register(cls):
 @register
 class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'casts_shadows': {'name': 'castsShadows', 'default': False},
-        'receive_shadows': {'name': 'receiveShadows', 'default': False},
-        'non_renderable': {'name': 'nonRenderable', 'default': False},        
+        'casts_shadows': {'name': 'castsShadows', 'default': False, 'blender_default': True},
+        'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': True},
+        'non_renderable': {'name': 'nonRenderable', 'default': False},
         'is_occluder': {'name': 'occluder', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
         'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
@@ -42,13 +42,13 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     casts_shadows: BoolProperty(
         name="Cast Shadowmap",
         description="Cast Shadowmap",
-        default=i3d_map['casts_shadows']['default']
+        default=i3d_map['casts_shadows']['blender_default']
     )
 
     receive_shadows: BoolProperty(
         name="Receive Shadowmap",
         description="Receive Shadowmap",
-        default=i3d_map['receive_shadows']['default']
+        default=i3d_map['receive_shadows']['blender_default']
     )
 
     non_renderable: BoolProperty(
