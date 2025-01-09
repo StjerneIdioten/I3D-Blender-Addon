@@ -16,71 +16,41 @@ from .. import xml_i3d
 
 import math
 
-
 class SkinnedMeshBoneNode(TransformGroupNode):
     def __init__(self, id_: int, bone_object: bpy.types.Bone,
                  i3d: I3D, parent: SceneGraphNode):
         super().__init__(id_=id_, empty_object=bone_object, i3d=i3d, parent=parent)
 
-    def _convert_to_i3d_space(self, matrix: mathutils.Matrix) -> mathutils.Matrix:
-        conversion_matrix: mathutils.Matrix = self.i3d.conversion_matrix
-        return conversion_matrix @ matrix @ conversion_matrix.inverted()
+    def _matrix_to_i3d_space(self, matrix: mathutils.Matrix) -> mathutils.Matrix:
+        return self.i3d.conversion_matrix @ matrix @ self.i3d.conversion_matrix.inverted()
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
         if self.blender_object.parent and isinstance(self.blender_object.parent, bpy.types.Bone):
-            # When a bone is parented to another bone, the bone's matrix_local is in relation to the parent bone.
-            # No need for the conversion matrix here since the bones are already in the correct orientation.
-            parent_bone_transform = self.blender_object.parent.matrix_local
-            return parent_bone_transform.inverted() @ self.blender_object.matrix_local
-
-        # Initialize default identity matrix for armature transform
-        armature_transform = mathutils.Matrix.Identity(4)
-
-        custom_parent = None
-
-        # Check if the bone has a 'Child Of' constraint and retrieve its target as the custom parent, if it exists
-        if isinstance(self.parent.blender_object, bpy.types.Object):
-            custom_parent = SkinnedMeshRootNode._get_new_bone_parent(self.parent.blender_object, self.blender_object)
-
-        # Get the armature object only if the bone is not parented to another bone
-        if custom_parent or (not self.blender_object.parent and self.i3d.settings['collapse_armatures']):
-            armature_obj = self.parent.blender_object
-            self.logger.debug(f"the armature object: {armature_obj.name}")
-            armature_transform = self._convert_to_i3d_space(armature_obj.matrix_local)
+            # For bones parented to other bones, matrix_local is relative to the parent.
+            # No transformation to I3D space is needed because the orientation is already relative to the parent bone.
+            return self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
 
         # Get the bone's transformation in armature space
-        bone_transform = self._convert_to_i3d_space(self.blender_object.matrix_local)
-
-        # Giants Engine expects bones to point along the Z-axis, just like how Blender shows them visually.
-        # But when a bone is directly connected to the armature (a root bone), Blender internally treats it as pointing
-        # along the Y-axis. This difference needs to be fixed by rotating the bone -90 degrees around the X-axis.
-        # Bones connected to other bones already work correctly and don’t need this adjustment.
+        bone_matrix = self._matrix_to_i3d_space(self.blender_object.matrix_local)
+        # Giants Engine expects bones to point along the Z-axis (Blender's visual alignment).
+        # However, root bones in Blender internally align along the Y-axis.
+        # Rotate -90° around X-axis to correct root bone orientation. Child bones remain unaffected.
         rot_fix = mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
-        translation = bone_transform.to_translation()
-        bone_transform = rot_fix @ bone_transform.to_3x3().to_4x4()
-        bone_transform.translation = translation
+        translation = bone_matrix.to_translation()
+        bone_matrix = rot_fix @ bone_matrix.to_3x3().to_4x4()
+        bone_matrix.translation = translation
 
-        # If a custom parent exists, calculate bone transformation relative to the parent
-        if custom_parent:
-            self.logger.debug(f"has a custom parent: {custom_parent.name} from child of constraint")
-            # For a 'Child Of' constraint targeting a regular object rather than another bone, the bone’s
-            # final transformation depends on that object’s global position in the scene. Since this object
-            # may lie deep within another hierarchy, `matrix_local` alone isn’t sufficient. Instead, we use
-            # `matrix_world` to get the object’s fully resolved global transform before converting it into I3D space.
-            custom_parent_transform = self._convert_to_i3d_space(custom_parent.matrix_world)
-            return custom_parent_transform.inverted() @ armature_transform @ bone_transform
-
-        # Default behavior for bones with no custom parent
         # For bones parented directly to the armature, matrix_local already represents their transform
         # relative to the armature, so no additional adjustments are needed.
-        if self.i3d.settings['collapse_armatures']:
-            # collapse_armatures deletes the armature object in the I3D, so we need to mutliply the armature matrix
-            # into the root bone since the bone essentially replaces the armature object
-            return armature_transform @ bone_transform
-        # If there's no custom parent, and we're not collapsing armatures, the bone's local transform
-        # is already correct relative to the armature. Just return it as-is.
-        return bone_transform
+        if self.i3d.settings['collapse_armatures'] and self.parent.blender_object:
+            # If collapse_armatures is enabled, the armature is removed in the I3D.
+            # The root bone replaces the armature in the hierarchy,
+            # so multiply its matrix with the armature matrix to preserve the correct transformation.
+            armature_matrix = self._matrix_to_i3d_space(self.parent.blender_object.matrix_local)
+            return armature_matrix @ bone_matrix
+        # Return the bone's local transform unchanged, as it is already correct relative to the armature.
+        return bone_matrix
 
 
 class SkinnedMeshRootNode(TransformGroupNode):
