@@ -30,6 +30,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': True},
         'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
+        'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
         'is_occluder': {'name': 'occluder', 'default': False},
         'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
         'nav_mesh_mask': {'name': 'buildNavMeshMask', 'default': '0', 'type': 'HEX'},
@@ -61,13 +62,19 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         description="Distance Blending",
         default=i3d_map['distance_blending']['default']
     )
-
+      
+    rendered_in_viewports: BoolProperty(
+      name="Rendered In Viewports",
+      description="Determines if the object is rendered in Giants Editor viewport or not",
+      default=i3d_map['rendered_in_viewports']['default']
+    )
+      
     is_occluder: BoolProperty(
         name="Occluder",
         description="Is Occluder?",
         default=i3d_map['is_occluder']['default']
     )
-
+      
     cpu_mesh: EnumProperty(
         name="CPU Mesh",
         description="CPU Mesh",
