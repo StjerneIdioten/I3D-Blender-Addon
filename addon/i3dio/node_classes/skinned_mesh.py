@@ -3,18 +3,25 @@ A lot of classes in this file is purely to have different classes for different 
 but it helps with debugging big trees and seeing the structure.
 """
 from __future__ import annotations
-from typing import (Union, Dict, List, Type, OrderedDict, Optional)
+from typing import (Union, Dict, List, Optional)
 from collections import ChainMap
 import mathutils
 import bpy
 
-from . import node
 from .node import (TransformGroupNode, SceneGraphNode)
 from .shape import (ShapeNode, EvaluatedMesh)
 from ..i3d import I3D
 from .. import xml_i3d
 
 import math
+
+
+def _get_child_of_target(armature: bpy.types.Object, bone_node: SkinnedMeshBoneNode) -> Optional[bpy.types.Object]:
+    """Return the target object from the first 'Child Of' constraint on the bone, if any."""
+    if pose_bone := armature.pose.bones.get(bone_node.name):
+        child_of = next((c for c in pose_bone.constraints if c.type == 'CHILD_OF'), None)
+        return child_of.target if (child_of and child_of.target) else None
+    return None
 
 
 class SkinnedMeshBoneNode(TransformGroupNode):
@@ -42,6 +49,11 @@ class SkinnedMeshBoneNode(TransformGroupNode):
         bone_matrix = rot_fix @ bone_matrix.to_3x3().to_4x4()
         bone_matrix.translation = translation
 
+        if target_obj := _get_child_of_target(self.parent.blender_object, self.blender_object):
+            target_matrix = self._matrix_to_i3d_space(target_obj.matrix_world)
+            armature_matrix = self._matrix_to_i3d_space(self.parent.blender_object.matrix_local)
+            return target_matrix.inverted() @ armature_matrix @ bone_matrix
+
         # For bones parented directly to the armature, matrix_local already represents their transform
         # relative to the armature, so no additional adjustments are needed.
         if self.i3d.settings['collapse_armatures'] and self.parent.blender_object:
@@ -66,13 +78,17 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
         super().__init__(id_=id_, empty_object=armature_object, i3d=i3d, parent=parent)
 
+        # Create all bones in normal Blender parent-child order
         for bone in armature_object.data.bones:
             if bone.parent is None:
                 self._add_bone(bone, self)
 
+        # Make a dict of child-of targets {bone_node: target_object}
+        self.child_of_parents = {bone_node: target for bone_node in self.bones
+                                 if (target := _get_child_of_target(armature_object, bone_node))}
+
     def add_i3d_mapping_to_xml(self):
-        """Wont export armature mapping, if 'collapsing armatures' is enabled
-        """
+        """Wont export armature mapping, if 'collapsing armatures' is enabled"""
         if not self.i3d.settings['collapse_armatures']:
             super().add_i3d_mapping_to_xml()
 
@@ -81,12 +97,12 @@ class SkinnedMeshRootNode(TransformGroupNode):
         self.bones.append(self.i3d.add_bone(bone_object, parent))
         current_bone = self.bones[-1]
         self.bone_mapping[bone_object.name] = current_bone.id
-
         for child_bone in bone_object.children:
             self._add_bone(child_bone, current_bone)
 
     @staticmethod
-    def _find_node_by_blender_object(root_nodes, target_object):
+    def _find_node_by_blender_object(root_nodes: List[SceneGraphNode],
+                                     target_object: bpy.types.Object) -> SceneGraphNode | None:
         """Recursively find a node in the scene graph by its Blender object."""
         for root_node in root_nodes:
             if root_node.blender_object == target_object:
@@ -95,46 +111,32 @@ class SkinnedMeshRootNode(TransformGroupNode):
                 return child_result
         return None
 
-    @staticmethod
-    def _get_new_bone_parent(armature_object: bpy.types.Armature,
-                             bone: bpy.types.Bone) -> Optional[Union[bpy.types.Object, bpy.types.Bone]]:
-        """Return the target object or bone of the first 'Child Of' constraint for a bone."""
-        pose_bone = armature_object.pose.bones.get(bone.name)
-        if not pose_bone:
-            return None
-
-        child_of_constraint = next((constraint for constraint in pose_bone.constraints
-                                    if constraint.type == 'CHILD_OF'), None)
-        if child_of_constraint and child_of_constraint.target:
-            return child_of_constraint.target
-        return None
-
-    def update_bone_parent(self, parent):
+    def update_bone_parent(self, fallback_parent: SceneGraphNode | None) -> None:
         """Update the parent of each bone based on constraints or fallback to default behavior."""
         for bone in self.bones:
-            new_parent_target = self._get_new_bone_parent(self.blender_object, bone)
-            effective_parent = self._find_node_by_blender_object(self.i3d.scene_root_nodes, new_parent_target) \
-                if new_parent_target else parent
+            if target_obj := self.child_of_parents.get(bone):
+                new_parent_node = self._find_node_by_blender_object(self.i3d.scene_root_nodes, target_obj)
+                if not new_parent_node:
+                    # If the target object is not in the scene graph, use the fallback parent
+                    self.logger.warning(f"Child Of target '{target_obj.name}' not found. Using fallback.")
+                    new_parent_node = fallback_parent
+            else:  # If no Child Of constraint is found, use the fallback parent
+                new_parent_node = fallback_parent
 
-            # Skip reparenting if the bone's parent is another bone in the same armature
-            if bone.parent != self:
-                continue
+            if bone.parent == new_parent_node:
+                continue  # Already parented correctly
 
-            self.logger.debug(f"Bone {bone.name} set parent to: "
-                              f"{effective_parent.name if effective_parent else 'Root'}")
+            # Remove bone from old parent
+            if bone.parent and (bone in bone.parent.children):
+                bone.parent.children.remove(bone)
+                bone.parent.element.remove(bone.element)
 
-            # Remove bone from current parent
-            if bone in self.children:
-                self.children.remove(bone)
-                self.element.remove(bone.element)
-
-            # Add bone to new parent if found
-            if effective_parent:
-                bone.parent = parent
-                effective_parent.add_child(bone)
-                effective_parent.element.append(bone.element)
-            else:
-                # If no valid parent is found, add to the root
+            # Reassign parent
+            if new_parent_node:
+                bone.parent = new_parent_node
+                new_parent_node.children.append(bone)
+                new_parent_node.element.append(bone.element)
+            else:  # If no valid parent is found, add to the root
                 bone.parent = None
                 self.i3d.scene_root_nodes.append(bone)
                 self.i3d.xml_elements['Scene'].append(bone.element)
@@ -142,7 +144,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
 class SkinnedMeshShapeNode(ShapeNode):
     def __init__(self, id_: int, skinned_mesh_object: bpy.types.Object, i3d: I3D,
-                 parent: [SceneGraphNode or None] = None):
+                 parent: [SceneGraphNode | None] = None):
         self.armature_nodes = []
         self.skinned_mesh_name = xml_i3d.skinned_mesh_prefix + skinned_mesh_object.data.name
         for modifier in skinned_mesh_object.modifiers:
