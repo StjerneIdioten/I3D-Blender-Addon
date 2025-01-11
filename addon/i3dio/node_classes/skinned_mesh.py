@@ -3,7 +3,7 @@ A lot of classes in this file is purely to have different classes for different 
 but it helps with debugging big trees and seeing the structure.
 """
 from __future__ import annotations
-from typing import (Union, Dict, List, Optional)
+from typing import (Union, Dict, List)
 from collections import ChainMap
 import mathutils
 import bpy
@@ -16,17 +16,10 @@ from .. import xml_i3d
 import math
 
 
-def _get_child_of_target(armature: bpy.types.Object, bone_node: SkinnedMeshBoneNode) -> Optional[bpy.types.Object]:
-    """Return the target object from the first 'Child Of' constraint on the bone, if any."""
-    if pose_bone := armature.pose.bones.get(bone_node.name):
-        child_of = next((c for c in pose_bone.constraints if c.type == 'CHILD_OF'), None)
-        return child_of.target if (child_of and child_of.target) else None
-    return None
-
-
 class SkinnedMeshBoneNode(TransformGroupNode):
     def __init__(self, id_: int, bone_object: bpy.types.Bone,
-                 i3d: I3D, parent: SceneGraphNode):
+                 i3d: I3D, parent: SceneGraphNode, is_child_of: bool = False):
+        self.is_child_of = is_child_of
         super().__init__(id_=id_, empty_object=bone_object, i3d=i3d, parent=parent)
 
     def _matrix_to_i3d_space(self, matrix: mathutils.Matrix) -> mathutils.Matrix:
@@ -49,10 +42,12 @@ class SkinnedMeshBoneNode(TransformGroupNode):
         bone_matrix = rot_fix @ bone_matrix.to_3x3().to_4x4()
         bone_matrix.translation = translation
 
-        if target_obj := _get_child_of_target(self.parent.blender_object, self.blender_object):
-            target_matrix = self._matrix_to_i3d_space(target_obj.matrix_world)
-            armature_matrix = self._matrix_to_i3d_space(self.parent.blender_object.matrix_local)
-            return target_matrix.inverted() @ armature_matrix @ bone_matrix
+        if self.is_child_of:
+            # Bone is parented to a CHILD_OF constraint target, collapse_armature doesn't matter here
+            # Multiply the bone's local transform with the inverse of the parent object's world matrix
+            # to correctly position it relative to its new parent
+            parent_matrix = self._matrix_to_i3d_space(self.parent.blender_object.matrix_world)
+            return parent_matrix.inverted() @ bone_matrix
 
         # For bones parented directly to the armature, matrix_local already represents their transform
         # relative to the armature, so no additional adjustments are needed.
@@ -78,73 +73,64 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
         super().__init__(id_=id_, empty_object=armature_object, i3d=i3d, parent=parent)
 
-        # Create all bones in normal Blender parent-child order
         for bone in armature_object.data.bones:
             if bone.parent is None:
                 self._add_bone(bone, self)
 
-        # Make a dict of child-of targets {bone_node: target_object}
-        self.child_of_parents = {bone_node: target for bone_node in self.bones
-                                 if (target := _get_child_of_target(armature_object, bone_node))}
-
     def add_i3d_mapping_to_xml(self):
-        """Wont export armature mapping, if 'collapsing armatures' is enabled"""
+        """Wont export armature mapping, if 'collapsing armatures' is enabled
+        """
         if not self.i3d.settings['collapse_armatures']:
             super().add_i3d_mapping_to_xml()
 
     def _add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]):
         """Recursive function for adding a bone along with all of its children"""
-        self.bones.append(self.i3d.add_bone(bone_object, parent))
+        is_child_of = False
+
+        # Try to find pose bone for the bone object
+        if pose_bone := self.blender_object.pose.bones.get(bone_object.name):
+            processed_objects = self.i3d.processed_objects
+
+            # Check if pose pose bone has a CHILD_OF constraint
+            child_of = next((c for c in pose_bone.constraints if c.type == 'CHILD_OF'), None)
+            if child_of and child_of.target:
+                target = child_of.target
+                if target not in processed_objects:
+                    # Target object has not been processed yet, defer the constraint
+                    self.logger.debug(f"Deferring CHILD_OF constraint for {bone_object.name} -> {target}")
+                    self.i3d.deferred_constraints.append((bone_object, target, None))
+                    return
+                else:
+                    # Use the target object if no subtarget is specified
+                    self.logger.debug(f"Bone {bone_object} is child of {target}")
+                    parent = processed_objects[target]
+                    is_child_of = True
+
+        self.bones.append(self.i3d.add_bone(bone_object, parent, is_child_of=is_child_of))
         current_bone = self.bones[-1]
         self.bone_mapping[bone_object.name] = current_bone.id
+
         for child_bone in bone_object.children:
             self._add_bone(child_bone, current_bone)
 
-    @staticmethod
-    def _find_node_by_blender_object(root_nodes: List[SceneGraphNode],
-                                     target_object: bpy.types.Object) -> SceneGraphNode | None:
-        """Recursively find a node in the scene graph by its Blender object."""
-        for root_node in root_nodes:
-            if root_node.blender_object == target_object:
-                return root_node
-            if child_result := SkinnedMeshRootNode._find_node_by_blender_object(root_node.children, target_object):
-                return child_result
-        return None
-
-    def update_bone_parent(self, fallback_parent: SceneGraphNode | None) -> None:
-        """Update the parent of each bone based on constraints or fallback to default behavior."""
+    def update_bone_parent(self, parent):
         for bone in self.bones:
-            if target_obj := self.child_of_parents.get(bone):
-                new_parent_node = self._find_node_by_blender_object(self.i3d.scene_root_nodes, target_obj)
-                if not new_parent_node:
-                    # If the target object is not in the scene graph, use the fallback parent
-                    self.logger.warning(f"Child Of target '{target_obj.name}' not found. Using fallback.")
-                    new_parent_node = fallback_parent
-            else:  # If no Child Of constraint is found, use the fallback parent
-                new_parent_node = fallback_parent
-
-            if bone.parent == new_parent_node:
-                continue  # Already parented correctly
-
-            # Remove bone from old parent
-            if bone.parent and (bone in bone.parent.children):
-                bone.parent.children.remove(bone)
-                bone.parent.element.remove(bone.element)
-
-            # Reassign parent
-            if new_parent_node:
-                bone.parent = new_parent_node
-                new_parent_node.children.append(bone)
-                new_parent_node.element.append(bone.element)
-            else:  # If no valid parent is found, add to the root
-                bone.parent = None
-                self.i3d.scene_root_nodes.append(bone)
-                self.i3d.xml_elements['Scene'].append(bone.element)
+            if bone.parent == self:
+                self.element.remove(bone.element)
+                self.children.remove(bone)
+                if parent is not None:
+                    bone.parent = parent
+                    parent.add_child(bone)
+                    parent.element.append(bone.element)
+                else:
+                    bone.parent = None
+                    self.i3d.scene_root_nodes.append(bone)
+                    self.i3d.xml_elements['Scene'].append(bone.element)
 
 
 class SkinnedMeshShapeNode(ShapeNode):
     def __init__(self, id_: int, skinned_mesh_object: bpy.types.Object, i3d: I3D,
-                 parent: [SceneGraphNode | None] = None):
+                 parent: [SceneGraphNode or None] = None):
         self.armature_nodes = []
         self.skinned_mesh_name = xml_i3d.skinned_mesh_prefix + skinned_mesh_object.data.name
         for modifier in skinned_mesh_object.modifiers:

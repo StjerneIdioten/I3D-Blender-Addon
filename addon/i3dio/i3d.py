@@ -1,6 +1,6 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, Dict, List, Type, OrderedDict, Optional)
+from typing import (Union, Dict, List, Type, OrderedDict, Optional, Tuple)
 import logging
 from . import xml_i3d
 
@@ -36,6 +36,8 @@ class I3D:
         self.xml_elements['UserAttributes'] = xml_i3d.SubElement(self.xml_elements['Root'], 'UserAttributes')
 
         self.scene_root_nodes = []
+        self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
+        self.deferred_constraints: List[Tuple[bpy.types.Bone, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
 
         self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
@@ -60,8 +62,9 @@ class I3D:
         return next_id
 
     def _add_node(self, node_type: Type[SceneGraphNode], object_: Type[bpy.types.bpy_struct],
-                  parent: Type[SceneGraphNode] = None) -> SceneGraphNode:
-        node = node_type(self._next_available_id('node'), object_, self, parent)
+                  parent: Type[SceneGraphNode] = None, **kwargs) -> SceneGraphNode:
+        node = node_type(self._next_available_id('node'), object_, self, parent, **kwargs)
+        self.processed_objects[object_] = node
         if parent is None:
             self.scene_root_nodes.append(node)
             self.xml_elements['Scene'].append(node.element)
@@ -92,9 +95,9 @@ class I3D:
 
         return node_to_return
 
-    def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]) \
-            -> SceneGraphNode:
-        return self._add_node(SkinnedMeshBoneNode, bone_object, parent)
+    def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode],
+                 is_child_of: bool = False) -> SceneGraphNode:
+        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, is_child_of=is_child_of)
 
     # TODO: Rethink this to not include an extra argument for when the node is actually discovered.
     #  Maybe two separate functions instead? This is just hack'n'slash code at this point!

@@ -176,6 +176,15 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
     for blender_object in objects_to_export:
         _add_object_to_i3d(i3d, blender_object, export_candidates=all_objects_to_export)
 
+    for bone_object, target in i3d.deferred_constraints:
+        i3d.logger.debug(f"Deferred constraint: {bone_object} -> {target}")
+        if target in i3d.processed_objects:
+            parent = i3d.processed_objects[target]
+            i3d.logger.debug(f"Processing deferred CHILD_OF constraint for {bone_object.name} -> {target}")
+            i3d.add_bone(bone_object, parent, is_child_of=True)
+        else:
+            i3d.logger.warning(f"Unresolved CHILD_OF constraint for {bone_object.name}: {target}")
+
 
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None,
                        export_candidates: list = None) -> None:
