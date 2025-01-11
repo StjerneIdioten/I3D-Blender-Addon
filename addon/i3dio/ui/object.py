@@ -518,8 +518,13 @@ class I3D_IO_MT_collision_presets(bpy.types.Menu):
         layout = self.layout
         presets = list(COLLISIONS['presets'].keys())
 
+        if not presets:
+            layout.label(text="No Presets Available")
+            return
+
+        grid = layout.grid_flow(columns=2, even_columns=True, even_rows=True)
         for preset in presets:
-            layout.operator(I3D_IO_OT_set_collision_preset.bl_idname, text=preset).preset = preset
+            grid.operator(I3D_IO_OT_set_collision_preset.bl_idname, text=preset).preset = preset
 
         layout.separator()
         layout.operator(I3D_IO_OT_set_collision_preset.bl_idname, text="NONE").preset = "NONE"
