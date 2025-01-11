@@ -26,10 +26,11 @@ logger.debug(f"Loading: {__name__}")
 
 BINARIZER_TIMEOUT_IN_SECONDS = 30
 
-def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
+
+def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings) -> dict:
     export_data = {}
 
-    if bpy.context.scene.i3dio.log_to_file:
+    if operator.log_to_file:
         # Remove the file ending from path and append log specific naming
         filename = filepath[0:len(filepath) - len(xml_i3d.file_ending)] + debugging.export_log_file_ending
         log_file_handler = logging.FileHandler(filename, mode='w')
@@ -47,7 +48,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
     logger.info(f"Exported using '{xml_i3d.xml_current_library}'")
     logger.info(f"Exporting to {filepath}")
 
-    if bpy.context.scene.i3dio.verbose_output:
+    if operator.verbose_output:
         debugging.addon_console_handler.setLevel(logging.DEBUG)
     else:
         debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
@@ -62,26 +63,39 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
         i3d = I3D(name=bpy.path.display_name_from_filepath(filepath),
                   i3d_file_path=filepath,
                   conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up, ).to_4x4(),
-                  depsgraph=depsgraph)
+                  depsgraph=depsgraph,
+                  settings=settings)
 
         # Log export settings
         logger.info("Exporter settings:")
         for setting, value in i3d.settings.items():
             logger.info(f"  {setting}: {value}")
 
-        export_selection = bpy.context.scene.i3dio.selection
-        if export_selection == 'ALL':
-            _export_active_scene_master_collection(i3d)
-        elif export_selection == 'ACTIVE_COLLECTION':
-            _export_active_collection(i3d)
-        elif export_selection == 'ACTIVE_OBJECT':
-            _export_active_object(i3d)
-        elif export_selection == 'SELECTED_OBJECTS':
-            _export_selected_objects(i3d)
+        # Handle case when export is triggered from a collection
+        source_collection = None
+        if operator.collection:
+            source_collection = bpy.data.collections.get(operator.collection)
+            if not source_collection:
+                operator.report({'ERROR'}, f"Collection '{operator.collection}' was not found")
+                return None
+
+        if source_collection:
+            logger.info(f"Exporting using Blender's collection export feature. Collection: '{source_collection.name}'")
+            _export_collection_content(i3d, source_collection)
+        else:
+            match operator.selection:
+                case 'ALL':
+                    _export_active_scene_master_collection(i3d)
+                case 'ACTIVE_COLLECTION':
+                    _export_active_collection(i3d)
+                case 'ACTIVE_OBJECT':
+                    _export_active_object(i3d)
+                case 'SELECTED_OBJECTS':
+                    _export_selected_objects(i3d)
 
         i3d.export_to_i3d_file()
 
-        if bpy.context.scene.i3dio.binarize_i3d == True:
+        if operator.binarize_i3d:
             logger.info(f'Starting binarization of "{filepath}"')
             try:
                 i3d_binarize_path = PurePath(None if (path := bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path) == "" else path)
