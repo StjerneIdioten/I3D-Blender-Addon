@@ -26,8 +26,8 @@ def register(cls):
 @register
 class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'casts_shadows': {'name': 'castsShadows', 'default': False, 'blender_default': True},
-        'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': True},
+        'casts_shadows': {'name': 'castsShadows', 'default': False, 'blender_default': False},
+        'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': False},
         'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
         'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
