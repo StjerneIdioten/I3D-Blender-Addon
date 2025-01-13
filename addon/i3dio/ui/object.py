@@ -565,7 +565,6 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.use_property_split = True
         i3d_property(layout, i3d_attributes, 'locked_group', obj)
         i3d_property(layout, i3d_attributes, 'visibility', obj)
-        i3d_property(layout, i3d_attributes, 'rendered_in_viewports', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
 
