@@ -614,7 +614,9 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
             i3d_attributes.property_unset('compound')
 
         panel.prop(i3d_attributes, 'collision')
-        panel.prop(i3d_attributes, 'collision_mask')
+        row = panel.row(align=True)
+        row.prop(i3d_attributes, 'collision_mask')
+        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'collision_mask'
         panel.prop(i3d_attributes, 'trigger')
         panel.prop(i3d_attributes, 'restitution')
         panel.prop(i3d_attributes, 'static_friction')
@@ -662,6 +664,9 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
         for prop in PROPS:
             row = panel.row()
             row.prop(i3d_attributes, prop)
+            if prop.endswith('_mask'):
+                row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = prop
+
             row.enabled = not use_parent
 
         if use_parent:
