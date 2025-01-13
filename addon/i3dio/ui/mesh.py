@@ -26,11 +26,12 @@ def register(cls):
 @register
 class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'casts_shadows': {'name': 'castsShadows', 'default': False},
-        'receive_shadows': {'name': 'receiveShadows', 'default': False},
-        'non_renderable': {'name': 'nonRenderable', 'default': False},        
-        'is_occluder': {'name': 'occluder', 'default': False},
+        'casts_shadows': {'name': 'castsShadows', 'default': False, 'blender_default': False},
+        'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': False},
+        'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
+        'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
+        'is_occluder': {'name': 'occluder', 'default': False},
         'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
         'nav_mesh_mask': {'name': 'buildNavMeshMask', 'default': '0', 'type': 'HEX'},
         'decal_layer': {'name': 'decalLayer', 'default': 0},
@@ -41,13 +42,13 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     casts_shadows: BoolProperty(
         name="Cast Shadowmap",
         description="Cast Shadowmap",
-        default=i3d_map['casts_shadows']['default']
+        default=i3d_map['casts_shadows']['blender_default']
     )
 
     receive_shadows: BoolProperty(
         name="Receive Shadowmap",
         description="Receive Shadowmap",
-        default=i3d_map['receive_shadows']['default']
+        default=i3d_map['receive_shadows']['blender_default']
     )
 
     non_renderable: BoolProperty(
@@ -56,18 +57,24 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         default=i3d_map['non_renderable']['default']
     )
 
-    is_occluder: BoolProperty(
-        name="Occluder",
-        description="Is Occluder?",
-        default=i3d_map['is_occluder']['default']
-    )
-
     distance_blending: BoolProperty(
         name="Distance Blending",
         description="Distance Blending",
         default=i3d_map['distance_blending']['default']
     )
-
+      
+    rendered_in_viewports: BoolProperty(
+      name="Rendered In Viewports",
+      description="Determines if the object is rendered in Giants Editor viewport or not",
+      default=i3d_map['rendered_in_viewports']['default']
+    )
+      
+    is_occluder: BoolProperty(
+        name="Occluder",
+        description="Is Occluder?",
+        default=i3d_map['is_occluder']['default']
+    )
+      
     cpu_mesh: EnumProperty(
         name="CPU Mesh",
         description="CPU Mesh",
@@ -101,9 +108,12 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
 
     bounding_volume_object: PointerProperty(
         name="Bounding Volume Object",
-        description="The object used to calculate bvCenter and bvRadius. If the bounding volume object shares origin with the original object, then Giants Engine will always ignore the exported values and recalculate them itself",
+        description="The object used to calculate bvCenter and bvRadius. "
+        "If the bounding volume object shares origin with the original object, "
+        "then Giants Engine will always ignore the exported values and recalculate them itself",
         type=bpy.types.Object,
-		)
+        poll=lambda self, obj: obj.type == 'MESH' and obj is not bpy.context.object
+    )
 
     use_vertex_colors: BoolProperty(
         name="Use Vertex Colors",
@@ -121,46 +131,29 @@ class I3D_IO_PT_shape_attributes(Panel):
 
     @classmethod
     def poll(cls, context):
-        if context.object is not None:
-            return context.object.type == 'MESH'
+        return context.mesh
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        obj = bpy.context.active_object.data
+        mesh = context.mesh
 
-        layout.prop(obj.i3d_attributes, "casts_shadows")
-        layout.prop(obj.i3d_attributes, "receive_shadows")
-        layout.prop(obj.i3d_attributes, "non_renderable")
-        layout.prop(obj.i3d_attributes, "distance_blending")
-        layout.prop(obj.i3d_attributes, "is_occluder")
-        layout.prop(obj.i3d_attributes, "cpu_mesh")
-        layout.prop(obj.i3d_attributes, "nav_mesh_mask")
-        layout.prop(obj.i3d_attributes, "decal_layer")
-        layout.prop(obj.i3d_attributes, 'fill_volume')
-        layout.prop(obj.i3d_attributes, 'use_vertex_colors')
+        layout.prop(mesh.i3d_attributes, "casts_shadows")
+        layout.prop(mesh.i3d_attributes, "receive_shadows")
+        layout.prop(mesh.i3d_attributes, "non_renderable")
+        layout.prop(mesh.i3d_attributes, "distance_blending")
+        layout.prop(mesh.i3d_attributes, "is_occluder")
+        layout.prop(mesh.i3d_attributes, "cpu_mesh")
+        layout.prop(mesh.i3d_attributes, "nav_mesh_mask")
+        layout.prop(mesh.i3d_attributes, "decal_layer")
+        layout.prop(mesh.i3d_attributes, 'fill_volume')
+        layout.prop(mesh.i3d_attributes, 'use_vertex_colors')
 
-
-@register
-class I3D_IO_PT_shape_bounding_box(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = "I3D Bounding Volume"
-    bl_context = 'data'
-
-    @classmethod
-    def poll(cls, context):
-        return context.object is not None and context.object.type == 'MESH'
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        obj = bpy.context.active_object.data
-
-        row = layout.row()
-        row.prop(obj.i3d_attributes, 'bounding_volume_object')     
+        header, panel = layout.panel('i3d_bounding_volume', default_closed=False)
+        header.label(text="I3D Bounding Volume")
+        if panel:
+            panel.prop(mesh.i3d_attributes, 'bounding_volume_object')
 
 
 def register():

@@ -16,43 +16,42 @@ from .. import xml_i3d
 
 import math
 
+
 class SkinnedMeshBoneNode(TransformGroupNode):
     def __init__(self, id_: int, bone_object: bpy.types.Bone,
                  i3d: I3D, parent: SceneGraphNode):
         super().__init__(id_=id_, empty_object=bone_object, i3d=i3d, parent=parent)
 
+    def _matrix_to_i3d_space(self, matrix: mathutils.Matrix) -> mathutils.Matrix:
+        return self.i3d.conversion_matrix @ matrix @ self.i3d.conversion_matrix.inverted()
+
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
-        conversion_matrix: mathutils.Matrix = self.i3d.conversion_matrix
+        if self.blender_object.parent and isinstance(self.blender_object.parent, bpy.types.Bone):
+            # For bones parented to other bones, matrix_local is relative to the parent.
+            # No transformation to I3D space is needed because the orientation is already relative to the parent bone.
+            return self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
 
-        if self.blender_object.parent is None:
-            # The bone is parented to the armature directly, and therefore should just use the matrix_local which is in
-            # relation to the armature anyway.
-            bone_transform = conversion_matrix @ self.blender_object.matrix_local @ conversion_matrix.inverted()
+        # Get the bone's transformation in armature space
+        bone_matrix = self._matrix_to_i3d_space(self.blender_object.matrix_local)
+        # Giants Engine expects bones to point along the Z-axis (Blender's visual alignment).
+        # However, root bones in Blender internally align along the Y-axis.
+        # Rotate -90° around X-axis to correct root bone orientation. Child bones remain unaffected.
+        rot_fix = mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
+        translation = bone_matrix.to_translation()
+        bone_matrix = rot_fix @ bone_matrix.to_3x3().to_4x4()
+        bone_matrix.translation = translation
 
-            # Blender bones are visually pointing along the Z-axis, but internally they use the Y-axis. This creates a
-            # discrepancy when converting to GE's expected orientation. To resolve this, apply a -90-degree rotation
-            # around the X-axis. The translation is extracted first to avoid altering the
-            # bone's position during rotation.
-            rot_fix = mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
-            translation = bone_transform.to_translation()
-            bone_transform = rot_fix @ bone_transform.to_3x3().to_4x4()
-            bone_transform.translation = translation
-
-            if self.i3d.settings['collapse_armatures']:
-                # collapse_armatures deletes the armature object in the I3D,
-                # so we need to mutliply the armature matrix into the root bone
-                armature_obj = self.parent.blender_object
-                armature_matrix = conversion_matrix @ armature_obj.matrix_local @ conversion_matrix.inverted()
-
-                bone_transform = armature_matrix @ bone_transform
-        else:
-            # To find the transform of child bone, we take the inverse of its parents transform in armature space and
-            # multiply that with the bones transform in armature space. The new 4x4 matrix gives the position and
-            # rotation in relation to the parent bone (of the head, that is)
-            bone_transform = self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
-
-        return bone_transform
+        # For bones parented directly to the armature, matrix_local already represents their transform
+        # relative to the armature, so no additional adjustments are needed.
+        if self.i3d.settings['collapse_armatures'] and self.parent.blender_object:
+            # If collapse_armatures is enabled, the armature is removed in the I3D.
+            # The root bone replaces the armature in the hierarchy,
+            # so multiply its matrix with the armature matrix to preserve the correct transformation.
+            armature_matrix = self._matrix_to_i3d_space(self.parent.blender_object.matrix_local)
+            return armature_matrix @ bone_matrix
+        # Return the bone's local transform unchanged, as it is already correct relative to the armature.
+        return bone_matrix
 
 
 class SkinnedMeshRootNode(TransformGroupNode):
@@ -92,9 +91,11 @@ class SkinnedMeshRootNode(TransformGroupNode):
                 self.element.remove(bone.element)
                 self.children.remove(bone)
                 if parent is not None:
+                    bone.parent = parent
                     parent.add_child(bone)
                     parent.element.append(bone.element)
                 else:
+                    bone.parent = None
                     self.i3d.scene_root_nodes.append(bone)
                     self.i3d.xml_elements['Scene'].append(bone.element)
 

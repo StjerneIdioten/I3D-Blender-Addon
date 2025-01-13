@@ -175,8 +175,11 @@ class Material(Node):
 
     def _write_properties(self):
         # Alpha blending
-        if self.blender_material.surface_render_method == 'BLENDED':
+        if self.blender_material.i3d_attributes.alpha_blending:
             self._write_attribute('alphaBlending', True)
+        # Shading rate
+        if (shading_rate := self.blender_material.i3d_attributes.shading_rate) != '1x1':
+            self._write_attribute('shadingRate', shading_rate)
 
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes

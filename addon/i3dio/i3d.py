@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class I3D:
     """A special node which is the root node for the entire I3D file. It essentially represents the i3d file"""
     def __init__(self, name: str, i3d_file_path: str, conversion_matrix: mathutils.Matrix,
-                 depsgraph: bpy.types.Depsgraph):
+                 depsgraph: bpy.types.Depsgraph, settings: Dict):
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': name})
         self._ids = {
@@ -46,10 +46,7 @@ class I3D:
 
         self.i3d_mapping: List[SceneGraphNode] = []
 
-        # Save all settings for the current run unto the I3D to abstract it from the nodes themselves
-        self.settings = {}
-        for setting in bpy.context.scene.i3dio.__annotations__.keys():
-            self.settings[setting] = getattr(bpy.context.scene.i3dio, setting)
+        self.settings = settings
 
         self.depsgraph = depsgraph
 
@@ -117,6 +114,10 @@ class I3D:
         elif is_located:
             if not self.settings['collapse_armatures']:
                 if parent is not None:
+                    # The armature was created from a modifier, which may introduce a parent relationship.
+                    # However, the parent might not have been known at the time of creation.
+                    if self.skinned_meshes[armature_object.name].parent is None:
+                        self.skinned_meshes[armature_object.name].parent = parent
                     parent.add_child(self.skinned_meshes[armature_object.name])
                     parent.element.append(self.skinned_meshes[armature_object.name].element)
                 else:
