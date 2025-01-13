@@ -144,7 +144,7 @@ class IndexedTriangleSet(Node):
     ID_FIELD_NAME = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None,
-                 is_merge_group: bool = False, bone_mapping: ChainMap = None, tangent = False):
+                 is_merge_group: bool = False, is_generic: bool = None, bone_mapping: ChainMap = None, tangent=False):
         self.id: int = id_
         self.i3d: I3D = i3d
         self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
@@ -152,8 +152,10 @@ class IndexedTriangleSet(Node):
         self.triangles: List[List[int]] = list()  # List of lists of vertex indexes
         self.subsets: List[SubSet] = []
         self.is_merge_group = is_merge_group
+        self.is_generic = is_generic
         self.bone_mapping: ChainMap = bone_mapping
         self.bind_index = 0
+        self.generic_value = 0.0
         self.vertex_group_ids = {}
         self.tangent = tangent
         if shape_name is None:
@@ -341,6 +343,40 @@ class IndexedTriangleSet(Node):
         for key, value in self.subsets[-1].as_dict().items():
             subset.set(key, value)
 
+    def append_from_evaluated_mesh_generic(self, mesh_to_append: EvaluatedMesh, generic_value: float):
+        if not self.is_generic:
+            self.logger.warning("Cannot add a mesh to a non-generic IndexedTriangleSet")
+            return
+
+        mesh = mesh_to_append.mesh
+
+        # Material validation
+        if len(mesh.materials) == 0:
+            self.logger.warning(f"Mesh '{mesh.name}' has no materials, skipping.")
+            return
+        elif len(mesh.materials) > 1:
+            self.logger.warning(f"Mesh '{mesh.name}' has multiple materials, skipping.")
+            return
+
+        triangle_offset = len(self.subsets[-1].triangles)
+        vertex_offset = self.subsets[-1].number_of_vertices
+
+        # Add triangles to the subset
+        for triangle in mesh.loop_triangles:
+            self.subsets[-1].add_triangle(triangle)
+
+        self.logger.debug(f"Added mesh '{mesh.name}' with generic value '{generic_value}'")
+        self.generic_value = generic_value
+        # Process the subset and write vertices/triangles
+        self.process_subset(mesh, self.subsets[-1], triangle_offset)
+        self.write_vertices(vertex_offset)
+        self.write_triangles(triangle_offset)
+
+        # Update the subset's generic value
+        subset = list(self.xml_elements['subsets'])[0]
+        for key, value in self.subsets[-1].as_dict().items():
+            subset.set(key, value)
+
     def write_vertices(self, offset=0):
         # Vertices
         self._write_attribute('count', len(self.vertices), 'vertices')
@@ -352,6 +388,8 @@ class IndexedTriangleSet(Node):
 
         if self.is_merge_group:
             self._write_attribute('singleblendweights', True, 'vertices')
+        elif self.is_generic:
+            self._write_attribute('generic', True, 'vertices')
         elif self.bone_mapping is not None:
             self._write_attribute('blendweights', True, 'vertices')
 
@@ -372,6 +410,8 @@ class IndexedTriangleSet(Node):
 
             if self.is_merge_group:
                 vertex_attributes['bi'] = str(self.bind_index)
+            elif self.is_generic:
+                vertex_attributes['g'] = str(self.generic_value)
             elif self.bone_mapping is not None:
                 vertex_attributes['bw'] = vertex.blend_weights_for_xml()
                 vertex_attributes['bi'] = vertex.blend_ids_for_xml()
@@ -561,10 +601,10 @@ class ShapeNode(SceneGraphNode):
     ELEMENT_TAG = 'Shape'
 
     def __init__(self, id_: int, shape_object: Optional[bpy.types.Object], i3d: I3D,
-                 parent: Optional[SceneGraphNode] = None):
+                 parent: Optional[SceneGraphNode] = None, custom_name: Optional[str] = None):
         self.shape_id = None
         self.tangent = False
-        super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent)
+        super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent, custom_name=custom_name)
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:

@@ -89,6 +89,17 @@ class I3D:
 
         return node_to_return
 
+    def add_merge_children_node(self, root_child_object: bpy.types.Object,
+                            parent: Optional[SceneGraphNode] = None) -> SceneGraphNode:
+        self.logger.debug(f"Adding MergeChildrenRoot starting with: {root_child_object.name}")
+
+        # Initialize the root node with the first child
+        merge_children_root = self._add_node(MergeChildrenRoot, root_child_object, parent)
+        merge_children_root.add_children_meshes()
+
+        self.logger.info(f"Finished merging children into root: {root_child_object.name}")
+        return merge_children_root
+
     def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]) \
             -> SceneGraphNode:
         return self._add_node(SkinnedMeshBoneNode, bone_object, parent)
@@ -146,7 +157,7 @@ class I3D:
         return self._add_node(CameraNode, camera_object, parent)
 
     def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None,
-                  bone_mapping: ChainMap = None, tangent = False) -> int:
+                  is_generic=None, bone_mapping: ChainMap=None, tangent=False) -> int:
         if shape_name is None:
             name = evaluated_mesh.name
         else:
@@ -155,7 +166,7 @@ class I3D:
         if name not in self.shapes:
             shape_id = self._next_available_id('shape')
             indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name, is_merge_group,
-                                                      bone_mapping, tangent)
+                                                      is_generic, bone_mapping, tangent)
             # Store a reference to the shape from both it's name and its shape id
             self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
@@ -326,6 +337,7 @@ class I3D:
 from i3dio.node_classes.node import *
 from i3dio.node_classes.shape import *
 from i3dio.node_classes.merge_group import *
+from i3dio.node_classes.merge_children import *
 from i3dio.node_classes.skinned_mesh import *
 from i3dio.node_classes.material import *
 from i3dio.node_classes.file import *

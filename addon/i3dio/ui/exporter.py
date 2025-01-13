@@ -133,7 +133,8 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             ('MERGE_GROUPS', "Merge Groups", "Export merge groups"),
             ('SKINNED_MESHES', "Skinned Meshes", "Bind meshes to the bones of an armature in i3d. If disabled, "
                                                  "the armature and bone structure will still be exported, "
-                                                 "but the meshes wont be bound to it")
+                                                 "but the meshes wont be bound to it"),
+            ('MERGE_CHILDREN', "Merge Children", "Export children of Merge Children empty object into a merged mesh")
         ),
         options={'ENUM_FLAG'},
         default={'MERGE_GROUPS', 'SKINNED_MESHES'},
