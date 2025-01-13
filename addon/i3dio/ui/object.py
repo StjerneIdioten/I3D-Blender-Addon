@@ -446,6 +446,30 @@ class I3DMergeGroup(bpy.types.PropertyGroup):
 
 
 @register
+class I3DMergeChildren(bpy.types.PropertyGroup):
+    enabled: BoolProperty(
+        name="Enable Merge Children",
+        description="If checked this object will be merged with the parent object",
+        default=False
+    )
+    freeze_translation: BoolProperty(
+        name="Translation",
+        description="If checked the translation of the children will be frozen in place when merged",
+        default=False
+    )
+    freeze_rotation: BoolProperty(
+        name="Rotation",
+        description="If checked the rotation of the children will be frozen in place when merged",
+        default=False
+    )
+    freeze_scale: BoolProperty(
+        name="Scale",
+        description="If checked the scale of the children will be frozen in place when merged",
+        default=False
+    )
+
+
+@register
 class I3DMappingData(bpy.types.PropertyGroup):
     is_mapped: BoolProperty(
         name="Add to mapping",
@@ -565,7 +589,7 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.use_property_split = True
         i3d_property(layout, i3d_attributes, 'locked_group', obj)
         i3d_property(layout, i3d_attributes, 'visibility', obj)
-        i3d_property(layout, i3d_attributes, 'rendered_in_viewports', obj)
+        # i3d_property(layout, i3d_attributes, 'rendered_in_viewports', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
 
@@ -579,6 +603,7 @@ class I3D_IO_PT_object_attributes(Panel):
             draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_level_of_detail_attributes(layout, obj, i3d_attributes)
             draw_joint_attributes(layout, i3d_attributes)
+            draw_merge_children_attributes(layout, obj.i3d_merge_children)
 
         elif obj.type == 'MESH':
             draw_rigid_body_attributes(layout, i3d_attributes)
@@ -728,6 +753,18 @@ def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.C
             col.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
             col = row.column(align=True)
             col.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
+
+
+def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_children: bpy.types.PropertyGroup) -> None:
+    header, panel = layout.panel('i3d_merge_children_panel', default_closed=True)
+    header.use_property_split = False
+    header.prop(i3d_merge_children, 'enabled', text="Merge Children")
+    if panel:
+        panel.enabled = i3d_merge_children.enabled
+        col = panel.column(heading="Freeze")
+        col.prop(i3d_merge_children, 'freeze_translation')
+        col.prop(i3d_merge_children, 'freeze_rotation')
+        col.prop(i3d_merge_children, 'freeze_scale')
 
 
 @register
@@ -932,59 +969,6 @@ def handle_old_reference_paths(dummy):
         if obj.type == 'EMPTY' and (path := obj.get('i3d_reference_path')) is not None:
             obj.i3d_reference.path = path
             del obj['i3d_reference_path']
-
-
-@register
-class I3DMergeChildren(bpy.types.PropertyGroup):
-    enabled: BoolProperty(
-        name="Enable Merge Children",
-        description="If checked this object will be merged with the parent object",
-        default=False
-    )
-    freeze_translation: BoolProperty(
-        name="Translation",
-        description="If checked the translation of the children will be frozen in place when merged",
-        default=False
-    )
-    freeze_rotation: BoolProperty(
-        name="Rotation",
-        description="If checked the rotation of the children will be frozen in place when merged",
-        default=False
-    )
-    freeze_scale: BoolProperty(
-        name="Scale",
-        description="If checked the scale of the children will be frozen in place when merged",
-        default=False
-    )
-
-
-@register
-class I3D_IO_PT_merge_children_attributes(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
-    bl_label = "Merge Children"
-    bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_object_attributes'
-
-    @classmethod
-    def poll(cls, context):
-        return context.object is not None and context.object.type == 'EMPTY'
-
-    def draw_header(self, context):
-        layout = self.layout
-        layout.prop(context.object.i3d_merge_children, 'enabled', text="")
-
-    def draw(self, context):
-        layout = self.layout
-        layout.use_property_split = True
-        layout.use_property_decorate = False
-        obj = context.object
-
-        col = layout.column(heading="Freeze")
-        col.enabled = obj.i3d_merge_children.enabled
-        col.prop(obj.i3d_merge_children, 'freeze_translation')
-        col.prop(obj.i3d_merge_children, 'freeze_rotation')
-        col.prop(obj.i3d_merge_children, 'freeze_scale')
 
 
 def register():
