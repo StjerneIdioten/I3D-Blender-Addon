@@ -567,7 +567,9 @@ class I3D_IO_PT_object_attributes(Panel):
         i3d_property(layout, i3d_attributes, 'visibility', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
-        i3d_property(layout, i3d_attributes, 'object_mask', obj)
+        row = layout.row(align=True)
+        i3d_property(row, i3d_attributes, 'object_mask', obj)
+        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'object_mask'
 
         layout.separator(type='LINE')
         box = layout.box()
