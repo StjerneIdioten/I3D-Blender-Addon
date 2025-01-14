@@ -194,7 +194,7 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None,
                        export_candidates: list = None) -> None:
     # Check if object should be excluded from export (including its children)
-    if obj.i3d_attributes.exclude_from_export:
+    if hasattr(obj, 'i3d_attributes') and obj.i3d_attributes.exclude_from_export:
         logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
         return
 
@@ -210,7 +210,11 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
     # Collections are checked first since these are always exported in some form
     if isinstance(obj, bpy.types.Collection):
         logger.debug(f"[{obj.name}] is a 'Collection'")
-        node = i3d.add_transformgroup_node(obj, _parent)
+        node = None
+        if i3d.settings['keep_collections_as_transformgroups']:
+            node = i3d.add_transformgroup_node(obj, _parent)
+        else:
+            i3d.logger.info(f"[{obj.name}] will be be ignored and its children will be added to nearest parent")
         _process_collection_objects(i3d, obj, node)
         return  # Early return because collections are special
     else:
