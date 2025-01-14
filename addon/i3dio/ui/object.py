@@ -524,10 +524,10 @@ class I3D_IO_MT_collision_presets(bpy.types.Menu):
 
         grid = layout.grid_flow(columns=2, even_columns=True, even_rows=True)
         for preset in presets:
-            grid.operator(I3D_IO_OT_set_collision_preset.bl_idname, text=preset).preset = preset
-
+            text = preset.title().replace('_', ' ')
+            grid.operator(I3D_IO_OT_set_collision_preset.bl_idname, text=text).preset = preset
         layout.separator()
-        layout.operator(I3D_IO_OT_set_collision_preset.bl_idname, text="NONE").preset = "NONE"
+        layout.operator(I3D_IO_OT_set_collision_preset.bl_idname, text="None").preset = "NONE"
 
 
 SPLIT_TYPE_PRESETS = {
