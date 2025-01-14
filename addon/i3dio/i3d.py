@@ -37,7 +37,7 @@ class I3D:
 
         self.scene_root_nodes = []
         self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
-        self.deferred_constraints: List[Tuple[bpy.types.Bone, bpy.types.Object]] = []
+        self.deferred_constraints: List[Tuple[bpy.types.Object, bpy.types.Bone, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
 
         self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
@@ -51,6 +51,8 @@ class I3D:
         self.settings = settings
 
         self.depsgraph = depsgraph
+
+        self.all_objects_to_export: List[bpy.types.Object] = []
 
     # Private Methods ##################################################################################################
     def _next_available_id(self, id_type: str) -> int:
@@ -93,8 +95,10 @@ class I3D:
         return node_to_return
 
     def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode],
-                 is_child_of: bool = False) -> SceneGraphNode:
-        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, is_child_of=is_child_of)
+                 is_child_of: bool = False, armature_object: bpy.types.Object = None,
+                 target: bpy.types.Object = None) -> SceneGraphNode:
+        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, is_child_of=is_child_of,
+                              armature_object=armature_object, target=target)
 
     # TODO: Rethink this to not include an extra argument for when the node is actually discovered.
     #  Maybe two separate functions instead? This is just hack'n'slash code at this point!
@@ -272,6 +276,7 @@ class I3D:
             self.export_i3d_mapping()
 
     def export_i3d_mapping(self) -> None:
+        self.logger.info(f"Exporting i3d mappings to {self.settings['i3d_mapping_file_path']}")
         with open(bpy.path.abspath(self.settings['i3d_mapping_file_path']), 'r+') as xml_file:
             vehicle_xml = []
             i3d_mapping_idx = None
