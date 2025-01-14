@@ -67,13 +67,13 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         description="Distance Blending",
         default=i3d_map['distance_blending']['default']
     )
-      
+
     rendered_in_viewports: BoolProperty(
-      name="Rendered In Viewports",
-      description="Determines if the object is rendered in Giants Editor viewport or not",
-      default=i3d_map['rendered_in_viewports']['default']
+        name="Rendered In Viewports",
+        description="Determines if the object is rendered in Giants Editor viewport or not",
+        default=i3d_map['rendered_in_viewports']['default']
     )
-      
+
     is_occluder: BoolProperty(
         name="Occluder",
         description="Is Occluder?",
@@ -184,6 +184,7 @@ class I3D_IO_PT_shape_attributes(Panel):
 
         layout.prop(mesh.i3d_attributes, "casts_shadows")
         layout.prop(mesh.i3d_attributes, "receive_shadows")
+        layout.prop(mesh.i3d_attributes, "rendered_in_viewports")
         layout.prop(mesh.i3d_attributes, "non_renderable")
         layout.prop(mesh.i3d_attributes, "distance_blending")
         layout.prop(mesh.i3d_attributes, "is_occluder")
