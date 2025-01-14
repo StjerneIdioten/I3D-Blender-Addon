@@ -195,19 +195,8 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
     for blender_object in objects_to_export:
         _add_object_to_i3d(i3d, blender_object)
 
-    for armature, bone_object, target in i3d.deferred_constraints:
-        i3d.logger.debug(f"Processing deferred constraint for: {bone_object}, Target: {target}")
-
-        if target in i3d.processed_objects:
-            i3d.logger.debug(f"Target object '{target}' is included in the export hierarchy. Setting bone parent.")
-            bone_name = bone_object.name
-            bone = next((b for b in i3d.skinned_meshes[armature.name].bones if b.name == bone_name), None)
-
-            if bone is not None:
-                i3d.skinned_meshes[armature.name].update_bone_parent(None, custom_target=i3d.processed_objects[target],
-                                                                     bone=bone)
-            else:
-                i3d.logger.warning(f"Could not find bone {bone_name} in the armature's bone list!")
+    if i3d.deferred_constraints:
+        _process_deferred_constraints(i3d)
 
 
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
@@ -324,3 +313,19 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
 def traverse_hierarchy(obj: BlenderObject) -> List[BlenderObject]:
     """Recursively traverses an object hierarchy and returns all objects."""
     return [obj] + [child for child in obj.children for child in traverse_hierarchy(child)]
+
+
+def _process_deferred_constraints(i3d: I3D):
+    for armature, bone_object, target in i3d.deferred_constraints:
+        i3d.logger.debug(f"Processing deferred constraint for: {bone_object}, Target: {target}")
+
+        if target in i3d.processed_objects:
+            i3d.logger.debug(f"Target object '{target}' is included in the export hierarchy. Setting bone parent.")
+            bone_name = bone_object.name
+            bone = next((b for b in i3d.skinned_meshes[armature.name].bones if b.name == bone_name), None)
+
+            if bone is not None:
+                i3d.skinned_meshes[armature.name].update_bone_parent(None, custom_target=i3d.processed_objects[target],
+                                                                     bone=bone)
+            else:
+                i3d.logger.warning(f"Could not find bone {bone_name} in the armature's bone list!")
