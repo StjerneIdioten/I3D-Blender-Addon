@@ -26,8 +26,8 @@ def register(cls):
 @register
 class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'casts_shadows': {'name': 'castsShadows', 'default': False, 'blender_default': True},
-        'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': True},
+        'casts_shadows': {'name': 'castsShadows', 'default': False, 'blender_default': False},
+        'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': False},
         'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
         'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
@@ -62,19 +62,19 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         description="Distance Blending",
         default=i3d_map['distance_blending']['default']
     )
-      
+
     rendered_in_viewports: BoolProperty(
-      name="Rendered In Viewports",
-      description="Determines if the object is rendered in Giants Editor viewport or not",
-      default=i3d_map['rendered_in_viewports']['default']
+        name="Rendered In Viewports",
+        description="Determines if the object is rendered in Giants Editor viewport or not",
+        default=i3d_map['rendered_in_viewports']['default']
     )
-      
+
     is_occluder: BoolProperty(
         name="Occluder",
         description="Is Occluder?",
         default=i3d_map['is_occluder']['default']
     )
-      
+
     cpu_mesh: EnumProperty(
         name="CPU Mesh",
         description="CPU Mesh",
@@ -141,6 +141,7 @@ class I3D_IO_PT_shape_attributes(Panel):
 
         layout.prop(mesh.i3d_attributes, "casts_shadows")
         layout.prop(mesh.i3d_attributes, "receive_shadows")
+        layout.prop(mesh.i3d_attributes, "rendered_in_viewports")
         layout.prop(mesh.i3d_attributes, "non_renderable")
         layout.prop(mesh.i3d_attributes, "distance_blending")
         layout.prop(mesh.i3d_attributes, "is_occluder")
