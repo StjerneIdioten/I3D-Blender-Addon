@@ -450,29 +450,29 @@ class I3DMergeChildren(bpy.types.PropertyGroup):
     enabled: BoolProperty(
         name="Enable Merge Children",
         description=(
-            "When enabled, this object will serve as the merge root for exporting its child objects. "
-            "All child objects will be merged into this object during the export process."
+            "Enable this object to act as the merge root for exporting its child objects. "
+            "During export, all child objects will be combined into a single merged object."
         ),
         default=False
     )
     apply_transforms: bpy.props.BoolProperty(
         name="Apply Transforms",
         description=(
-            "If enabled, bake location, rotation, and scale into the mesh, so each child mesh "
-            "keeps its current position and orientation relative to the root (merge children root object). "
-            "If disabled, transform all child meshes to align directly with the root object, "
-            "removing their individual offsets and effectively placing them at the root's location"
+            "Bake location, rotation, and scale into each child mesh. When enabled, child meshes retain their "
+            "current position and orientation relative to the root (merge root object). "
+            "When disabled, child meshes will be transformed to align directly with the root object, "
+            "removing their individual offsets and placing them at the root's location."
         ),
         default=False
     )
     interpolation_steps: bpy.props.IntProperty(
         name="Interpolation Steps",
         description=(
-            "Number of extra interpolation steps added between merged child objects. "
-            "Higher values help achieve smoother animations or effects when using "
-            "array textures with shaders (e.g., motion path shader variation). "
-            "Ensure the same number of steps is accounted for in the corresponding texture, "
-            "or unexpected offsets may occur in your setup"
+            "Number of additional interpolation steps inserted between merged child objects. "
+            "This is useful for creating smoother animations or transitions in shaders "
+            "that utilize array textures (e.g., for motion paths). "
+            "Make sure the corresponding texture accounts for the same number of steps to "
+            "avoid unexpected offsets in the animation or effect."
         ),
         default=1,
         min=1,
