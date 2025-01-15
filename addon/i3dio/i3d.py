@@ -104,20 +104,24 @@ class I3D:
                 for material in child.data.materials:
                     materials_from_children.add(material)
 
-        # Create a new mesh
-        dummy_mesh_data = bpy.data.meshes.new(f"{empty_object.name}_dummy")
+        # A bit hacky, but we need to create a dummy mesh object to be able to use the ShapeNode class and also to get
+        # materials added to the final shape
+        dummy_mesh_data = bpy.data.meshes.new(f"MergeChildren_{empty_object.name}")
         self.logger.debug(f"Created dummy mesh data: {dummy_mesh_data.name} "
                           f"adding {len(materials_from_children)} materials")
         for material in materials_from_children:
             dummy_mesh_data.materials.append(material)
-        # dummy_mesh_data.materials = list(materials_from_children)
         dummy_mesh_object = bpy.data.objects.new(f"{empty_object.name}_dummy", dummy_mesh_data)
 
         # Copy the transformation of the original EMPTY
         dummy_mesh_object.matrix_world = empty_object.matrix_world
+        if empty_object.parent is not None:
+            dummy_mesh_object.parent = empty_object.parent
+            dummy_mesh_object.matrix_parent_inverse = empty_object.matrix_world.inverted()
 
-        # Initialize the root node with the first child
+        # Initialize the root node with the dummy mesh object
         merge_children_root = self._add_node(MergeChildrenRoot, dummy_mesh_object, parent)
+        # Add the children meshes to the root node
         merge_children_root.add_children_meshes(empty_object)
 
         bpy.data.objects.remove(dummy_mesh_object, do_unlink=True)

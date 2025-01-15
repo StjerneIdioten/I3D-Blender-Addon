@@ -449,23 +449,34 @@ class I3DMergeGroup(bpy.types.PropertyGroup):
 class I3DMergeChildren(bpy.types.PropertyGroup):
     enabled: BoolProperty(
         name="Enable Merge Children",
-        description="If checked this object will be merged with the parent object",
+        description=(
+            "When enabled, this object will serve as the merge root for exporting its child objects. "
+            "All child objects will be merged into this object during the export process."
+        ),
         default=False
     )
-    freeze_translation: BoolProperty(
-        name="Translation",
-        description="If checked the translation of the children will be frozen in place when merged",
+    apply_transforms: bpy.props.BoolProperty(
+        name="Apply Transforms",
+        description=(
+            "If enabled, bake location, rotation, and scale into the mesh, so each child mesh "
+            "keeps its current position and orientation relative to the root (merge children root object). "
+            "If disabled, transform all child meshes to align directly with the root object, "
+            "removing their individual offsets and effectively placing them at the root's location"
+        ),
         default=False
     )
-    freeze_rotation: BoolProperty(
-        name="Rotation",
-        description="If checked the rotation of the children will be frozen in place when merged",
-        default=False
-    )
-    freeze_scale: BoolProperty(
-        name="Scale",
-        description="If checked the scale of the children will be frozen in place when merged",
-        default=False
+    interpolation_steps: bpy.props.IntProperty(
+        name="Interpolation Steps",
+        description=(
+            "Number of extra interpolation steps added between merged child objects. "
+            "Higher values help achieve smoother animations or effects when using "
+            "array textures with shaders (e.g., motion path shader variation). "
+            "Ensure the same number of steps is accounted for in the corresponding texture, "
+            "or unexpected offsets may occur in your setup"
+        ),
+        default=1,
+        min=1,
+        max=10
     )
 
 
@@ -759,10 +770,8 @@ def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_childre
     header.prop(i3d_merge_children, 'enabled', text="Merge Children")
     if panel:
         panel.enabled = i3d_merge_children.enabled
-        col = panel.column(heading="Freeze")
-        col.prop(i3d_merge_children, 'freeze_translation')
-        col.prop(i3d_merge_children, 'freeze_rotation')
-        col.prop(i3d_merge_children, 'freeze_scale')
+        panel.prop(i3d_merge_children, 'apply_transforms')
+        panel.prop(i3d_merge_children, 'interpolation_steps')
 
 
 @register

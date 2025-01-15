@@ -102,24 +102,20 @@ class EvaluatedMesh:
                                                   {'object_name': self.name})
         self.generate_evaluated_mesh(mesh_object, reference_frame)
 
-    def generate_evaluated_mesh(self, mesh_object: bpy.types.Object, reference_frame: mathutils.Matrix = None):
+    def generate_evaluated_mesh(self, mesh_object: bpy.types.Object, reference_frame: mathutils.Matrix = None) -> None:
         if self.i3d.get_setting('apply_modifiers'):
             self.object = mesh_object.evaluated_get(self.i3d.depsgraph)
-            self.logger.debug(f"is exported with modifiers applied")
+            self.logger.debug("is exported with modifiers applied")
         else:
             self.object = mesh_object
-            self.logger.debug(f"is exported without modifiers applied")
+            self.logger.debug("is exported without modifiers applied")
 
         self.mesh = self.object.to_mesh(preserve_all_data_layers=False, depsgraph=self.i3d.depsgraph)
 
         # If a reference is given transform the generated mesh by that frame to place it somewhere else than center of
         # the mesh origo
         if reference_frame is not None:
-            self.logger.debug("applying reference frame inside generate_evaluated_mesh in EvaluatedMesh")
-            self.logger.debug(f"translation for reference frame: {reference_frame.translation}, translation for object: {self.object.matrix_world.to_translation()}")
             self.mesh.transform(reference_frame.inverted() @ self.object.matrix_world)
-            after = reference_frame.inverted() @ self.object.matrix_world
-            self.logger.debug(f"translation for object after applying reference frame: {after.to_translation()}")
 
         conversion_matrix = self.i3d.conversion_matrix
         if self.i3d.get_setting('apply_unit_scale'):
