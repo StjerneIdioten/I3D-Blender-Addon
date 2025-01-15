@@ -37,7 +37,8 @@ class SubSet:
 
 
 class Vertex:
-    def __init__(self, subset_idx: int, position, normal, vertex_color, uvs, blend_ids=None, blend_weights=None):
+    def __init__(self, subset_idx: int, position, normal, vertex_color, uvs, blend_ids=None,
+                 blend_weights=None, generic_value=None):
         self._subset_idx = subset_idx
         self._position = position
         self._normal = normal
@@ -45,6 +46,7 @@ class Vertex:
         self._uvs = uvs
         self._blend_ids = blend_ids
         self._blend_weights = blend_weights
+        self._generic_value = generic_value
         self._str = ''
         self._make_hash_string()
 
@@ -86,6 +88,9 @@ class Vertex:
 
     def blend_weights_for_xml(self):
         return "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*self._blend_weights)
+
+    def generic_value_for_xml(self):
+        return "{}".format(self._generic_value)
 
 
 class EvaluatedMesh:
@@ -153,6 +158,7 @@ class IndexedTriangleSet(Node):
         self.subsets: List[SubSet] = []
         self.is_merge_group = is_merge_group
         self.is_generic = is_generic
+        self.is_generic_from_geometry_nodes = False
         self.bone_mapping: ChainMap = bone_mapping
         self.bind_index = 0
         self.generic_value = 0.0
@@ -221,6 +227,13 @@ class IndexedTriangleSet(Node):
                             self.logger.warning(f"Incompatible color attribute {color_layer.name}: "
                                                 f"domain={color_layer.domain}, data_type={color_layer.data_type}")
 
+                generic_value = None
+                if self.is_generic_from_geometry_nodes:
+                    # Get the generic value from the mesh attributes, can come from Geometry Nodes
+                    generic_layer = mesh.attributes["generic"]
+                    generic_vertex_index = mesh.loops[loop_index].vertex_index
+                    generic_value = generic_layer.data[generic_vertex_index].value
+
                 # Add uvs
                 uvs = []
                 uv_keys = mesh.uv_layers.keys()
@@ -263,7 +276,8 @@ class IndexedTriangleSet(Node):
                                 vertex_color,
                                 uvs,
                                 blend_ids,
-                                blend_weights)
+                                blend_weights,
+                                generic_value)
 
                 if vertex not in self.vertices:
                     vertex_index = len(self.vertices)
@@ -286,11 +300,18 @@ class IndexedTriangleSet(Node):
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh
 
+        # Check if evaluated mesh has "generic" attribute in its attributes
+        if "generic" in mesh.attributes:
+            self.logger.debug("'generic' was found in mesh attributes, likely from a 'Geometry Nodes' modifer. "
+                              "Exporting as generic")
+            self.is_generic = True
+            self.is_generic_from_geometry_nodes = True
+
         if len(mesh.materials) == 0:
             self.logger.info(f"has no material assigned, assigning default material")
             mesh.materials.append(self.i3d.get_default_material().blender_material)
             self.logger.info(f"assigned default material i3d_default_material")
-        
+
         for _ in mesh.materials:
             self.subsets.append(SubSet())
 
@@ -414,7 +435,11 @@ class IndexedTriangleSet(Node):
             if self.is_merge_group:
                 vertex_attributes['bi'] = str(self.bind_index)
             elif self.is_generic:
-                vertex_attributes['g'] = str(self.generic_value)
+                if self.is_generic_from_geometry_nodes:
+                    generic_value = vertex.generic_value_for_xml()
+                else:
+                    generic_value = self.generic_value
+                vertex_attributes['g'] = str(generic_value)
             elif self.bone_mapping is not None:
                 vertex_attributes['bw'] = vertex.blend_weights_for_xml()
                 vertex_attributes['bi'] = vertex.blend_ids_for_xml()
