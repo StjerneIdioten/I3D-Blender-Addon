@@ -294,7 +294,7 @@ class IndexedTriangleSet(Node):
                                 "This will confuse GE and result in the mesh showing up as just a wireframe. "
                                 "Please correct by assigning some weight to all vertices.")
 
-        # self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
+        self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
         return subset.first_vertex + subset.number_of_vertices, subset.first_index + subset.number_of_indices
 
     def populate_from_evaluated_mesh(self):
