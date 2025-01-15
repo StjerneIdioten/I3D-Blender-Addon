@@ -3,56 +3,89 @@ A lot of classes in this file is purely to have different classes for different 
 but it helps with debugging big trees and seeing the structure.
 """
 from __future__ import annotations
-from typing import (Union, Dict, List, Type, OrderedDict, Optional)
-from collections import ChainMap
+from typing import (Union, Dict, List)
+from collections import (ChainMap, namedtuple)
 import mathutils
 import bpy
+import math
 
-from . import node
 from .node import (TransformGroupNode, SceneGraphNode)
 from .shape import (ShapeNode, EvaluatedMesh)
 from ..i3d import I3D
 from .. import xml_i3d
 
-import math
+
+AssignParentResult = namedtuple('AssignParentResult', ['parent', 'is_child_of', 'deferred'])
+
 
 class SkinnedMeshBoneNode(TransformGroupNode):
-    def __init__(self, id_: int, bone_object: bpy.types.Bone,
-                 i3d: I3D, parent: SceneGraphNode):
+    def __init__(self, id_: int, bone_object: bpy.types.Bone, i3d: I3D, parent: SceneGraphNode,
+                 is_child_of: bool = False, armature_object: bpy.types.Object = None, target: bpy.types.Object = None):
+        self.is_child_of = is_child_of
+        self.armature_object = armature_object
+        self.target = target  # Used for deferred constraints
         super().__init__(id_=id_, empty_object=bone_object, i3d=i3d, parent=parent)
+
+    def _matrix_to_i3d_space(self, matrix: mathutils.Matrix) -> mathutils.Matrix:
+        return self.i3d.conversion_matrix @ matrix @ self.i3d.conversion_matrix.inverted()
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
-        conversion_matrix: mathutils.Matrix = self.i3d.conversion_matrix
+        """
+        Calculate the bone's transformation matrix in I3D space, considering parenting and deferred constraints.
+        Handles scenarios like direct parenting, deferred CHILD_OF constraints, and collapsed armatures.
+        """
+        if self.blender_object.parent and isinstance(self.blender_object.parent, bpy.types.Bone):
+            # For bones parented to other bones, matrix_local is relative to the parent.
+            # No transformation to I3D space is needed because the orientation is already relative to the parent bone.
+            return self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
 
-        if self.blender_object.parent is None:
-            # The bone is parented to the armature directly, and therefore should just use the matrix_local which is in
-            # relation to the armature anyway.
-            bone_transform = conversion_matrix @ self.blender_object.matrix_local @ conversion_matrix.inverted()
+        # Get the bone's transformation in armature space
+        bone_matrix = self._matrix_to_i3d_space(self.blender_object.matrix_local)
+        # Giants Engine expects bones to point along the Z-axis (Blender's visual alignment).
+        # However, root bones in Blender internally align along the Y-axis.
+        # Rotate -90° around X-axis to correct root bone orientation. Child bones remain unaffected.
+        rot_fix = mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
+        translation = bone_matrix.to_translation()
+        bone_matrix = rot_fix @ bone_matrix.to_3x3().to_4x4()
+        bone_matrix.translation = translation
 
-            # Blender bones are visually pointing along the Z-axis, but internally they use the Y-axis. This creates a
-            # discrepancy when converting to GE's expected orientation. To resolve this, apply a -90-degree rotation
-            # around the X-axis. The translation is extracted first to avoid altering the
-            # bone's position during rotation.
-            rot_fix = mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
-            translation = bone_transform.to_translation()
-            bone_transform = rot_fix @ bone_transform.to_3x3().to_4x4()
-            bone_transform.translation = translation
+        self.logger.debug(f"bone settings: {self.is_child_of} {self.target}")
 
-            if self.i3d.settings['collapse_armatures']:
-                # collapse_armatures deletes the armature object in the I3D,
-                # so we need to mutliply the armature matrix into the root bone
-                armature_obj = self.parent.blender_object
-                armature_matrix = conversion_matrix @ armature_obj.matrix_local @ conversion_matrix.inverted()
+        if self.is_child_of and self.parent.blender_object is not None:
+            # Bone is parented to a CHILD_OF constraint target, collapse_armature doesn't matter here
+            # Multiply the bone's local transform with the inverse of the parent object's world matrix
+            # to correctly position it relative to its new parent
+            parent_matrix = self._matrix_to_i3d_space(self.parent.blender_object.matrix_world)
+            if self.armature_object is not None:
+                # If the armature object is also present, include its local matrix in the calculation
+                armature_matrix = self._matrix_to_i3d_space(self.armature_object.matrix_local)
+                return parent_matrix.inverted() @ armature_matrix @ bone_matrix
+            return parent_matrix.inverted() @ bone_matrix
+        elif self.target is not None:
+            # Bone is parented to a deferred CHILD_OF constraint target
+            # Multiply the bone's local transform with the inverse of the target's world matrix
+            # to correctly position it relative to its new parent
+            target_matrix = self._matrix_to_i3d_space(self.target.matrix_world)
+            return target_matrix.inverted() @ bone_matrix
 
-                bone_transform = armature_matrix @ bone_transform
-        else:
-            # To find the transform of child bone, we take the inverse of its parents transform in armature space and
-            # multiply that with the bones transform in armature space. The new 4x4 matrix gives the position and
-            # rotation in relation to the parent bone (of the head, that is)
-            bone_transform = self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
+        # For bones parented directly to the armature, matrix_local already represents their transform
+        # relative to the armature, so no additional adjustments are needed.
+        if self.i3d.settings['collapse_armatures'] and self.parent.blender_object is not None:
+            # If collapse_armatures is enabled, the armature is removed in the I3D.
+            # The root bone replaces the armature in the hierarchy,
+            # so multiply its matrix with the armature matrix to preserve the correct transformation.
+            armature_matrix = self._matrix_to_i3d_space(self.parent.blender_object.matrix_local)
+            return armature_matrix @ bone_matrix
 
-        return bone_transform
+        if self.armature_object is not None:
+            # In some rare cases when armature is collapsed and bone ends up being parented to scene root,
+            # we have to multiply the bone's matrix with its armature's world matrix to ensure correct positioning.
+            armature_matrix = self._matrix_to_i3d_space(self.armature_object.matrix_world)
+            return armature_matrix @ bone_matrix
+
+        # Return the bone's local transform unchanged, as it is already correct relative to the armature.
+        return bone_matrix
 
 
 class SkinnedMeshRootNode(TransformGroupNode):
@@ -62,6 +95,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
         # but dicts should be ordered going forwards in python
         self.bones: List[SkinnedMeshBoneNode] = list()
         self.bone_mapping: Dict[str, int] = {}
+        self.armature_object = armature_object
         # To determine if we just added the armature through a modifier lookup or knows its position in the scenegraph
         self.is_located = False
 
@@ -72,33 +106,97 @@ class SkinnedMeshRootNode(TransformGroupNode):
                 self._add_bone(bone, self)
 
     def add_i3d_mapping_to_xml(self):
-        """Wont export armature mapping, if 'collapsing armatures' is enabled
-        """
+        """Wont export armature mapping, if 'collapsing armatures' is enabled"""
         if not self.i3d.settings['collapse_armatures']:
             super().add_i3d_mapping_to_xml()
 
-    def _add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]):
+    def _add_bone(self, bone_object: bpy.types.Bone, parent: SceneGraphNode):
         """Recursive function for adding a bone along with all of its children"""
-        self.bones.append(self.i3d.add_bone(bone_object, parent))
+        target = None
+        is_child_of = False
+
+        # Check for CHILD_OF constraint
+        if (pose_bone := self.blender_object.pose.bones.get(bone_object.name)) is not None:
+            child_of = next((c for c in pose_bone.constraints if c.type == 'CHILD_OF'), None)
+            if child_of:
+                if not child_of.target:
+                    self.logger.warning(f"CHILD_OF constraint on {bone_object.name} has no target. Ignoring.")
+                else:
+                    target = child_of.target
+                    result = self.assign_parent(bone_object, parent, target)
+                    parent = result.parent
+                    is_child_of = result.is_child_of
+
+                    if result.deferred:
+                        self.i3d.deferred_constraints.append((self.armature_object, bone_object, target))
+                        self.logger.debug(f"Deferred constraint added for: {bone_object}, target: {target}")
+
+        self.bones.append(self.i3d.add_bone(bone_object, parent, is_child_of=is_child_of,
+                                            armature_object=self.armature_object, target=target))
         current_bone = self.bones[-1]
         self.bone_mapping[bone_object.name] = current_bone.id
 
         for child_bone in bone_object.children:
             self._add_bone(child_bone, current_bone)
 
-    def update_bone_parent(self, parent):
-        for bone in self.bones:
-            if bone.parent == self:
-                self.element.remove(bone.element)
-                self.children.remove(bone)
-                if parent is not None:
-                    bone.parent = parent
-                    parent.add_child(bone)
-                    parent.element.append(bone.element)
-                else:
-                    bone.parent = None
-                    self.i3d.scene_root_nodes.append(bone)
-                    self.i3d.xml_elements['Scene'].append(bone.element)
+    def update_bone_parent(self, parent: SceneGraphNode = None,
+                           custom_target: SceneGraphNode = None, bone: SkinnedMeshBoneNode = None):
+        """Updates the parent of bones"""
+        if custom_target is not None and bone is not None:
+            self._assign_bone_parent(bone, custom_target)
+        else:
+            for bone in self.bones:
+                if bone.parent == self:
+                    new_parent = parent or None
+                    self._assign_bone_parent(bone, new_parent)
+
+    def _assign_bone_parent(self, bone: SkinnedMeshBoneNode, new_parent: SceneGraphNode):
+        """Assigns a new parent to a bone and updates the scene graph"""
+        self.logger.debug(f"Updating parent for {bone} to {new_parent}")
+        # Remove bone from its current parent
+        if bone.parent == self:
+            self.logger.debug(f"Removing {bone} from current parent")
+            self.element.remove(bone.element)
+            self.children.remove(bone)
+
+        # Add to the new parent or scene root
+        if new_parent:
+            if bone in self.i3d.scene_root_nodes:
+                # If collapse armature is enabled the bone would have moved to the scene root,
+                # but since we are now moving it to a new parent we have to remove it from the scene root
+                # Or else we can get problems with i3dmappings
+                self.logger.debug(f"Removing {bone} from scene root")
+                self.i3d.scene_root_nodes.remove(bone)
+                self.i3d.xml_elements['Scene'].remove(bone.element)
+            self.logger.debug(f"Adding {bone} to {new_parent}")
+            bone.parent = new_parent
+            new_parent.add_child(bone)
+            new_parent.element.append(bone.element)
+        else:
+            self.logger.debug(f"Adding {bone} to scene root")
+            bone.parent = None
+            self.i3d.scene_root_nodes.append(bone)
+            self.i3d.xml_elements['Scene'].append(bone.element)
+
+    def assign_parent(self, bone_object: bpy.types.Bone, parent: SceneGraphNode,
+                      target: bpy.types.Object) -> AssignParentResult:
+        """
+        Assign the parent for a bone. Returns the assigned parent, whether the bone is a child of a target,
+        and whether the assignment is deferred.
+        """
+        if target in self.i3d.processed_objects:
+            # Target is processed, use it as the parent
+            self.logger.debug(f"Target {target} is processed. Assigning as parent for {bone_object}.")
+            return AssignParentResult(parent=self.i3d.processed_objects[target], is_child_of=True, deferred=False)
+
+        if target not in self.i3d.all_objects_to_export:
+            # Target is not in the export list, fallback to the original parent
+            self.logger.debug(f"Target {target} is not in the export list. Using original parent for {bone_object}.")
+            return AssignParentResult(parent=parent, is_child_of=False, deferred=False)
+
+        # Defer the constraint and temporarily keep the original parent
+        self.logger.debug(f"Deferring CHILD_OF constraint for {bone_object}, target: {target}")
+        return AssignParentResult(parent=parent, is_child_of=False, deferred=True)
 
 
 class SkinnedMeshShapeNode(ShapeNode):
