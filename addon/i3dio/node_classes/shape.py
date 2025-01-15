@@ -432,9 +432,9 @@ class IndexedTriangleSet(Node):
             xml_i3d.SubElement(self.xml_elements['triangles'], 't', {'vi': "{0} {1} {2}".format(*triangle)})
 
     def populate_xml_element(self):
-        if len(self.evaluated_mesh.mesh.vertices) == 0 and self.is_generic:
+        if len(self.evaluated_mesh.mesh.vertices) == 0 or self.is_generic:
             if self.is_generic:
-                self.logger.debug(f"Initializing dry run for generic merge children root: '{self.name}'")
+                self.logger.debug(f"Setting up generic merge children root: '{self.name}'")
                 self.subsets.append(SubSet())
                 self._write_attribute('count', len(self.subsets), 'subsets')
 
@@ -442,7 +442,7 @@ class IndexedTriangleSet(Node):
                     xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
                 return
 
-            self.logger.warning(f"has no vertices! Export of this mesh is aborted.")
+            self.logger.warning("has no vertices! Export of this mesh is aborted.")
             return
         self.populate_from_evaluated_mesh()
         self.logger.debug(f"Has '{len(self.subsets)}' subsets, "

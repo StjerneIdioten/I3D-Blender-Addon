@@ -266,17 +266,16 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         elif obj.type == 'ARMATURE':
             node = i3d.add_armature(obj, _parent, is_located=True)
         elif obj.type == 'EMPTY':
-            if obj.i3d_merge_children.enabled:
-                if 'MERGE_CHILDREN' in i3d.settings['features_to_export']:
-                    logger.debug(f"Processing MergeChildren for: {obj.name}")
+            if obj.i3d_merge_children.enabled and 'MERGE_CHILDREN' in i3d.settings['features_to_export']:
+                logger.debug(f"Processing MergeChildren for: {obj.name}")
 
-                    if not obj.children:
-                        logger.warning(f"Empty object {obj.name} has no children to merge.")
-                        return
-                    # Find the first mesh child of the empty object and use that as the parent for the merge children
-                    # first_mesh = next((child for child in obj.children if child.type == 'MESH'), None)
-                    i3d.add_merge_children_node(obj, parent)
-                    return  # Early return to prevent children from being processed the "normal" way
+                if not obj.children:
+                    logger.warning(f"Empty object {obj.name} has no children to merge.")
+                    return
+                # Find the first mesh child of the empty object and use that as the parent for the merge children
+                # first_mesh = next((child for child in obj.children if child.type == 'MESH'), None)
+                i3d.add_merge_children_node(obj, parent)
+                return  # Return to prevent children from being processed the "normal" way
 
             node = i3d.add_transformgroup_node(obj, _parent)
             if obj.instance_collection is not None:
