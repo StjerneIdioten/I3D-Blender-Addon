@@ -598,10 +598,10 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.separator(type='LINE')
 
         if obj.type == 'EMPTY':
-            draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_level_of_detail_attributes(layout, obj, i3d_attributes)
-            draw_joint_attributes(layout, i3d_attributes)
             draw_merge_children_attributes(layout, obj.i3d_merge_children)
+            draw_reference_file_attributes(layout, obj.i3d_reference)
+            draw_joint_attributes(layout, i3d_attributes)
 
         elif obj.type == 'MESH':
             draw_rigid_body_attributes(layout, i3d_attributes)

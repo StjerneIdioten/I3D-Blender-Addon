@@ -94,15 +94,35 @@ class I3D:
 
         return node_to_return
 
-    def add_merge_children_node(self, root_child_object: bpy.types.Object,
+    def add_merge_children_node(self, empty_object: bpy.types.Object,
                             parent: Optional[SceneGraphNode] = None) -> SceneGraphNode:
-        self.logger.debug(f"Adding MergeChildrenRoot starting with: {root_child_object.name}")
+        self.logger.debug(f"Adding MergeChildrenRoot starting with: {empty_object.name}")
+
+        materials_from_children = set()
+        for child in empty_object.children:
+            if child.type == 'MESH':
+                for material in child.data.materials:
+                    materials_from_children.add(material)
+
+        # Create a new mesh
+        dummy_mesh_data = bpy.data.meshes.new(f"{empty_object.name}_dummy")
+        self.logger.debug(f"Created dummy mesh data: {dummy_mesh_data.name} "
+                          f"adding {len(materials_from_children)} materials")
+        for material in materials_from_children:
+            dummy_mesh_data.materials.append(material)
+        # dummy_mesh_data.materials = list(materials_from_children)
+        dummy_mesh_object = bpy.data.objects.new(f"{empty_object.name}_dummy", dummy_mesh_data)
+
+        # Copy the transformation of the original EMPTY
+        dummy_mesh_object.matrix_world = empty_object.matrix_world
 
         # Initialize the root node with the first child
-        merge_children_root = self._add_node(MergeChildrenRoot, root_child_object, parent)
-        merge_children_root.add_children_meshes()
+        merge_children_root = self._add_node(MergeChildrenRoot, dummy_mesh_object, parent)
+        merge_children_root.add_children_meshes(empty_object)
 
-        self.logger.info(f"Finished merging children into root: {root_child_object.name}")
+        bpy.data.objects.remove(dummy_mesh_object, do_unlink=True)
+        bpy.data.meshes.remove(dummy_mesh_data, do_unlink=True)
+        self.logger.info(f"Finished merging children into root: {empty_object.name}")
         return merge_children_root
 
     def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode],

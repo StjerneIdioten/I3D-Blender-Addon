@@ -115,7 +115,11 @@ class EvaluatedMesh:
         # If a reference is given transform the generated mesh by that frame to place it somewhere else than center of
         # the mesh origo
         if reference_frame is not None:
+            self.logger.debug("applying reference frame inside generate_evaluated_mesh in EvaluatedMesh")
+            self.logger.debug(f"translation for reference frame: {reference_frame.translation}, translation for object: {self.object.matrix_world.to_translation()}")
             self.mesh.transform(reference_frame.inverted() @ self.object.matrix_world)
+            after = reference_frame.inverted() @ self.object.matrix_world
+            self.logger.debug(f"translation for object after applying reference frame: {after.to_translation()}")
 
         conversion_matrix = self.i3d.conversion_matrix
         if self.i3d.get_setting('apply_unit_scale'):
@@ -280,7 +284,7 @@ class IndexedTriangleSet(Node):
                                 "This will confuse GE and result in the mesh showing up as just a wireframe. "
                                 "Please correct by assigning some weight to all vertices.")
 
-        self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
+        # self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
         return subset.first_vertex + subset.number_of_vertices, subset.first_index + subset.number_of_indices
 
     def populate_from_evaluated_mesh(self):
@@ -358,6 +362,8 @@ class IndexedTriangleSet(Node):
             self.logger.warning(f"Mesh '{mesh.name}' has multiple materials, skipping.")
             return
 
+        self.logger.debug(f"Adding mesh '{mesh.name}' to merge children root")
+
         triangle_offset = len(self.subsets[-1].triangles)
         vertex_offset = self.subsets[-1].number_of_vertices
 
@@ -367,6 +373,7 @@ class IndexedTriangleSet(Node):
 
         self.logger.debug(f"Added mesh '{mesh.name}' with generic value '{generic_value}'")
         self.generic_value = generic_value
+
         # Process the subset and write vertices/triangles
         self.process_subset(mesh, self.subsets[-1], triangle_offset)
         self.write_vertices(vertex_offset)
@@ -429,7 +436,16 @@ class IndexedTriangleSet(Node):
             xml_i3d.SubElement(self.xml_elements['triangles'], 't', {'vi': "{0} {1} {2}".format(*triangle)})
 
     def populate_xml_element(self):
-        if len(self.evaluated_mesh.mesh.vertices) == 0:
+        if len(self.evaluated_mesh.mesh.vertices) == 0 and self.is_generic:
+            if self.is_generic:
+                self.logger.debug(f"Initializing dry run for generic merge children root: '{self.name}'")
+                self.subsets.append(SubSet())
+                self._write_attribute('count', len(self.subsets), 'subsets')
+
+                for subset in self.subsets:
+                    xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
+                return
+
             self.logger.warning(f"has no vertices! Export of this mesh is aborted.")
             return
         self.populate_from_evaluated_mesh()
