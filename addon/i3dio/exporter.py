@@ -279,8 +279,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
 
             node = i3d.add_transformgroup_node(obj, _parent)
             if obj.instance_collection is not None:
-                logger.debug(f"[{obj.name}] is a collection instance and "
-                             "will be instanced into the 'Empty' object")
+                logger.debug(f"[{obj.name}] is a collection instance and will be instanced into the 'Empty' object")
                 # This is a collection instance so the children needs to be fetched from the referenced
                 # collection and be 'instanced' as children of the 'Empty' object directly.
                 _process_collection_objects(i3d, obj.instance_collection, node)
