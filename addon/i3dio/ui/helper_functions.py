@@ -3,7 +3,6 @@ This module contains various small ui helper functions.
 """
 from __future__ import annotations
 import bpy
-from pathlib import Path
 
 classes = []
 
@@ -90,32 +89,6 @@ def i3d_property(layout, attributes, attribute: str, obj):
     else:
         attrib_row = row.row()
         attrib_row.prop(attributes, attribute)
-
-
-def get_addon_preset_paths():
-    current_script_path = Path(__file__).resolve().parent
-    preset_path = current_script_path / "presets"
-    return [str(preset_path)]
-
-
-def draw_preset_menu(layout, preset_groups, preset_operator):
-    main_row = layout.row(align=True)
-
-    for group in preset_groups:
-        col = main_row.column(align=True)
-        col.label(text=group['label'], icon='PRESET')
-
-        for preset_path in group['paths']:
-            preset_path_obj = Path(preset_path)
-            if preset_path_obj.exists():
-                files = [f for f in preset_path_obj.iterdir()]
-                for f in files:
-                    if f.suffix == ".py":
-                        name = f.stem
-                        row = col.row()
-                        op = row.operator(preset_operator, text=name, icon='DOT')
-                        op.filepath = str(f)
-                        op.menu_idname = "I3D_MT_display_presets"
 
 
 def register():
