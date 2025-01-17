@@ -49,6 +49,12 @@ class PresetManager:
         return list(preset_dir.glob("*.py")) if preset_dir.exists() else []
 
     @staticmethod
+    def write_attributes(file, prefix, attributes):
+        """Helper to write attributes to the preset file."""
+        for attr, value in attributes.items():
+            file.write(f"{prefix}.{attr} = {repr(value)}\n")
+
+    @staticmethod
     def save_preset(name, grouped_values):
         filepath = PresetManager.get_preset_filepath(name)
         with filepath.open("w", encoding="utf-8") as file:
@@ -56,48 +62,52 @@ class PresetManager:
             file.write("obj = bpy.context.object\n\n")
 
             # Write universal attributes
-            for attr, value in grouped_values["UNIVERSAL"].items():
-                file.write(f"obj.i3d_attributes.{attr} = {repr(value)}\n")
+            PresetManager.write_attributes(file, "obj.i3d_attributes", grouped_values["UNIVERSAL"])
 
-            # Write mesh-specific attributes under 'if obj.type == "MESH":'
-            if grouped_values["MESH"]:
+            # Write mesh-specific attributes
+            if grouped_values["MESH"] or grouped_values["MESH_DATA"]:
                 file.write("\nif obj.type == 'MESH':\n")
-                for attr, value in grouped_values["MESH"].items():
-                    file.write(f"    obj.data.i3d_attributes.{attr} = {repr(value)}\n")
+                if grouped_values["MESH"]:
+                    PresetManager.write_attributes(file, "    obj.i3d_attributes", grouped_values["MESH"])
+                if grouped_values["MESH_DATA"]:
+                    PresetManager.write_attributes(file, "    obj.data.i3d_attributes", grouped_values["MESH_DATA"])
 
-            # Write empty-specific attributes under 'if obj.type == "EMPTY":'
+            # Write empty-specific attributes
             if grouped_values["EMPTY"]:
                 file.write("\nif obj.type == 'EMPTY':\n")
-                for attr, value in grouped_values["EMPTY"].items():
-                    file.write(f"    obj.i3d_attributes.{attr} = {repr(value)}\n")
+                PresetManager.write_attributes(file, "    obj.i3d_attributes", grouped_values["EMPTY"])
 
         return filepath
 
     @staticmethod
-    def collect_attributes(source: bpy.types.Object, obj_type: str) -> dict:
-        """Collect attributes explicitly defined in a PropertyGroup based on object type."""
-        # Combine universal attributes with type-specific attributes
-        applicable_attributes = ATTRIBUTE_MAP.get("UNIVERSAL", [])
-        applicable_attributes += ATTRIBUTE_MAP.get(obj_type, [])
-
-        if obj_type == "MESH":
-            applicable_attributes += ATTRIBUTE_MAP.get("MESH_DATA", [])
-
-        grouped_values = {"UNIVERSAL": {}, "MESH": {}, "EMPTY": {}}
-
-        for attr in applicable_attributes:
+    def collect_group_attributes(source, group_name, attribute_source):
+        """Helper to collect attributes from a specific group."""
+        attributes = {}
+        for attr in ATTRIBUTE_MAP[group_name]:
             try:
-                value = getattr(source.i3d_attributes, attr)
+                value = getattr(attribute_source, attr)
                 if isinstance(value, bpy.types.bpy_prop_array):
                     value = list(value)
-                if obj_type == "MESH" and attr in ATTRIBUTE_MAP["MESH_DATA"]:
-                    grouped_values["MESH"][attr] = value
-                elif obj_type == "EMPTY" and attr in ATTRIBUTE_MAP["EMPTY"]:
-                    grouped_values["EMPTY"][attr] = value
-                else:
-                    grouped_values["UNIVERSAL"][attr] = value
+                attributes[attr] = value
             except AttributeError:
-                pass  # Skip attributes that cannot be accessed
+                pass
+        return attributes
+
+    @staticmethod
+    def collect_attributes(source: bpy.types.Object, obj_type: str) -> dict:
+        """Collect attributes explicitly defined in a PropertyGroup based on object type."""
+        grouped_values = {
+            "UNIVERSAL": PresetManager.collect_group_attributes(source, "UNIVERSAL", source.i3d_attributes),
+            "MESH": {},
+            "MESH_DATA": {},
+            "EMPTY": {}
+        }
+        if obj_type == "MESH":
+            grouped_values["MESH"] = PresetManager.collect_group_attributes(source, "MESH", source.i3d_attributes)
+            grouped_values["MESH_DATA"] = PresetManager.collect_group_attributes(source, "MESH_DATA",
+                                                                                 source.data.i3d_attributes)
+        elif obj_type == "EMPTY":
+            grouped_values["EMPTY"] = PresetManager.collect_group_attributes(source, "EMPTY", source.i3d_attributes)
         return grouped_values
 
 
