@@ -130,9 +130,6 @@ class EvaluatedMesh:
 
         # Calculates triangles from mesh polygons
         self.mesh.calc_loop_triangles()
-        # Recalculates normals after the scaling has messed with them
-        if bpy.app.version < (4, 1, 0):
-            self.mesh.calc_normals_split()
 
     # On hold for the moment, it seems to be triggered at random times in the middle of an export which messes with
     # everything. Further investigation is needed.
@@ -192,8 +189,10 @@ class IndexedTriangleSet(Node):
             subset.first_index = next_index
             next_vertex, next_index = self.process_subset(mesh, subset)
 
-    def process_subset(self, mesh, subset: SubSet, triangle_offset: int = 0) -> tuple[int, int]:
+    def process_subset(self, mesh: bpy.types.Mesh, subset: SubSet, triangle_offset: int = 0) -> tuple[int, int]:
         self.logger.debug(f"Processing subset: {subset}")
+
+        zero_weight_vertices = set()
         for triangle in subset.triangles[triangle_offset:]:
 
             # Add a new empty container for the vertex indexes of the triangle
@@ -202,13 +201,23 @@ class IndexedTriangleSet(Node):
             for loop_index in triangle.loops:
                 blender_vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
 
-
                 # Add vertex color
                 vertex_color = None
-                if len(mesh.vertex_colors):
-                    # Get the color from the active layer or first layer, since only one vertex color layer is supported in GE
-                    color_layer = mesh.vertex_colors.active if mesh.vertex_colors.active is not None else mesh.vertex_colors[0]
-                    vertex_color = color_layer.data[loop_index].color
+                if mesh.i3d_attributes.use_vertex_colors and len(mesh.color_attributes):
+                    # Use the active color layer or fallback to the first (GE supports only one layer)
+                    color_layer = mesh.color_attributes.active_color or mesh.color_attributes[0]
+
+                    match color_layer.domain:
+                        case 'CORNER':
+                            # Color data is stored per corner/loop
+                            vertex_color = color_layer.data[loop_index].color_srgb
+                        case 'POINT':
+                            # Color data is stored per vertex
+                            color_vertex_index = mesh.loops[loop_index].vertex_index
+                            vertex_color = color_layer.data[color_vertex_index].color_srgb
+                        case _:
+                            self.logger.warning(f"Incompatible color attribute {color_layer.name}: "
+                                                f"domain={color_layer.domain}, data_type={color_layer.data_type}")
 
                 # Add uvs
                 uvs = []
@@ -239,9 +248,7 @@ class IndexedTriangleSet(Node):
                                 break
 
                     if len(blend_ids) == 0:
-                        self.logger.warning("Has a vertex with 0.0 weight to all bones. "
-                                            "This will confuse GE and results in the mesh showing up as just a "
-                                            "wireframe. Please correct by assigning some weight to all vertices")
+                        zero_weight_vertices.add(blender_vertex.index)
 
                     if len(blend_ids) < 4:
                         padding = [0]*(4-len(blend_ids))
@@ -265,6 +272,12 @@ class IndexedTriangleSet(Node):
 
                 self.triangles[-1].append(vertex_index)
             subset.number_of_indices += 3
+
+        if zero_weight_vertices:
+            self.logger.warning(f"Has {len(zero_weight_vertices)} vertices with 0.0 weight to all bones. "
+                                "This will confuse GE and result in the mesh showing up as just a wireframe. "
+                                "Please correct by assigning some weight to all vertices.")
+
         self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
         return subset.first_vertex + subset.number_of_vertices, subset.first_index + subset.number_of_indices
 

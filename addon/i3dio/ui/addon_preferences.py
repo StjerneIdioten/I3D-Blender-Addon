@@ -108,6 +108,12 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
     email: StringProperty(name="Email", default="")
     password: StringProperty(name="Password", default="", subtype="PASSWORD")
 
+    @classmethod
+    def poll(cls, context):
+        cls.poll_message_set("Online access required to download the I3D Converter, "
+                             "enable it in the Blender System Preferences to use this feature!")
+        return bpy.app.online_access
+
     def execute(self, context):
         import re
         from io import BytesIO
@@ -119,15 +125,15 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         session = Session()
         request = session.post('https://gdn.giants-software.com/index.php', data={'greenstoneX':'1', 'redstoneX':self.email, 'bluestoneX':self.password})
 
-        ## Clear email and password after usage
+        # Clear email and password after usage
         self.email = ""
         self.password = ""
 
         # Check if login was successful
-        if '<li id="topmenu1"><a href="index.php?logout=true" accesskey="1" title="">Logout</a></li>' not in request.text:
-            self.report({'WARNING'}, f"Could not login to https://gdn.giants-software.com/index.php with provided credentials!")
+        if not re.search(r'href="index\.php\?logout=true"', request.text):
+            self.report({'WARNING'}, "Could not login to https://gdn.giants-software.com/index.php with provided credentials!")
             return {'CANCELLED'}
-        
+
         # Get download page
         request = session.get('https://gdn.giants-software.com/downloads.php')
 
@@ -140,7 +146,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         # Request download of Giants I3D Exporter
         download_url = f'https://gdn.giants-software.com/download.php?downloadId={download_id}'
         request = session.get(download_url)
-        
+
         try:
             # Create in-memory zipfile from downloaded content
             zipfile = ZipFile(BytesIO(request.content), 'r')
@@ -153,7 +159,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
             with zipfile.open('io_export_i3d/util/i3dConverter.exe') as zipped_binary, open(binary_path, 'wb') as saved_binary:
                 copyfileobj(zipped_binary, saved_binary)
             # Set I3D Converter Binary path to newly downloaded converter
-            bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path = str(binary_path)
+            context.preferences.addons['i3dio'].preferences.i3d_converter_path = str(binary_path)
         except (BadZipfile, KeyError, OSError) as e:
             self.report({'WARNING'}, f"The Community I3D Exporter did not succesfully fetch and install the Giants I3D Converter binary! ({e})")
             return {'CANCELLED'}
@@ -162,10 +168,10 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        wm = bpy.context.window_manager
+        wm = context.window_manager
         # Width increased to fit the warning about the download freezing the UI
         return wm.invoke_props_dialog(self, width=350)
-        
+
     def draw(self, context):
         layout = self.layout
         row = layout.row()

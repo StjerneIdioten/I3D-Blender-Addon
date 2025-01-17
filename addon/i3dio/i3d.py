@@ -1,6 +1,6 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, Dict, List, Type, OrderedDict, Optional)
+from typing import (Union, Dict, List, Type, OrderedDict, Optional, Tuple)
 import logging
 from . import xml_i3d
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class I3D:
     """A special node which is the root node for the entire I3D file. It essentially represents the i3d file"""
     def __init__(self, name: str, i3d_file_path: str, conversion_matrix: mathutils.Matrix,
-                 depsgraph: bpy.types.Depsgraph):
+                 depsgraph: bpy.types.Depsgraph, settings: Dict):
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': name})
         self._ids = {
@@ -36,6 +36,8 @@ class I3D:
         self.xml_elements['UserAttributes'] = xml_i3d.SubElement(self.xml_elements['Root'], 'UserAttributes')
 
         self.scene_root_nodes = []
+        self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
+        self.deferred_constraints: List[Tuple[bpy.types.Object, bpy.types.Bone, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
 
         self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
@@ -46,12 +48,11 @@ class I3D:
 
         self.i3d_mapping: List[SceneGraphNode] = []
 
-        # Save all settings for the current run unto the I3D to abstract it from the nodes themselves
-        self.settings = {}
-        for setting in bpy.context.scene.i3dio.__annotations__.keys():
-            self.settings[setting] = getattr(bpy.context.scene.i3dio, setting)
+        self.settings = settings
 
         self.depsgraph = depsgraph
+
+        self.all_objects_to_export: List[bpy.types.Object] = []
 
     # Private Methods ##################################################################################################
     def _next_available_id(self, id_type: str) -> int:
@@ -60,8 +61,9 @@ class I3D:
         return next_id
 
     def _add_node(self, node_type: Type[SceneGraphNode], object_: Type[bpy.types.bpy_struct],
-                  parent: Type[SceneGraphNode] = None) -> SceneGraphNode:
-        node = node_type(self._next_available_id('node'), object_, self, parent)
+                  parent: Type[SceneGraphNode] = None, **kwargs) -> SceneGraphNode:
+        node = node_type(self._next_available_id('node'), object_, self, parent, **kwargs)
+        self.processed_objects[object_] = node
         if parent is None:
             self.scene_root_nodes.append(node)
             self.xml_elements['Scene'].append(node.element)
@@ -92,9 +94,11 @@ class I3D:
 
         return node_to_return
 
-    def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]) \
-            -> SceneGraphNode:
-        return self._add_node(SkinnedMeshBoneNode, bone_object, parent)
+    def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode],
+                 is_child_of: bool = False, armature_object: bpy.types.Object = None,
+                 target: bpy.types.Object = None) -> SceneGraphNode:
+        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, is_child_of=is_child_of,
+                              armature_object=armature_object, target=target)
 
     # TODO: Rethink this to not include an extra argument for when the node is actually discovered.
     #  Maybe two separate functions instead? This is just hack'n'slash code at this point!
@@ -117,6 +121,10 @@ class I3D:
         elif is_located:
             if not self.settings['collapse_armatures']:
                 if parent is not None:
+                    # The armature was created from a modifier, which may introduce a parent relationship.
+                    # However, the parent might not have been known at the time of creation.
+                    if self.skinned_meshes[armature_object.name].parent is None:
+                        self.skinned_meshes[armature_object.name].parent = parent
                     parent.add_child(self.skinned_meshes[armature_object.name])
                     parent.element.append(self.skinned_meshes[armature_object.name].element)
                 else:
@@ -268,6 +276,7 @@ class I3D:
             self.export_i3d_mapping()
 
     def export_i3d_mapping(self) -> None:
+        self.logger.info(f"Exporting i3d mappings to {self.settings['i3d_mapping_file_path']}")
         with open(bpy.path.abspath(self.settings['i3d_mapping_file_path']), 'r+') as xml_file:
             vehicle_xml = []
             i3d_mapping_idx = None

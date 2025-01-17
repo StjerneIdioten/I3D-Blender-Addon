@@ -5,7 +5,6 @@ from bpy.types import (
 
 from bpy.props import (
     PointerProperty,
-    IntProperty,
     FloatProperty,
     EnumProperty,
     FloatVectorProperty,
@@ -30,7 +29,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
                           'default': 'point',
                           'tracking': {'member_path': 'type',
                                        'mapping': {'POINT': 'point',
-                                                   'SUN': 'point',
+                                                   'SUN': 'directional',
                                                    'SPOT': 'spot',
                                                    'AREA': 'directional'}
                                        }
@@ -106,7 +105,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         precision=3,
         subtype='COLOR',
         default=i3d_map['color']['default']
-        )
+    )
 
     color_tracking: BoolProperty(
         name="Color",
@@ -326,39 +325,38 @@ class I3D_IO_PT_light_attributes(Panel):
 
     @classmethod
     def poll(cls, context):
-        if context.object is not None:
-            return context.object.type == 'LIGHT'
+        return context.light
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
         layout.alignment = 'RIGHT'
-        obj = bpy.context.active_object.data
+        light = context.light
 
-        i3d_property(layout, obj.i3d_attributes, 'type_of_light', obj)
-        i3d_property(layout, obj.i3d_attributes, "emit_diffuse", obj)
-        i3d_property(layout, obj.i3d_attributes, "emit_specular", obj)
-        i3d_property(layout, obj.i3d_attributes, "scattering", obj)
-        i3d_property(layout, obj.i3d_attributes, 'range', obj)
-        i3d_property(layout, obj.i3d_attributes, 'color', obj)
+        i3d_property(layout, light.i3d_attributes, 'type_of_light', light)
+        i3d_property(layout, light.i3d_attributes, "emit_diffuse", light)
+        i3d_property(layout, light.i3d_attributes, "emit_specular", light)
+        i3d_property(layout, light.i3d_attributes, "scattering", light)
+        i3d_property(layout, light.i3d_attributes, 'range', light)
+        i3d_property(layout, light.i3d_attributes, 'color', light)
 
-        i3d_property(layout, obj.i3d_attributes, 'cone_angle', obj)
-        i3d_property(layout, obj.i3d_attributes, 'drop_off', obj)
+        i3d_property(layout, light.i3d_attributes, 'cone_angle', light)
+        i3d_property(layout, light.i3d_attributes, 'drop_off', light)
 
-        i3d_property(layout, obj.i3d_attributes, "cast_shadow_map", obj)
-        i3d_property(layout, obj.i3d_attributes, "shadow_map_bias", obj)
-        i3d_property(layout, obj.i3d_attributes, "shadow_map_slope_scale_bias", obj)
-        i3d_property(layout, obj.i3d_attributes, "shadow_map_slope_clamp", obj)
-        i3d_property(layout, obj.i3d_attributes, "shadow_map_resolution", obj)
-        i3d_property(layout, obj.i3d_attributes, "shadow_map_perspective", obj)
-        i3d_property(layout, obj.i3d_attributes, "shadow_far_distance", obj)
-        i3d_property(layout, obj.i3d_attributes, "shadow_extrusion_distance", obj)
-        i3d_property(layout, obj.i3d_attributes, "shadow_map_num_splits", obj)
-        i3d_property(layout, obj.i3d_attributes, "split_distance_1", obj)
-        i3d_property(layout, obj.i3d_attributes, "split_distance_2", obj)
-        i3d_property(layout, obj.i3d_attributes, "split_distance_3", obj)
-        i3d_property(layout, obj.i3d_attributes, "split_distance_4", obj)
+        i3d_property(layout, light.i3d_attributes, "cast_shadow_map", light)
+        i3d_property(layout, light.i3d_attributes, "shadow_map_bias", light)
+        i3d_property(layout, light.i3d_attributes, "shadow_map_slope_scale_bias", light)
+        i3d_property(layout, light.i3d_attributes, "shadow_map_slope_clamp", light)
+        i3d_property(layout, light.i3d_attributes, "shadow_map_resolution", light)
+        i3d_property(layout, light.i3d_attributes, "shadow_map_perspective", light)
+        i3d_property(layout, light.i3d_attributes, "shadow_far_distance", light)
+        i3d_property(layout, light.i3d_attributes, "shadow_extrusion_distance", light)
+        i3d_property(layout, light.i3d_attributes, "shadow_map_num_splits", light)
+        i3d_property(layout, light.i3d_attributes, "split_distance_1", light)
+        i3d_property(layout, light.i3d_attributes, "split_distance_2", light)
+        i3d_property(layout, light.i3d_attributes, "split_distance_3", light)
+        i3d_property(layout, light.i3d_attributes, "split_distance_4", light)
 
 
 def register():

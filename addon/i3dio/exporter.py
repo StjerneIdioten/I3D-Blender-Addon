@@ -26,10 +26,11 @@ logger.debug(f"Loading: {__name__}")
 
 BINARIZER_TIMEOUT_IN_SECONDS = 30
 
-def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
+
+def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings) -> dict:
     export_data = {}
 
-    if bpy.context.scene.i3dio.log_to_file:
+    if operator.log_to_file:
         # Remove the file ending from path and append log specific naming
         filename = filepath[0:len(filepath) - len(xml_i3d.file_ending)] + debugging.export_log_file_ending
         log_file_handler = logging.FileHandler(filename, mode='w')
@@ -47,7 +48,7 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
     logger.info(f"Exported using '{xml_i3d.xml_current_library}'")
     logger.info(f"Exporting to {filepath}")
 
-    if bpy.context.scene.i3dio.verbose_output:
+    if operator.verbose_output:
         debugging.addon_console_handler.setLevel(logging.DEBUG)
     else:
         debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
@@ -62,21 +63,39 @@ def export_blend_to_i3d(filepath: str, axis_forward, axis_up) -> dict:
         i3d = I3D(name=bpy.path.display_name_from_filepath(filepath),
                   i3d_file_path=filepath,
                   conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up, ).to_4x4(),
-                  depsgraph=depsgraph)
+                  depsgraph=depsgraph,
+                  settings=settings)
 
-        export_selection = bpy.context.scene.i3dio.selection
-        if export_selection == 'ALL':
-            _export_active_scene_master_collection(i3d)
-        elif export_selection == 'ACTIVE_COLLECTION':
-            _export_active_collection(i3d)
-        elif export_selection == 'ACTIVE_OBJECT':
-            _export_active_object(i3d)
-        elif export_selection == 'SELECTED_OBJECTS':
-            _export_selected_objects(i3d)
+        # Log export settings
+        logger.info("Exporter settings:")
+        for setting, value in i3d.settings.items():
+            logger.info(f"  {setting}: {value}")
+
+        # Handle case when export is triggered from a collection
+        source_collection = None
+        if operator.collection:
+            source_collection = bpy.data.collections.get(operator.collection)
+            if not source_collection:
+                operator.report({'ERROR'}, f"Collection '{operator.collection}' was not found")
+                return None
+
+        if source_collection:
+            logger.info(f"Exporting using Blender's collection export feature. Collection: '{source_collection.name}'")
+            _export_collection_content(i3d, source_collection)
+        else:
+            match operator.selection:
+                case 'ALL':
+                    _export_active_scene_master_collection(i3d)
+                case 'ACTIVE_COLLECTION':
+                    _export_active_collection(i3d)
+                case 'ACTIVE_OBJECT':
+                    _export_active_object(i3d)
+                case 'SELECTED_OBJECTS':
+                    _export_selected_objects(i3d)
 
         i3d.export_to_i3d_file()
 
-        if bpy.context.scene.i3dio.binarize_i3d == True:
+        if operator.binarize_i3d:
             logger.info(f'Starting binarization of "{filepath}"')
             try:
                 i3d_binarize_path = PurePath(None if (path := bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path) == "" else path)
@@ -167,11 +186,25 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
     objects_to_export = objects
     if sort_alphabetical:
         objects_to_export = sort_blender_objects_by_outliner_ordering(objects)
+
+    new_objects_to_export = [obj for root_obj in objects for obj in traverse_hierarchy(root_obj)]
+    for obj in new_objects_to_export:
+        if obj not in i3d.all_objects_to_export:
+            i3d.all_objects_to_export.append(obj)
+
     for blender_object in objects_to_export:
         _add_object_to_i3d(i3d, blender_object)
 
+    if i3d.deferred_constraints:
+        _process_deferred_constraints(i3d)
+
 
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
+    # Check if object should be excluded from export (including its children)
+    if hasattr(obj, 'i3d_attributes') and obj.i3d_attributes.exclude_from_export:
+        logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
+        return
+
     # Special handling of armature nodes, since they are sort of "extra" compared to how other programs like Maya
     # handles bones. So the option for turning them off is provided.
     _parent = parent
@@ -184,7 +217,11 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
     # Collections are checked first since these are always exported in some form
     if isinstance(obj, bpy.types.Collection):
         logger.debug(f"[{obj.name}] is a 'Collection'")
-        node = i3d.add_transformgroup_node(obj, _parent)
+        node = None
+        if i3d.settings['keep_collections_as_transformgroups']:
+            node = i3d.add_transformgroup_node(obj, _parent)
+        else:
+            i3d.logger.info(f"[{obj.name}] will be be ignored and its children will be added to nearest parent")
         _process_collection_objects(i3d, obj, node)
         return  # Early return because collections are special
     else:
@@ -201,8 +238,20 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 for modifier in obj.modifiers:
                     # We only need to find one armature to know it should be an armature node
                     if modifier.type == 'ARMATURE':
-                        node = i3d.add_skinned_mesh_node(obj, _parent)
-                        break
+                        if modifier.object is None:
+                            logger.warning(f"Armature modifier '{modifier.name}' on skinned mesh '{obj.name}' "
+                                           "has no armature object assigned. Exporting as a regular shape instead.")
+                            break
+                        elif modifier.object not in i3d.all_objects_to_export:
+                            logger.warning(
+                                f"Skinned mesh '{obj.name}' references armature '{modifier.object.name}', "
+                                "but the armature is not included in the export hierarchy. "
+                                "Exporting as a regular shape instead."
+                            )
+                            break
+                        else:
+                            node = i3d.add_skinned_mesh_node(obj, _parent)
+                            break
 
             if node is None:
                 if 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group_index != -1:
@@ -260,5 +309,27 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
         # a part of the collections objects. Which means that they would be added twice without this check. One for the
         # object itself and one for the collection.
         if child.parent is None:
+            i3d.all_objects_to_export.append(child)
             _add_object_to_i3d(i3d, child, parent)
     logger.debug(f"[{collection.name}] no more objects to process in collection")
+
+
+def traverse_hierarchy(obj: BlenderObject) -> List[BlenderObject]:
+    """Recursively traverses an object hierarchy and returns all objects."""
+    return [obj] + [child for child in obj.children for child in traverse_hierarchy(child)]
+
+
+def _process_deferred_constraints(i3d: I3D):
+    for armature, bone_object, target in i3d.deferred_constraints:
+        i3d.logger.debug(f"Processing deferred constraint for: {bone_object}, Target: {target}")
+
+        if target in i3d.processed_objects:
+            i3d.logger.debug(f"Target object '{target}' is included in the export hierarchy. Setting bone parent.")
+            bone_name = bone_object.name
+            bone = next((b for b in i3d.skinned_meshes[armature.name].bones if b.name == bone_name), None)
+
+            if bone is not None:
+                i3d.skinned_meshes[armature.name].update_bone_parent(None, custom_target=i3d.processed_objects[target],
+                                                                     bone=bone)
+            else:
+                i3d.logger.warning(f"Could not find bone {bone_name} in the armature's bone list!")

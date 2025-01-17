@@ -6,7 +6,8 @@ from bpy.props import (
     EnumProperty,
     FloatVectorProperty,
     FloatProperty,
-    CollectionProperty
+    CollectionProperty,
+    BoolProperty
 )
 
 from .. import xml_i3d
@@ -26,6 +27,14 @@ SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
 VARIATIONS_ENUM_ITEMS_DEFAULT = ('NO_VARIATIONS', 'no variation', 'No Variation Selected')
 
 ShaderMetadata = namedtuple('Shader', ['path', 'parameters', 'textures', 'variations'])
+
+valid_types = {
+    'float': 'float',
+    'float1': 'float',
+    'float2': 'float2',
+    'float3': 'float3',
+    'float4': 'float4'
+}
 
 
 def register(cls):
@@ -100,12 +109,12 @@ class I3DLoadCustomShader(bpy.types.Operator):
         file = attributes.shader
         tree = xml_i3d.parse(bpy.path.abspath(path))
         if tree is None:
-            print(f"{file} is not correct xml")
+            print("{file} is not correct xml")
             clear_shader(context)
         else:
             root = tree.getroot()
             if root.tag != 'CustomShader':
-                print(f"{file} is xml, but not a properly formatted shader file! Aborting")
+                print("{file} is xml, but not a properly formatted shader file! Aborting")
                 clear_shader(context)
             else:
                 attributes.variations.clear()
@@ -125,7 +134,8 @@ class I3DLoadCustomShader(bpy.types.Operator):
 
 def parameter_element_as_dict(parameter):
     parameter_list = []
-    if parameter.attrib['type'] == 'float':
+
+    if parameter.attrib['type'] in ['float', 'float1']:
         type_length = 1
     elif parameter.attrib['type'] == 'float2':
         type_length = 2
@@ -134,7 +144,7 @@ def parameter_element_as_dict(parameter):
     elif parameter.attrib['type'] == 'float4':
         type_length = 4
     else:
-        print(f"Shader Parameter type is unknown!")
+        print("Shader Parameter type is unknown!")
 
     def parse_default(default):
         default_parsed = []
@@ -143,9 +153,9 @@ def parameter_element_as_dict(parameter):
             # For some reason, Giants shaders has to specify their default values in terms of float4... Where the extra
             # parts compared with what the actual type length is, aren't in any way relevant.
             if len(default_parsed) > type_length:
-                default_parsed = default_parsed[:type_length-1]
+                default_parsed = default_parsed[:type_length - 1]
 
-        default_parsed += ['0']*(type_length-len(default_parsed))
+        default_parsed += ['0'] * (type_length - len(default_parsed))
         return default_parsed
 
     if 'arraySize' in parameter.attrib:
@@ -204,7 +214,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
 
         tree = xml_i3d.parse(bpy.path.abspath(path))
         if tree is None:
-            print(f"{path} doesn't exist!")
+            print("{path} doesn't exist!")
             clear_shader(context)
 
         else:
@@ -243,7 +253,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
                     for parameter in grouped_parameters[group]:
                         param = attributes.shader_parameters.add()
                         param.name = parameter['name']
-                        param.type = parameter['type']
+                        param.type = valid_types.get(parameter['type'], None)
                         data = tuple(map(float, parameter['default_value']))
                         if param.type == 'float':
                             param.data_float_1 = data[0]
@@ -397,12 +407,33 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     shader_parameters: CollectionProperty(type=I3DShaderParameter)
     shader_textures: CollectionProperty(type=I3DShaderTexture)
 
+    alpha_blending: BoolProperty(
+        name='Alpha Blending',
+        description='Enable alpha blending for this material',
+        default=False
+    )
+
+    shading_rate: EnumProperty(
+        name='Shading Rate',
+        description='Shading Rate',
+        items=[
+            ('1x1', '1x1', '1x1'),
+            ('1x2', '1x2', '1x2'),
+            ('2x1', '2x1', '2x1'),
+            ('2x2', '2x2', '2x2'),
+            ('2x4', '2x4', '2x4'),
+            ('4x2', '4x2', '4x2'),
+            ('4x4', '4x4', '4x4')
+        ],
+        default='1x1'
+    )
+
 
 @register
-class I3D_IO_PT_shader(Panel):
+class I3D_IO_PT_material_shader(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
-    bl_label = "I3D Shader Settings"
+    bl_label = "I3D Material & Shader Settings"
     bl_context = 'material'
 
     @classmethod
@@ -413,30 +444,54 @@ class I3D_IO_PT_shader(Panel):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        material = context.object.active_material
+        material = context.active_object.active_material
 
-        row = layout.row(align = True)
-        row.use_property_decorate = False
-        row.prop(material.i3d_attributes, 'shader', text="")
-        row.prop(material.i3d_attributes, 'variation', text="")
+        layout.prop(material.i3d_attributes, 'shading_rate')
+        layout.prop(material.i3d_attributes, 'alpha_blending')
 
-        column = layout.column(align=True)
-        column.use_property_split = False
-        parameters = material.i3d_attributes.shader_parameters
-        for parameter in parameters:
-            if parameter.type == 'float':
-                property_type = 'data_float_1'
-            elif parameter.type == 'float2':
-                property_type = 'data_float_2'
-            elif parameter.type == 'float3':
-                property_type = 'data_float_3'
-            else:
-                property_type = 'data_float_4'
-            column.row(align=True).prop(parameter, property_type, text=parameter.name)
-        column.separator()
-        textures = material.i3d_attributes.shader_textures
-        for texture in textures:
-            column.row(align=True).prop(texture, 'source', text=texture.name)
+        layout.use_property_split = False
+        layout.prop(material.i3d_attributes, 'source')
+
+        if material.i3d_attributes.variations:
+            layout.prop(material.i3d_attributes, 'variation')
+
+        draw_shader_parameters(layout, material)
+        draw_shader_textures(layout, material)
+
+
+def draw_shader_parameters(layout: bpy.types.UILayout, material: bpy.types.Material) -> None:
+    if material.i3d_attributes.shader_parameters:
+        header, panel = layout.panel("shader_paramters", default_closed=False)
+        header.label(text="Shader Parameters")
+        if panel:
+            column = panel.column(align=True)
+            parameters = material.i3d_attributes.shader_parameters
+            for parameter in parameters:
+                match parameter.type:
+                    case 'float':
+                        property_type = 'data_float_1'
+                    case 'float2':
+                        property_type = 'data_float_2'
+                    case 'float3':
+                        property_type = 'data_float_3'
+                    case _:
+                        property_type = 'data_float_4'
+
+                column.row(align=True).prop(parameter, property_type, text=parameter.name)
+
+
+def draw_shader_textures(layout: bpy.types.UILayout, material: bpy.types.Material) -> None:
+    if material.i3d_attributes.shader_textures:
+        header, panel = layout.panel("shader_textures", default_closed=False)
+        header.label(text="Textures")
+        if panel:
+            panel.use_property_split = False
+            panel.use_property_decorate = False
+
+            column = panel.column(align=True)
+            textures = material.i3d_attributes.shader_textures
+            for texture in textures:
+                column.row(align=True).prop(texture, 'source', text=texture.name)
 
 
 def register():
