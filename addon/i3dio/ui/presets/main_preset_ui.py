@@ -101,28 +101,46 @@ class PresetManager:
         return grouped_values
 
 
+def get_preset_items():
+    """Dynamically build a list of (value, label, description) tuples."""
+    items = []
+    for file in PresetManager.list_presets():
+        name = file.stem
+        items.append((name, name, f"Delete the preset '{name}'"))
+    if not items:
+        items.append(("NONE", "No Presets Found", ""))
+    return items
+
+
 @register
 class I3D_IO_OT_DeletePreset(bpy.types.Operator):
     bl_idname = "i3dio.delete_preset"
     bl_label = "Delete Preset"
     bl_description = "Delete a preset file"
 
-    name: bpy.props.StringProperty(name="Preset Name")
+    preset_to_delete: bpy.props.EnumProperty(
+        name="Preset",
+        description="Which preset to delete",
+        items=get_preset_items(),
+    )
 
     def execute(self, context):
-        filepath = PresetManager.get_preset_filepath(self.name)
-        if filepath.exists():
-            filepath.unlink()
-            self.report({'INFO'}, f"Preset deleted: {filepath}")
+        preset_filepath = PresetManager.get_preset_filepath(self.preset_to_delete)
+        if preset_filepath.exists():
+            preset_filepath.unlink()
+            self.report({'INFO'}, f"Preset deleted: {preset_filepath}")
         else:
-            self.report({'ERROR'}, f"Preset not found: {filepath}")
+            self.report({'ERROR'}, f"Preset not found: {preset_filepath}")
+            return {'CANCELLED'}
         return {'FINISHED'}
 
-    def invoke(self, context, _event):
-        return context.window_manager.invoke_props_dialog(self, confirm_text="Delete", width=200)
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, width=100)
 
-    def draw(self, _context):
-        self.layout.label(text=f"Delete preset '{self.name}'?")
+    def draw(self, context):
+        layout = self.layout
+        layout.label(text="Select a preset to delete:")
+        layout.prop(self, "preset_to_delete", text="")
 
 
 @register
@@ -135,10 +153,7 @@ class I3D_IO_OT_SavePreset(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.object
-
         grouped_values = PresetManager.collect_attributes(obj, obj.type)
-
-        # Save the preset
         filepath = PresetManager.save_preset(self.name, grouped_values)
         self.report({'INFO'}, f"Preset saved: {filepath}")
         return {'FINISHED'}
@@ -149,14 +164,18 @@ class I3D_IO_OT_SavePreset(bpy.types.Operator):
 
 def draw_presets(layout: bpy.types.UILayout, subdir: Path, menu_idname: str, add_delete: bool = False) -> None:
     presets = PresetManager.list_presets(subdir)
+    col = layout.column(align=True)
     for file in presets:
+        row = col.row(align=True)
         name = file.stem
-        row = layout.row(align=True)
         op = row.operator("script.execute_preset", text=name)
         op.filepath = str(file)
         op.menu_idname = menu_idname
-        if add_delete:
-            row.operator("i3dio.delete_preset", text="", icon='TRASH').name = name
+    if add_delete:
+        # NOTE: Tried adding it to the same row as the presets, but it either caused the presets to be misaligned
+        # or scale the menu across the entire width of the monitor.
+        layout.separator(factor=2)
+        layout.operator("i3dio.delete_preset", text="Delete Preset", icon='TRASH')
 
 
 @register
