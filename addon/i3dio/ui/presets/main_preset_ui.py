@@ -49,32 +49,32 @@ class PresetManager:
         return list(preset_dir.glob("*.py")) if preset_dir.exists() else []
 
     @staticmethod
-    def save_preset(name, defines, values):
+    def save_preset(name, grouped_values):
         filepath = PresetManager.get_preset_filepath(name)
         with filepath.open("w", encoding="utf-8") as file:
-            file.write("import bpy\n\n")
+            file.write("import bpy\n")
+            file.write("obj = bpy.context.object\n\n")
 
-            # Write the defines (e.g., obj and mesh setup)
-            for define in defines:
-                file.write(f"{define}\n")
-            file.write("\n")
+            # Write universal attributes
+            for attr, value in grouped_values["UNIVERSAL"].items():
+                file.write(f"obj.i3d_attributes.{attr} = {repr(value)}\n")
 
-            # Write object attributes
-            for key, value in values.items():
-                if key.startswith("mesh."):  # Skip mesh attributes
-                    continue
-                file.write(f"{key} = {repr(value)}\n")
+            # Write mesh-specific attributes under 'if obj.type == "MESH":'
+            if grouped_values["MESH"]:
+                file.write("\nif obj.type == 'MESH':\n")
+                for attr, value in grouped_values["MESH"].items():
+                    file.write(f"    obj.data.i3d_attributes.{attr} = {repr(value)}\n")
 
-            # Write mesh attributes under 'if mesh:'
-            mesh_attributes = {k: v for k, v in values.items() if k.startswith("mesh.")}
-            if mesh_attributes:
-                file.write("\nif mesh:\n")
-                for key, value in mesh_attributes.items():
-                    file.write(f"    {key} = {repr(value)}\n")
+            # Write empty-specific attributes under 'if obj.type == "EMPTY":'
+            if grouped_values["EMPTY"]:
+                file.write("\nif obj.type == 'EMPTY':\n")
+                for attr, value in grouped_values["EMPTY"].items():
+                    file.write(f"    obj.i3d_attributes.{attr} = {repr(value)}\n")
+
         return filepath
 
     @staticmethod
-    def collect_attributes(source: bpy.types.Object, source_key: str, obj_type: str):
+    def collect_attributes(source: bpy.types.Object, obj_type: str) -> dict:
         """Collect attributes explicitly defined in a PropertyGroup based on object type."""
         # Combine universal attributes with type-specific attributes
         applicable_attributes = ATTRIBUTE_MAP.get("UNIVERSAL", [])
@@ -83,16 +83,22 @@ class PresetManager:
         if obj_type == "MESH":
             applicable_attributes += ATTRIBUTE_MAP.get("MESH_DATA", [])
 
-        values = {}
+        grouped_values = {"UNIVERSAL": {}, "MESH": {}, "EMPTY": {}}
+
         for attr in applicable_attributes:
             try:
                 value = getattr(source.i3d_attributes, attr)
                 if isinstance(value, bpy.types.bpy_prop_array):
                     value = list(value)
-                values[f"{source_key}.i3d_attributes.{attr}"] = value
+                if obj_type == "MESH" and attr in ATTRIBUTE_MAP["MESH_DATA"]:
+                    grouped_values["MESH"][attr] = value
+                elif obj_type == "EMPTY" and attr in ATTRIBUTE_MAP["EMPTY"]:
+                    grouped_values["EMPTY"][attr] = value
+                else:
+                    grouped_values["UNIVERSAL"][attr] = value
             except AttributeError:
                 pass  # Skip attributes that cannot be accessed
-        return values
+        return grouped_values
 
 
 @register
@@ -129,25 +135,11 @@ class I3D_IO_OT_SavePreset(bpy.types.Operator):
 
     def execute(self, context):
         obj = context.object
-        if not obj:
-            self.report({'ERROR'}, "No object selected.")
-            return {'CANCELLED'}
 
-        preset_defines = [
-            "obj = bpy.context.object",
-            "mesh = obj.data if obj.type == 'MESH' else None",
-        ]
-        preset_values = {}
-
-        # Collect object attributes
-        preset_values.update(PresetManager.collect_attributes(obj, "obj", obj.type))
-
-        # Collect mesh-specific attributes
-        if obj.type == 'MESH' and hasattr(obj.data, "i3d_attributes"):
-            preset_values.update(PresetManager.collect_attributes(obj.data, "mesh", "MESH_DATA"))
+        grouped_values = PresetManager.collect_attributes(obj, obj.type)
 
         # Save the preset
-        filepath = PresetManager.save_preset(self.name, preset_defines, preset_values)
+        filepath = PresetManager.save_preset(self.name, grouped_values)
         self.report({'INFO'}, f"Preset saved: {filepath}")
         return {'FINISHED'}
 
