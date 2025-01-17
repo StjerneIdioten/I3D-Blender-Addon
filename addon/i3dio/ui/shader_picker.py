@@ -30,14 +30,6 @@ VARIATIONS_ENUM_ITEMS_DEFAULT = ('NO_VARIATIONS', 'no variation', 'No Variation 
 
 ShaderMetadata = namedtuple('Shader', ['path', 'parameters', 'textures', 'variations'])
 
-valid_types = {
-    'float': 'float',
-    'float1': 'float',
-    'float2': 'float2',
-    'float3': 'float3',
-    'float4': 'float4'
-}
-
 
 def register(cls):
     classes.append(cls)
@@ -70,58 +62,6 @@ class I3DShaderVariation(bpy.types.PropertyGroup):
     name: StringProperty(default='Unnamed Variation')
 
 
-def parameter_element_as_dict(parameter):
-    parameter_list = []
-
-    if parameter.attrib['type'] in ['float', 'float1']:
-        type_length = 1
-    elif parameter.attrib['type'] == 'float2':
-        type_length = 2
-    elif parameter.attrib['type'] == 'float3':
-        type_length = 3
-    elif parameter.attrib['type'] == 'float4':
-        type_length = 4
-    else:
-        print("Shader Parameter type is unknown!")
-
-    def parse_default(default):
-        default_parsed = []
-        if default is not None:
-            default_parsed = default.split()
-            # For some reason, Giants shaders has to specify their default values in terms of float4... Where the extra
-            # parts compared with what the actual type length is, aren't in any way relevant.
-            if len(default_parsed) > type_length:
-                default_parsed = default_parsed[:type_length - 1]
-
-        default_parsed += ['0'] * (type_length - len(default_parsed))
-        return default_parsed
-
-    if 'arraySize' in parameter.attrib:
-        for child in parameter:
-            parameter_list.append({'name': f"{parameter.attrib['name']}{child.attrib['index']}",
-                                   'type': parameter.attrib['type'],
-                                   'default_value': parse_default(child.text)})
-    else:
-        parameter_list.append({'name': parameter.attrib['name'],
-                               'type': parameter.attrib['type'],
-                               'default_value': parse_default(parameter.attrib.get('defaultValue'))})
-
-    return parameter_list
-
-
-def texture_element_as_dict(texture):
-    texture_dictionary = {'name': texture.attrib['name'],
-                          'default_file': texture.attrib.get('defaultFilename', '')
-                          }
-    return texture_dictionary
-
-
-def get_shader_name_from_index(index):
-    if 0 <= index < len(SHADERS_ENUM_ITEMS):
-        return SHADERS_ENUM_ITEMS[index][0]  # First element is the shader name
-    return None
-
-
 def update_shader(shader_name):
     global SHADERS, SHADERS_ENUM_ITEMS
     attributes = bpy.context.material.i3d_attributes
@@ -146,9 +86,20 @@ def update_variation(shader_name, variation_name):
     for group in variation:
         print(f"Group: {group}")
         for parameter in shader.parameters.get(group, []):
-            attributes.shader_parameters.add().name = parameter['name']
-        for texture in shader.textures.get(group, []):
-            attributes.shader_textures.add().name = texture['name']
+            new_parameter = attributes.shader_parameters.add()
+            new_parameter.name = parameter['name']
+            new_parameter.type = parameter['type']
+            data = tuple(map(float, parameter['default_value']))
+            match parameter['type']:
+                case 'float':
+                    new_parameter.data_float_1 = data
+                case 'float2':
+                    new_parameter.data_float_2 = data
+                case 'float3':
+                    new_parameter.data_float_3 = data
+                case 'float4':
+                    new_parameter.data_float_4 = data
+            print(f"Parameter: {parameter['name']}, {parameter['type']}, {parameter['default_value']}")
 
 
 @register
@@ -246,31 +197,76 @@ class I3D_IO_PT_material_shader(Panel):
         row.use_property_split = False
         col = row.column(align=False)
         col.prop(i3d_attributes, 'shader', text="Shader")
-        # row = layout.row(align=True)
         col.prop_search(i3d_attributes, 'variation_name', i3d_attributes, 'shader_variations', text="Variation")
-        # length of variations prop:
-        row = layout.row(align=True)
-        row.label(text=f"Variations: {len(i3d_attributes.shader_variations)}")
 
-        column = layout.column(align=True)
-        column.use_property_split = False
-        parameters = i3d_attributes.shader_parameters
-        for parameter in parameters:
-            match parameter.type:
-                case 'float':
-                    property_type = 'data_float_1'
-                case 'float2':
-                    property_type = 'data_float_2'
-                case 'float3':
-                    property_type = 'data_float_3'
-                case _:
-                    property_type = 'data_float_4'
+        header, panel = layout.panel('shader_parameters', default_closed=False)
+        header.label(text="Shader Parameters")
+        if panel:
+            column = panel.column(align=True)
+            column.use_property_split = False
+            parameters = i3d_attributes.shader_parameters
+            for parameter in parameters:
+                match parameter.type:
+                    case 'float':
+                        property_type = 'data_float_1'
+                    case 'float2':
+                        property_type = 'data_float_2'
+                    case 'float3':
+                        property_type = 'data_float_3'
+                    case _:
+                        property_type = 'data_float_4'
+                column.row(align=True).prop(parameter, property_type, text=parameter.name)
 
-            column.row(align=True).prop(parameter, property_type, text=parameter.name)
-        column.separator()
+        """ column.separator()
         textures = i3d_attributes.shader_textures
         for texture in textures:
-            column.row(align=True).prop(texture, 'source', text=texture.name)
+            column.row(align=True).prop(texture, 'source', text=texture.name) """
+
+
+def parameter_element_as_dict(parameter):
+    parameter_list = []
+
+    match parameter.attrib['type']:
+        case 'float' | 'float1':
+            type_length = 1
+        case 'float2':
+            type_length = 2
+        case 'float3':
+            type_length = 3
+        case 'float4':
+            type_length = 4
+        case _:
+            print(f"Shader Parameter type is unknown! {parameter.attrib['type']}")
+
+    def parse_default(default):
+        default_parsed = []
+        if default is not None:
+            default_parsed = default.split()
+            # For some reason, Giants shaders has to specify their default values in terms of float4... Where the extra
+            # parts compared with what the actual type length is, aren't in any way relevant.
+            if len(default_parsed) > type_length:
+                default_parsed = default_parsed[:type_length - 1]
+        default_parsed += ['0'] * (type_length - len(default_parsed))
+        return default_parsed
+
+    if 'arraySize' in parameter.attrib:
+        for child in parameter:
+            parameter_list.append({'name': f"{parameter.attrib['name']}{child.attrib['index']}",
+                                   'type': parameter.attrib['type'],
+                                   'default_value': parse_default(child.text)})
+    else:
+        parameter_list.append({'name': parameter.attrib['name'],
+                               'type': parameter.attrib['type'],
+                               'default_value': parse_default(parameter.attrib.get('defaultValue'))})
+
+    return parameter_list
+
+
+def texture_element_as_dict(texture):
+    texture_dictionary = {'name': texture.attrib['name'],
+                          'default_file': texture.attrib.get('defaultFilename', '')
+                          }
+    return texture_dictionary
 
 
 def load_shader(path: Path):
