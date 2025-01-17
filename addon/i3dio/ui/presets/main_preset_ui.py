@@ -175,6 +175,9 @@ class I3D_IO_OT_SavePreset(bpy.types.Operator):
 def draw_presets(layout: bpy.types.UILayout, subdir: Path, menu_idname: str, add_delete: bool = False) -> None:
     presets = PresetManager.list_presets(subdir)
     col = layout.column(align=True)
+    if not presets:
+        col.label(text="No presets found")
+        return
     for file in presets:
         row = col.row(align=True)
         name = file.stem
