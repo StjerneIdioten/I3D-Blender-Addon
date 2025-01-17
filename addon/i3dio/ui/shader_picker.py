@@ -1,5 +1,5 @@
 import bpy
-from bpy.types import (Panel)
+from bpy.types import Panel
 from bpy.props import (
     StringProperty,
     PointerProperty,
@@ -21,6 +21,7 @@ classes = []
 # A module value to represent what the field shows when a shader is not selected
 shader_no_variations = 'NO_VARIATIONS'
 shader_parameter_max_decimals = 3  # 0-6 per blender properties documentation
+custom_shader_default = ''
 SHADERS = {}
 SHADER_ENUM_ITEMS_DEFAULT = ('NO_SHADER', 'no shader', 'No Shader Selected')
 SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
@@ -109,12 +110,12 @@ class I3DLoadCustomShader(bpy.types.Operator):
         file = attributes.shader
         tree = xml_i3d.parse(bpy.path.abspath(path))
         if tree is None:
-            print("{file} is not correct xml")
+            print(f"{file} is not correct xml")
             clear_shader(context)
         else:
             root = tree.getroot()
             if root.tag != 'CustomShader':
-                print("{file} is xml, but not a properly formatted shader file! Aborting")
+                print(f"{file} is xml, but not a properly formatted shader file! Aborting")
                 clear_shader(context)
             else:
                 attributes.variations.clear()
@@ -214,7 +215,7 @@ class I3DLoadCustomShaderVariation(bpy.types.Operator):
 
         tree = xml_i3d.parse(bpy.path.abspath(path))
         if tree is None:
-            print("{path} doesn't exist!")
+            print(f"{path} doesn't exist!")
             clear_shader(context)
 
         else:
@@ -298,13 +299,13 @@ def load_shader(path: Path):
                 # Some variations don't have a group defined, but should still use the 'base' group regardless
                 shader.variations[v.attrib.get('name')] = v.attrib.get('groups', 'base').split()
     return shader
-        
+
 
 def populate_shader_cache():
     global SHADERS, SHADERS_ENUM_ITEMS
     shader_dir = Path(bpy.context.preferences.addons['i3dio'].preferences.fs_data_path) / 'shaders'
     if shader_dir.exists():
-        SHADERS = {path.stem:load_shader(path) for path in locate_shaders_in_directory(shader_dir)}
+        SHADERS = {path.stem: load_shader(path) for path in locate_shaders_in_directory(shader_dir)}
     SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
     SHADERS_ENUM_ITEMS.extend([(shader[0], shader[0], str(shader[1].path)) for shader in SHADERS.items()])
 
@@ -319,20 +320,20 @@ def handle_old_shader_format(file):
 
     if not file:
         return
-    
+
     for mat in bpy.data.materials:
-        if (source := mat.i3d_attributes.get('source')) != None:
-                attr = mat.i3d_attributes
-                shader_path = Path(source)
-                
-                if shader_path in (s.path for s in SHADERS.values()):
-                    attr.shader = shader_path.stem
-                # Handle shader that doesn't exist anymore
-                print(f"{attr.get('variations')[attr.get('variation')].get('name')}")
-               
+        if (source := mat.i3d_attributes.get('source')) is not None:
+            attr = mat.i3d_attributes
+            shader_path = Path(source)
+
+            if shader_path in (s.path for s in SHADERS.values()):
+                attr.shader = shader_path.stem
+            # Handle shader that doesn't exist anymore
+            print(f"{attr.get('variations')[attr.get('variation')].get('name')}")
+
         else:
             print("Has no source")
-            if (variation := mat.i3d_attributes.get('variation_name')) != None:
+            if (variation := mat.i3d_attributes.get('variation_name')) is not None:
                 print(f"V: {variation}")
     return
 
@@ -361,7 +362,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         if existing_shader != selected_index:
             self['shader'] = selected_index
             if existing_shader is not None:
-                update_shader()
+                update_shader(selected_index)
 
     def shader_getter(self):
         return self.get('shader', 0)
@@ -379,7 +380,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     def variation_items_update(self, context):
         items = [VARIATIONS_ENUM_ITEMS_DEFAULT]
-        #if self.shader is not None or self.shader != 'NO_SHADER':
+        # if self.shader is not None or self.shader != 'NO_SHADER':
         #    for variation in SHADERS.variations:
         #        items.append((f'{variation.name}', f'{variation.name}', f"The shader variation '{variation.name}'"))
         return items
@@ -438,60 +439,41 @@ class I3D_IO_PT_material_shader(Panel):
 
     @classmethod
     def poll(cls, context):
-        return context.object is not None and context.object.active_material is not None
+        return context.material
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        material = context.active_object.active_material
+        material = context.material
 
         layout.prop(material.i3d_attributes, 'shading_rate')
         layout.prop(material.i3d_attributes, 'alpha_blending')
 
-        layout.use_property_split = False
-        layout.prop(material.i3d_attributes, 'source')
+        row = layout.row(align=True)
+        row.use_property_split = False
+        row.prop(material.i3d_attributes, 'shader', text="")
+        row.prop(material.i3d_attributes, 'variation', text="")
 
-        if material.i3d_attributes.variations:
-            layout.prop(material.i3d_attributes, 'variation')
+        column = layout.column(align=True)
+        column.use_property_split = False
+        parameters = material.i3d_attributes.shader_parameters
+        for parameter in parameters:
+            match parameter.type:
+                case 'float':
+                    property_type = 'data_float_1'
+                case 'float2':
+                    property_type = 'data_float_2'
+                case 'float3':
+                    property_type = 'data_float_3'
+                case _:
+                    property_type = 'data_float_4'
 
-        draw_shader_parameters(layout, material)
-        draw_shader_textures(layout, material)
-
-
-def draw_shader_parameters(layout: bpy.types.UILayout, material: bpy.types.Material) -> None:
-    if material.i3d_attributes.shader_parameters:
-        header, panel = layout.panel("shader_paramters", default_closed=False)
-        header.label(text="Shader Parameters")
-        if panel:
-            column = panel.column(align=True)
-            parameters = material.i3d_attributes.shader_parameters
-            for parameter in parameters:
-                match parameter.type:
-                    case 'float':
-                        property_type = 'data_float_1'
-                    case 'float2':
-                        property_type = 'data_float_2'
-                    case 'float3':
-                        property_type = 'data_float_3'
-                    case _:
-                        property_type = 'data_float_4'
-
-                column.row(align=True).prop(parameter, property_type, text=parameter.name)
-
-
-def draw_shader_textures(layout: bpy.types.UILayout, material: bpy.types.Material) -> None:
-    if material.i3d_attributes.shader_textures:
-        header, panel = layout.panel("shader_textures", default_closed=False)
-        header.label(text="Textures")
-        if panel:
-            panel.use_property_split = False
-            panel.use_property_decorate = False
-
-            column = panel.column(align=True)
-            textures = material.i3d_attributes.shader_textures
-            for texture in textures:
-                column.row(align=True).prop(texture, 'source', text=texture.name)
+            column.row(align=True).prop(parameter, property_type, text=parameter.name)
+        column.separator()
+        textures = material.i3d_attributes.shader_textures
+        for texture in textures:
+            column.row(align=True).prop(texture, 'source', text=texture.name)
 
 
 def register():
