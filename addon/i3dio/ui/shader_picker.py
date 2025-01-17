@@ -185,16 +185,19 @@ class I3D_IO_PT_material_shader(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = True
+        layout.use_property_split = False
         layout.use_property_decorate = False
         material = context.material
         i3d_attributes = material.i3d_attributes
 
-        layout.prop(i3d_attributes, 'shading_rate')
-        layout.prop(i3d_attributes, 'alpha_blending')
+        main_props = layout.column(align=True)
+        main_props.use_property_split = True
+        main_props.prop(i3d_attributes, 'shading_rate')
+        main_props.prop(i3d_attributes, 'alpha_blending')
+
+        layout.separator(type='LINE')
 
         row = layout.row(align=True)
-        row.use_property_split = False
         col = row.column(align=False)
         col.prop(i3d_attributes, 'shader', text="Shader")
         col.prop_search(i3d_attributes, 'variation_name', i3d_attributes, 'shader_variations', text="Variation")
@@ -203,7 +206,6 @@ class I3D_IO_PT_material_shader(Panel):
         header.label(text="Shader Parameters")
         if panel:
             column = panel.column(align=True)
-            column.use_property_split = False
             parameters = i3d_attributes.shader_parameters
             for parameter in parameters:
                 match parameter.type:
