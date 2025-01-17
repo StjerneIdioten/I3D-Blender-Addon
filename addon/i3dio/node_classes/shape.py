@@ -131,7 +131,8 @@ class EvaluatedMesh:
         # Calculates triangles from mesh polygons
         self.mesh.calc_loop_triangles()
         # Recalculates normals after the scaling has messed with them
-        self.mesh.calc_normals_split()
+        if bpy.app.version < (4, 1, 0):
+            self.mesh.calc_normals_split()
 
     # On hold for the moment, it seems to be triggered at random times in the middle of an export which messes with
     # everything. Further investigation is needed.
@@ -265,7 +266,7 @@ class IndexedTriangleSet(Node):
                 self.triangles[-1].append(vertex_index)
             subset.number_of_indices += 3
         self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
-        return (subset.number_of_vertices, subset.number_of_indices)
+        return subset.first_vertex + subset.number_of_vertices, subset.first_index + subset.number_of_indices
 
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh
