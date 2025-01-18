@@ -17,17 +17,16 @@ from enum import Enum
 from bpy.app.handlers import (persistent, load_post)
 from .. import __package__ as base_package
 from collections import namedtuple
-import idprop
 
 classes = []
 
 # A module value to represent what the field shows when a shader is not selected
-SHADER_NO_VARIATIONS = 'None'
+SHADER_NO_VARIATION = 'None'
 SHADER_PARAMETER_MAX_DECIMALS = 3  # 0-6 per blender properties documentation
-CUSTOM_SHADER_DEFAULT = 'NO_SHADER'
+SHADER_DEFAULT = 'NO_SHADER'
 
 SHADERS = {}
-SHADER_ENUM_ITEMS_DEFAULT = (f'{CUSTOM_SHADER_DEFAULT}', 'No Shader', 'No Shader Selected')
+SHADER_ENUM_ITEMS_DEFAULT = (f'{SHADER_DEFAULT}', 'No Shader', 'No Shader Selected')
 SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
 
 ShaderMetadata = namedtuple('Shader', ['path', 'parameters', 'textures', 'vertex_attributes', 'variations'])
@@ -54,9 +53,9 @@ class ShaderManager:
     def update_shader(self, shader_name):
         self.clear_shader_data(clear_all=True)
         self.attributes.shader_name = shader_name
-        self.attributes.shader_variations.add().name = SHADER_NO_VARIATIONS
-        self.attributes.shader_variation_name = SHADER_NO_VARIATIONS
-        if shader_name != CUSTOM_SHADER_DEFAULT:
+        self.attributes.shader_variations.add().name = SHADER_NO_VARIATION
+        self.attributes.shader_variation_name = SHADER_NO_VARIATION
+        if shader_name != SHADER_DEFAULT:
             # Add all variations
             for variation in SHADERS[shader_name].variations:
                 self.attributes.shader_variations.add().name = variation
@@ -69,13 +68,13 @@ class ShaderManager:
 
     def update_variation(self, shader_name, shader_variation_name):
         self.clear_shader_data()
-        if shader_name == CUSTOM_SHADER_DEFAULT:
+        if shader_name == SHADER_DEFAULT:
             return
 
         shader = SHADERS[shader_name]
 
         # Add base parameters and textures when no variation is selected
-        if shader_variation_name == SHADER_NO_VARIATIONS or shader_variation_name == '':
+        if shader_variation_name == SHADER_NO_VARIATION or shader_variation_name == '':
             for param in shader.parameters.get('base', []):
                 self.add_shader_parameter(param)
             for texture in shader.textures.get('base', []):
@@ -200,13 +199,13 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     # Variations
     def variation_setter(self, new_name):
-        existing_variation = self.get('shader_variation_name', SHADER_NO_VARIATIONS)
+        existing_variation = self.get('shader_variation_name', SHADER_NO_VARIATION)
         if existing_variation != new_name:
             self['shader_variation_name'] = new_name
             update_variation(self.id_data, self['shader_name'], new_name)
 
     def variation_getter(self):
-        return self.get('shader_variation_name', SHADER_NO_VARIATIONS)
+        return self.get('shader_variation_name', SHADER_NO_VARIATION)
 
     shader_variation_name: StringProperty(
         name="Selected Variation",
@@ -439,21 +438,21 @@ def handle_old_shader_format(file):
                 attr.shader = old_shader_path.stem
             else:
                 print(f"Shader not found: {old_shader_path.stem}")
-                attr.shader = CUSTOM_SHADER_DEFAULT
+                attr.shader = SHADER_DEFAULT
                 continue  # Shader is not found, no reason to run through variations etc when no shader is set
 
             if old_variations is not None and old_variation is not None:
                 if 0 <= old_variation < len(old_variations):
                     # Old variation was enum, we need to use the index to get the name through its stored variations
-                    old_variation_name = old_variations[old_variation].get('name', SHADER_NO_VARIATIONS)
+                    old_variation_name = old_variations[old_variation].get('name', SHADER_NO_VARIATION)
                     print(f"Setting variation to, {old_variation_name}")
                     attr.shader_variation_name = old_variation_name
                 else:
                     print(f"Invalid old variation index: {old_variation}, falling back to default.")
-                    attr.shader_variation_name = SHADER_NO_VARIATIONS
+                    attr.shader_variation_name = SHADER_NO_VARIATION
             else:
                 print(f"No variations found for {mat.name}, falling back to default.")
-                attr.shader_variation_name = SHADER_NO_VARIATIONS
+                attr.shader_variation_name = SHADER_NO_VARIATION
 
             if old_parameters is not None:
                 for old_param in old_parameters:
