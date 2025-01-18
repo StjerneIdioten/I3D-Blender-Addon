@@ -28,7 +28,7 @@ SHADERS = {}
 SHADER_ENUM_ITEMS_DEFAULT = (f'{custom_shader_default}', 'No Shader', 'No Shader Selected')
 SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
 
-ShaderMetadata = namedtuple('Shader', ['path', 'parameters', 'textures', 'variations'])
+ShaderMetadata = namedtuple('Shader', ['path', 'parameters', 'textures', 'vertex_attributes', 'variations'])
 
 
 class ShaderParameterType(Enum):
@@ -45,6 +45,7 @@ class ShaderManager:
     def clear_shader_data(self, clear_all=False):
         self.attributes.shader_parameters.clear()
         self.attributes.shader_textures.clear()
+        self.attributes.required_vertex_attributes.clear()
         if clear_all:
             self.attributes.shader_variations.clear()
 
@@ -77,6 +78,7 @@ class ShaderManager:
                 self.add_shader_parameter(param)
             for texture in shader.textures.get('base', []):
                 self.add_shader_texture(texture)
+            self.set_vertex_attributes(shader, groups=['base'])
             return
 
         # Add variation-specific parameters and textures
@@ -86,6 +88,7 @@ class ShaderManager:
                 self.add_shader_parameter(param)
             for texture in shader.textures.get(group, []):
                 self.add_shader_texture(texture)
+        self.set_vertex_attributes(shader, groups=variation)
 
     def add_shader_parameter(self, parameter):
         new_param = self.attributes.shader_parameters.add()
@@ -107,10 +110,22 @@ class ShaderManager:
         new_texture.name = texture['name']
         new_texture.default_source = texture.get('default_file', '')
 
+    def set_vertex_attributes(self, shader, groups):
+        required_attributes = {name for name, group in shader.vertex_attributes.items() if group in groups}
+        self.attributes.required_vertex_attributes.clear()
+        for name in required_attributes:
+            attr = self.attributes.required_vertex_attributes.add()
+            attr.name = name
+
 
 def register(cls):
     classes.append(cls)
     return cls
+
+
+@register
+class I3DRequiredVertexAttribute(bpy.types.PropertyGroup):
+    name: StringProperty()
 
 
 @register
@@ -196,6 +211,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     shader_parameters: CollectionProperty(type=I3DShaderParameter)
     shader_textures: CollectionProperty(type=I3DShaderTexture)
+    required_vertex_attributes: CollectionProperty(type=I3DRequiredVertexAttribute)
 
     alpha_blending: BoolProperty(
         name='Alpha Blending',
@@ -248,6 +264,14 @@ class I3D_IO_PT_material_shader(Panel):
         col = row.column(align=False)
         col.prop(i3d_attributes, 'shader', text="Shader")
         col.prop_search(i3d_attributes, 'variation_name', i3d_attributes, 'shader_variations', text="Variation")
+
+        if i3d_attributes.required_vertex_attributes:
+            column = layout.column(align=True)
+            column.separator(factor=2.5, type='LINE')
+            column.label(text="Required Vertex Attributes:")
+            for attr in i3d_attributes.required_vertex_attributes:
+                column.label(text=attr.name, icon='DOT')
+            column.separator(factor=2.5, type='LINE')
 
         if i3d_attributes.shader_parameters:
             draw_shader_parameters(layout, i3d_attributes)
@@ -334,7 +358,7 @@ def load_shader(path: Path):
     tree = xml_i3d.parse(path)
     if tree is None:
         return None
-    shader = ShaderMetadata(path, {}, {}, {})
+    shader = ShaderMetadata(path, {}, {}, {}, {})
     root = tree.getroot()
     parameters = root.find('Parameters')
     if parameters is not None:
@@ -348,6 +372,11 @@ def load_shader(path: Path):
             if t.tag == 'Texture' and t.attrib.get('defaultColorProfile') is not None:
                 group = t.attrib.get('group', 'base')  # Default to "base" if no group is specified
                 shader.textures.setdefault(group, []).append(texture_element_as_dict(t))
+    vertex_attributes = root.find('VertexAttributes')
+    if vertex_attributes is not None:
+        for attr in vertex_attributes:
+            if attr.tag == 'VertexAttribute':
+                shader.vertex_attributes[attr.attrib['name']] = attr.attrib.get('group', 'base')
     variations = root.find('Variations')
     if variations is not None:
         for v in variations:
