@@ -12,6 +12,7 @@ from bpy.props import (
 
 from .. import xml_i3d
 from pathlib import Path
+from enum import Enum
 
 from bpy.app.handlers import (persistent, load_post)
 from .. import __package__ as base_package
@@ -20,15 +21,80 @@ from collections import namedtuple
 classes = []
 
 # A module value to represent what the field shows when a shader is not selected
-shader_no_variations = 'NO_VARIATIONS'
+shader_no_variations = 'None'
 shader_parameter_max_decimals = 3  # 0-6 per blender properties documentation
-custom_shader_default = ''
+custom_shader_default = 'NO_SHADER'
 SHADERS = {}
-SHADER_ENUM_ITEMS_DEFAULT = ('NO_SHADER', 'no shader', 'No Shader Selected')
+SHADER_ENUM_ITEMS_DEFAULT = (f'{custom_shader_default}', 'No Shader', 'No Shader Selected')
 SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
-VARIATIONS_ENUM_ITEMS_DEFAULT = ('NO_VARIATIONS', 'no variation', 'No Variation Selected')
 
 ShaderMetadata = namedtuple('Shader', ['path', 'parameters', 'textures', 'variations'])
+
+
+class ShaderParameterType(Enum):
+    FLOAT = 'float'
+    FLOAT2 = 'float2'
+    FLOAT3 = 'float3'
+    FLOAT4 = 'float4'
+
+
+class ShaderManager:
+    def __init__(self, material):
+        self.attributes = material.i3d_attributes
+
+    def clear_shader_data(self, clear_all=False):
+        self.attributes.shader_parameters.clear()
+        self.attributes.shader_textures.clear()
+        if clear_all:
+            self.attributes.shader_variations.clear()
+
+    def update_shader(self, shader_name):
+        self.clear_shader_data(clear_all=True)
+        self.attributes.shader_name = shader_name
+        self.attributes.shader_variations.add().name = shader_no_variations
+        self.attributes.variation_name = shader_no_variations
+        if shader_name != custom_shader_default:
+            # Add all variations
+            for variation in SHADERS[shader_name].variations:
+                self.attributes.shader_variations.add().name = variation
+
+            # Always include base parameters
+            for param in SHADERS[shader_name].parameters.get('base', []):
+                self.add_shader_parameter(param)
+
+    def update_variation(self, shader_name, variation_name):
+        self.clear_shader_data()
+        if shader_name == custom_shader_default:
+            return
+
+        shader = SHADERS[shader_name]
+
+        # Add base parameters when no variation is selected
+        if variation_name == shader_no_variations or variation_name == '':
+            for param in shader.parameters.get('base', []):
+                self.add_shader_parameter(param)
+            return
+
+        # Add variation-specific parameters
+        variation = shader.variations.get(variation_name, [])
+        for group in variation:
+            for param in shader.parameters.get(group, []):
+                self.add_shader_parameter(param)
+
+    def add_shader_parameter(self, parameter):
+        new_param = self.attributes.shader_parameters.add()
+        new_param.name = parameter['name']
+        new_param.type = parameter['type']
+        data = tuple(map(float, parameter['default_value']))
+        match parameter['type']:
+            case ShaderParameterType.FLOAT.value:
+                new_param.data_float_1 = data[0]
+            case ShaderParameterType.FLOAT2.value:
+                new_param.data_float_2 = data
+            case ShaderParameterType.FLOAT3.value:
+                new_param.data_float_3 = data
+            case ShaderParameterType.FLOAT4.value:
+                new_param.data_float_4 = data
 
 
 def register(cls):
@@ -63,43 +129,13 @@ class I3DShaderVariation(bpy.types.PropertyGroup):
 
 
 def update_shader(shader_name):
-    global SHADERS, SHADERS_ENUM_ITEMS
-    attributes = bpy.context.material.i3d_attributes
-    attributes.shader_parameters.clear()
-    attributes.shader_textures.clear()
-    attributes.shader_name = shader_name
-    attributes.shader_variations.clear()
-    attributes.shader_variations.add().name = shader_no_variations
-    attributes.variation_name = shader_no_variations
-    for variation in SHADERS[shader_name].variations:
-        attributes.shader_variations.add().name = variation
+    manager = ShaderManager(bpy.context.material)
+    manager.update_shader(shader_name)
 
 
 def update_variation(shader_name, variation_name):
-    global SHADERS
-    attributes = bpy.context.material.i3d_attributes
-    attributes.shader_parameters.clear()
-    attributes.shader_textures.clear()
-    shader = SHADERS[shader_name]
-    variation = shader.variations[variation_name]
-    print(f"Updating variation {variation_name} for shader {shader_name}, with {len(variation)} groups")
-    for group in variation:
-        print(f"Group: {group}")
-        for parameter in shader.parameters.get(group, []):
-            new_parameter = attributes.shader_parameters.add()
-            new_parameter.name = parameter['name']
-            new_parameter.type = parameter['type']
-            data = tuple(map(float, parameter['default_value']))
-            match parameter['type']:
-                case 'float':
-                    new_parameter.data_float_1 = data
-                case 'float2':
-                    new_parameter.data_float_2 = data
-                case 'float3':
-                    new_parameter.data_float_3 = data
-                case 'float4':
-                    new_parameter.data_float_4 = data
-            print(f"Parameter: {parameter['name']}, {parameter['type']}, {parameter['default_value']}")
+    manager = ShaderManager(bpy.context.material)
+    manager.update_variation(shader_name, variation_name)
 
 
 @register
@@ -112,7 +148,8 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         if existing_shader != selected_index:
             self['shader'] = selected_index
             if existing_shader is not None:
-                update_shader(self.shader)
+                shader_name = SHADERS_ENUM_ITEMS[selected_index][0]
+                update_shader(shader_name)
 
     def shader_getter(self):
         return self.get('shader', 0)
@@ -135,8 +172,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     def variation_setter(self, new_name):
         if self['variation_name'] != new_name:
             self['variation_name'] = new_name
-            if new_name != shader_no_variations:
-                update_variation(self['shader_name'], new_name)
+            update_variation(self['shader_name'], new_name)
 
     def variation_getter(self):
         return self.get('variation_name', shader_no_variations)
@@ -202,22 +238,8 @@ class I3D_IO_PT_material_shader(Panel):
         col.prop(i3d_attributes, 'shader', text="Shader")
         col.prop_search(i3d_attributes, 'variation_name', i3d_attributes, 'shader_variations', text="Variation")
 
-        header, panel = layout.panel('shader_parameters', default_closed=False)
-        header.label(text="Shader Parameters")
-        if panel:
-            column = panel.column(align=True)
-            parameters = i3d_attributes.shader_parameters
-            for parameter in parameters:
-                match parameter.type:
-                    case 'float':
-                        property_type = 'data_float_1'
-                    case 'float2':
-                        property_type = 'data_float_2'
-                    case 'float3':
-                        property_type = 'data_float_3'
-                    case _:
-                        property_type = 'data_float_4'
-                column.row(align=True).prop(parameter, property_type, text=parameter.name)
+        if i3d_attributes.shader_parameters:
+            draw_shader_parameters(layout, i3d_attributes)
 
         """ column.separator()
         textures = i3d_attributes.shader_textures
@@ -225,20 +247,34 @@ class I3D_IO_PT_material_shader(Panel):
             column.row(align=True).prop(texture, 'source', text=texture.name) """
 
 
+def draw_shader_parameters(layout: bpy.types.UILayout, i3d_attributes) -> None:
+    header, panel = layout.panel('shader_parameters', default_closed=False)
+    header.label(text="Shader Parameters")
+    if panel:
+        column = panel.column(align=True)
+        parameters = i3d_attributes.shader_parameters
+        for parameter in parameters:
+            match parameter.type:
+                case 'float':
+                    property_type = 'data_float_1'
+                case 'float2':
+                    property_type = 'data_float_2'
+                case 'float3':
+                    property_type = 'data_float_3'
+                case _:
+                    property_type = 'data_float_4'
+            column.row(align=True).prop(parameter, property_type, text=parameter.name)
+
+
 def parameter_element_as_dict(parameter):
     parameter_list = []
 
-    match parameter.attrib['type']:
-        case 'float' | 'float1':
-            type_length = 1
-        case 'float2':
-            type_length = 2
-        case 'float3':
-            type_length = 3
-        case 'float4':
-            type_length = 4
-        case _:
-            print(f"Shader Parameter type is unknown! {parameter.attrib['type']}")
+    try:
+        param_type = ShaderParameterType(parameter.attrib['type'])
+        type_length = int(param_type.value[-1]) if param_type != ShaderParameterType.FLOAT else 1
+    except ValueError:
+        print(f"Shader Parameter type is unknown! {parameter.attrib['type']}")
+        pass
 
     def parse_default(default):
         default_parsed = []
@@ -253,13 +289,17 @@ def parameter_element_as_dict(parameter):
 
     if 'arraySize' in parameter.attrib:
         for child in parameter:
-            parameter_list.append({'name': f"{parameter.attrib['name']}{child.attrib['index']}",
-                                   'type': parameter.attrib['type'],
-                                   'default_value': parse_default(child.text)})
+            parameter_list.append({
+                'name': f"{parameter.attrib['name']}{child.attrib['index']}",
+                'type': param_type.value,
+                'default_value': parse_default(child.text)
+            })
     else:
-        parameter_list.append({'name': parameter.attrib['name'],
-                               'type': parameter.attrib['type'],
-                               'default_value': parse_default(parameter.attrib.get('defaultValue'))})
+        parameter_list.append({
+            'name': parameter.attrib['name'],
+            'type': param_type.value,
+            'default_value': parse_default(parameter.attrib.get('defaultValue'))
+        })
 
     return parameter_list
 
@@ -281,7 +321,8 @@ def load_shader(path: Path):
     if parameters is not None:
         for p in parameters:
             if p.tag == 'Parameter':
-                shader.parameters.setdefault(p.attrib.get('group'), []).extend(parameter_element_as_dict(p))
+                group = p.attrib.get('group', 'base')  # Default to "base" if no group is specified
+                shader.parameters.setdefault(group, []).extend(parameter_element_as_dict(p))
     textures = root.find('Textures')
     if textures is not None:
         for t in textures:
