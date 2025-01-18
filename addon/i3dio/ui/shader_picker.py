@@ -154,13 +154,17 @@ class I3DShaderVariation(bpy.types.PropertyGroup):
     name: StringProperty(default='Unnamed Variation')
 
 
-def update_shader(shader_name):
-    manager = ShaderManager(bpy.context.material)
+def update_shader(material, shader_name):
+    if material is None:
+        raise ValueError("Material must be provided")
+    manager = ShaderManager(material)
     manager.update_shader(shader_name)
 
 
-def update_variation(shader_name, variation_name):
-    manager = ShaderManager(bpy.context.material)
+def update_variation(material, shader_name, variation_name):
+    if material is None:
+        raise ValueError("Material must be provided")
+    manager = ShaderManager(material)
     manager.update_variation(shader_name, variation_name)
 
 
@@ -170,12 +174,11 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         return SHADERS_ENUM_ITEMS
 
     def shader_setter(self, selected_index):
-        existing_shader = self.get('shader')
+        existing_shader = self.get('shader', 0)
         if existing_shader != selected_index:
             self['shader'] = selected_index
-            if existing_shader is not None:
-                shader_name = SHADERS_ENUM_ITEMS[selected_index][0]
-                update_shader(shader_name)
+            shader_name = SHADERS_ENUM_ITEMS[selected_index][0]
+            update_shader(self.id_data, shader_name)
 
     def shader_getter(self):
         return self.get('shader', 0)
@@ -196,9 +199,10 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     shader_variations: CollectionProperty(type=I3DShaderVariation)
 
     def variation_setter(self, new_name):
-        if self['variation_name'] != new_name:
+        existing_variation = self.get('variation_name', shader_no_variations)
+        if existing_variation != new_name:
             self['variation_name'] = new_name
-            update_variation(self['shader_name'], new_name)
+            update_variation(self.id_data, self['shader_name'], new_name)
 
     def variation_getter(self):
         return self.get('variation_name', shader_no_variations)
