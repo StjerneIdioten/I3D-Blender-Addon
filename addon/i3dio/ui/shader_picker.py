@@ -58,9 +58,11 @@ class ShaderManager:
             for variation in SHADERS[shader_name].variations:
                 self.attributes.shader_variations.add().name = variation
 
-            # Always include base parameters
+            # Add base parameters and textures
             for param in SHADERS[shader_name].parameters.get('base', []):
                 self.add_shader_parameter(param)
+            for texture in SHADERS[shader_name].textures.get('base', []):
+                self.add_shader_texture(texture)
 
     def update_variation(self, shader_name, variation_name):
         self.clear_shader_data()
@@ -69,17 +71,21 @@ class ShaderManager:
 
         shader = SHADERS[shader_name]
 
-        # Add base parameters when no variation is selected
+        # Add base parameters and textures when no variation is selected
         if variation_name == shader_no_variations or variation_name == '':
             for param in shader.parameters.get('base', []):
                 self.add_shader_parameter(param)
+            for texture in shader.textures.get('base', []):
+                self.add_shader_texture(texture)
             return
 
-        # Add variation-specific parameters
+        # Add variation-specific parameters and textures
         variation = shader.variations.get(variation_name, [])
         for group in variation:
             for param in shader.parameters.get(group, []):
                 self.add_shader_parameter(param)
+            for texture in shader.textures.get(group, []):
+                self.add_shader_texture(texture)
 
     def add_shader_parameter(self, parameter):
         new_param = self.attributes.shader_parameters.add()
@@ -95,6 +101,11 @@ class ShaderManager:
                 new_param.data_float_3 = data
             case ShaderParameterType.FLOAT4.value:
                 new_param.data_float_4 = data
+
+    def add_shader_texture(self, texture):
+        new_texture = self.attributes.shader_textures.add()
+        new_texture.name = texture['name']
+        new_texture.default_source = texture.get('default_file', '')
 
 
 def register(cls):
@@ -240,11 +251,8 @@ class I3D_IO_PT_material_shader(Panel):
 
         if i3d_attributes.shader_parameters:
             draw_shader_parameters(layout, i3d_attributes)
-
-        """ column.separator()
-        textures = i3d_attributes.shader_textures
-        for texture in textures:
-            column.row(align=True).prop(texture, 'source', text=texture.name) """
+        if i3d_attributes.shader_textures:
+            draw_shader_textures(layout, i3d_attributes)
 
 
 def draw_shader_parameters(layout: bpy.types.UILayout, i3d_attributes) -> None:
@@ -264,6 +272,17 @@ def draw_shader_parameters(layout: bpy.types.UILayout, i3d_attributes) -> None:
                 case _:
                     property_type = 'data_float_4'
             column.row(align=True).prop(parameter, property_type, text=parameter.name)
+
+
+def draw_shader_textures(layout: bpy.types.UILayout, i3d_attributes) -> None:
+    header, panel = layout.panel('shader_textures', default_closed=False)
+    header.label(text="Shader Textures")
+    if panel:
+        column = panel.column(align=True)
+        textures = i3d_attributes.shader_textures
+        for texture in textures:
+            placeholder = texture.default_source if texture.default_source else 'Texture not assigned'
+            column.row(align=True).prop(texture, 'source', text=texture.name, placeholder=placeholder)
 
 
 def parameter_element_as_dict(parameter):
@@ -327,7 +346,8 @@ def load_shader(path: Path):
     if textures is not None:
         for t in textures:
             if t.tag == 'Texture' and t.attrib.get('defaultColorProfile') is not None:
-                shader.textures.setdefault(t.attrib.get('group'), []).extend(texture_element_as_dict(t))
+                group = t.attrib.get('group', 'base')  # Default to "base" if no group is specified
+                shader.textures.setdefault(group, []).append(texture_element_as_dict(t))
     variations = root.find('Variations')
     if variations is not None:
         for v in variations:
