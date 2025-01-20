@@ -29,11 +29,13 @@ class MergeChildrenRoot(ShapeNode):
 
     def add_children_meshes(self, empty_object: bpy.types.Object):
         """
-        Collect and evaluate all child meshes of the empty object (mergeChildren root).
+        Merges all child meshes of `empty_object`. Each *top-level child* (and its descendants)
+        is assigned the same normalized `generic_value`.
 
-        Each child mesh is assigned a normalized `generic_value`, which is used
-        in shaders for animations or visibility controls. Transforms can be
-        baked into the mesh or preserved based on the `apply_transforms` setting.
+        If `apply_transforms` is true, local transforms are baked into the root’s transform.
+        Otherwise, each mesh preserves its own local transform.
+
+        :param empty_object: The root object containing child meshes.
         """
         apply_child_transforms = empty_object.i3d_merge_children.apply_transforms
         root_world_matrix = empty_object.matrix_world
@@ -44,20 +46,33 @@ class MergeChildrenRoot(ShapeNode):
             f"Interpolation steps: {interpolation_steps}."
         )
 
-        child_meshes = (child for child in empty_object.children if child.type == 'MESH')
+        def process_child_subtree(obj: bpy.types.Object, g_value: float):
+            """
+            Recursively process `obj` and its descendants, assigning `g_value` to every mesh in this branch.
+            """
+            # Use root_matrix to bake transforms into the mesh, or preserve the child's local transform.
+            reference_frame = root_world_matrix if apply_child_transforms else obj.matrix_world
+
+            if obj.type == 'MESH':
+                self.logger.debug(f"Processing mesh: '{obj.name}', g_value: {g_value}")
+                self.i3d.shapes[self.shape_id].append_from_evaluated_mesh_generic(
+                    EvaluatedMesh(self.i3d, obj, reference_frame=reference_frame),
+                    g_value
+                )
+
+            for child in obj.children:
+                process_child_subtree(child, g_value)
 
         g_value_index = 0
-        for child in child_meshes:
+        for child in empty_object.children:
+            # Any object can be processed here.
+            # Non-mesh objects act as "g_value" increments, similar to interpolation steps.
+
+            # Generic value for this child and its descendants.
             generic_value = g_value_index / MERGE_CHILDREN_MAX_INDEX
-            self.logger.debug(f"Processing child: '{child.name}', g_value: {generic_value}")
-
-            # Use root_matrix to bake transforms into the mesh, or preserve the child's local transform.
-            reference_frame = root_world_matrix if apply_child_transforms else child.matrix_world
-
-            self.i3d.shapes[self.shape_id].append_from_evaluated_mesh_generic(
-                EvaluatedMesh(self.i3d, child, reference_frame=reference_frame), generic_value
-            )
-
+            # Process the child and its descendants.
+            process_child_subtree(child, generic_value)
+            # Increment the g_value index for the next child
             g_value_index += interpolation_steps
 
     def populate_xml_element(self):

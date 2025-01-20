@@ -270,8 +270,9 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 logger.debug(f"[{obj.name}] is a 'MergeChildren' object")
                 if obj.children and next((child for child in obj.children if child.type == 'MESH'), None):
                     logger.debug(f"Processing MergeChildren for: {obj.name}")
-                    i3d.add_merge_children_node(obj, _parent)
-                    return  # Return to prevent children from being processed the "normal" way
+                    node = i3d.add_merge_children_node(obj, _parent)
+                    if node is not None:
+                        return  # Return to prevent children from being processed the "normal" way
                 else:
                     logger.warning(f"Empty object {obj.name} has no children to merge. "
                                    "Exporting as a regular TransformGroup instead.")

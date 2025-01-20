@@ -95,13 +95,23 @@ class I3D:
         return node_to_return
 
     def add_merge_children_node(self, empty_object: bpy.types.Object,
-                            parent: Optional[SceneGraphNode] = None) -> SceneGraphNode:
-        self.logger.debug(f"Adding MergeChildrenRoot starting with: {empty_object.name}")
+                                parent: Optional[SceneGraphNode] = None) -> SceneGraphNode:
+        self.logger.debug(f"Adding MergeChildrenRoot: {empty_object.name}")
 
         materials_from_children = set()
-        for child in empty_object.children:
-            if child.type == 'MESH':
-                materials_from_children.update(child.data.materials)
+
+        def collect_materials_recursive(obj):
+            for child in obj.children:
+                if child.type == 'MESH':
+                    materials_from_children.update(child.data.materials)
+                collect_materials_recursive(child)
+
+        collect_materials_recursive(empty_object)
+
+        if not materials_from_children:
+            self.logger.warning(f"No materials found in children of {empty_object.name}. "
+                                f"MergeChildrenRoot will not be created.")
+            return None
 
         # Create a merged mesh object to act as a container for the children
         # This is necessary to utilize the ShapeNode class and include materials
