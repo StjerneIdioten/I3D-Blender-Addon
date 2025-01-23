@@ -463,6 +463,8 @@ class IndexedTriangleSet(Node):
                 self.subsets.append(SubSet())
                 self._write_attribute('count', len(self.subsets), 'subsets')
 
+                self._process_bounding_volume()
+
                 for subset in self.subsets:
                     xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
                 return
@@ -480,6 +482,13 @@ class IndexedTriangleSet(Node):
         # Subsets
         self._write_attribute('count', len(self.subsets), 'subsets')
 
+        self._process_bounding_volume()
+
+        # Write subsets
+        for subset in self.subsets:
+            xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
+
+    def _process_bounding_volume(self):
         bounding_volume_object = self.evaluated_mesh.mesh.i3d_attributes.bounding_volume_object
         if bounding_volume_object is not None:
             # Calculate the bounding volume center from the corners of the bounding box
@@ -498,10 +507,6 @@ class IndexedTriangleSet(Node):
             self._write_attribute(
                 "bvRadius", max(bounding_volume_object.dimensions) / 2
             )
-
-        # Write subsets
-        for subset in self.subsets:
-            xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
 
 
 class ControlVertex:

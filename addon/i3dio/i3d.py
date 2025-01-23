@@ -126,6 +126,16 @@ class I3D:
             dummy_mesh_object.parent = empty_object.parent
             dummy_mesh_object.matrix_parent_inverse = empty_object.matrix_world.inverted()
 
+        first_mesh_child = next(child for child in empty_object.children if child.type == 'MESH')
+
+        def copy_custom_properties(source, target):
+            for key in source.keys():
+                self.logger.debug(f"Copying custom property: {key}")
+                target[key] = source[key]
+
+        copy_custom_properties(first_mesh_child, dummy_mesh_object)
+        copy_custom_properties(first_mesh_child.data.i3d_attributes, dummy_mesh_data.i3d_attributes)
+
         # Initialize the root node with the dummy mesh object
         merge_children_root = self._add_node(MergeChildrenRoot, dummy_mesh_object, parent)
         # Add the children meshes to the root node
