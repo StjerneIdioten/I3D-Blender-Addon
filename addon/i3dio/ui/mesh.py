@@ -145,7 +145,7 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(mesh.i3d_attributes, "non_renderable")
         layout.prop(mesh.i3d_attributes, "distance_blending")
         layout.prop(mesh.i3d_attributes, "is_occluder")
-        layout.prop(mesh.i3d_attributes, "cpu_mesh")
+        layout.prop(mesh.i3d_attributes, "cpu_mesh", expand=True)
         layout.prop(mesh.i3d_attributes, "nav_mesh_mask")
         layout.prop(mesh.i3d_attributes, "decal_layer")
         layout.prop(mesh.i3d_attributes, 'fill_volume')
