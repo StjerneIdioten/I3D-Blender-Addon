@@ -336,9 +336,11 @@ def export_files(layout, operator):
     if body:
         body.use_property_split = False
         body.prop(operator, 'copy_files')
-        body.prop(operator, 'overwrite_files')
-        body.enabled = operator.copy_files
-        body.prop(operator, 'file_structure')
+        col = body.column()
+        col.enabled = operator.copy_files
+        col.prop(operator, 'overwrite_files')
+        col.alignment = 'RIGHT'
+        col.prop(operator, 'file_structure')
 
 
 def export_debug(layout, operator):
