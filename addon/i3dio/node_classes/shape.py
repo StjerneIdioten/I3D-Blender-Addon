@@ -52,6 +52,8 @@ class Vertex:
 
     def _make_hash_string(self):
         self._str = f"{self._subset_idx}{self._position}{self._normal}{self._vertex_color}"
+        if self._generic_value is not None:
+            self._str += f"{self._generic_value}"
 
         for uv in self._uvs:
             self._str += f"{uv}"
@@ -233,6 +235,8 @@ class IndexedTriangleSet(Node):
                     generic_layer = mesh.attributes["generic"]
                     generic_vertex_index = mesh.loops[loop_index].vertex_index
                     generic_value = generic_layer.data[generic_vertex_index].value
+                elif self.is_generic:
+                    generic_value = self.generic_value
 
                 # Add uvs
                 uvs = []
@@ -435,11 +439,7 @@ class IndexedTriangleSet(Node):
             if self.is_merge_group:
                 vertex_attributes['bi'] = str(self.bind_index)
             elif self.is_generic:
-                if self.is_generic_from_geometry_nodes:
-                    generic_value = vertex.generic_value_for_xml()
-                else:
-                    generic_value = self.generic_value
-                vertex_attributes['g'] = str(generic_value)
+                vertex_attributes['g'] = str(vertex.generic_value_for_xml())
             elif self.bone_mapping is not None:
                 vertex_attributes['bw'] = vertex.blend_weights_for_xml()
                 vertex_attributes['bi'] = vertex.blend_ids_for_xml()
