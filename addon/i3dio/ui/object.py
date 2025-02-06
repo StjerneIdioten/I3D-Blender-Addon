@@ -1,12 +1,12 @@
 import bpy
 from bpy.types import (
+    Operator,
     Panel
 )
 from bpy.app.handlers import (
     persistent,
     load_post
 )
-
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -17,9 +17,9 @@ from bpy.props import (
     FloatVectorProperty,
     CollectionProperty,
 )
-
 from .helper_functions import i3d_property
 from ..xml_i3d import i3d_max
+from . import presets
 
 classes = []
 
@@ -543,6 +543,10 @@ class I3D_IO_PT_object_attributes(Panel):
     def poll(cls, context):
         return context.object is not None
 
+    def draw_header_preset(self, context):
+        if context.object.type == 'MESH':
+            I3D_IO_PT_Mesh_Presets.draw_panel_header(self.layout)
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = False
@@ -896,6 +900,36 @@ class I3D_IO_PT_mapping_bone_attributes(Panel):
         row.prop(bone.i3d_mapping, 'is_mapped')
         row = layout.row()
         row.prop(bone.i3d_mapping, 'mapping_name')
+
+PRESET_SUB_DIR = 'mesh'
+
+@register
+class I3D_IO_PT_Mesh_Presets(presets.PresetPanel, Panel):
+    bl_label = "Mesh Presets"
+    preset_subdir = presets.PresetSubdirPath(PRESET_SUB_DIR)
+    preset_operator = "script.execute_preset"
+    preset_add_operator = "i3dio.add_mesh_preset"
+
+
+@register
+class I3D_IO_OT_Mesh_Add_Preset(presets.AddPresetBase, Operator):
+    bl_idname = "i3dio.add_mesh_preset"
+    bl_label = "Add a Mesh Preset"
+    preset_menu = "I3D_IO_PT_Mesh_Presets"
+
+    preset_defines = [
+        "obj = bpy.context.object",
+        "obj_att = obj.i3d_attributes",
+        "mesh_att = obj.data.i3d_attributes"
+    ]
+
+    preset_values = [
+        "obj_att.visibility",
+        "obj_att.clip_distance",
+        "obj_att.rigid_body_type"
+    ]
+
+    preset_subdir = presets.PresetSubdirPath(PRESET_SUB_DIR)
 
 
 @persistent

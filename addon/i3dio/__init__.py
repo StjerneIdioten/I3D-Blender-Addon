@@ -41,7 +41,6 @@ bl_info = {
     "wiki_url": "https://stjerneidioten.github.io/I3D-Blender-Addon/"
 }
 
-
 def register():
     try:
         import lxml
@@ -72,6 +71,7 @@ def register():
     ui.udim_picker.register()
     ui.shader_picker.register()
     ui.exporter.register()
+    ui.presets.register()
     ui.object.register()
     ui.user_attributes.register()
     ui.mesh.register()
@@ -82,6 +82,7 @@ def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(ui.exporter.menu_func_export)
     ui.exporter.unregister()
     ui.user_attributes.unregister()
+    ui.presets.unregister()
     ui.object.unregister()
     ui.mesh.unregister()
     ui.light.unregister()
