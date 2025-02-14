@@ -306,20 +306,16 @@ def export_options(layout: bpy.types.UILayout, operator):
         col = body.column()
         col.enabled = bool(bpy.context.preferences.addons[base_package].preferences.i3d_converter_path)
         col.prop(operator, 'binarize_i3d')
-
         col = body.column()
         col.prop(operator, 'keep_collections_as_transformgroups')
         col.prop(operator, 'apply_modifiers')
         col.prop(operator, 'apply_unit_scale')
         col.prop(operator, 'alphabetic_uvs')
-
         body.separator(type='LINE')
         body.prop(operator, 'object_types_to_export', expand=True)
-
         body.separator(type='LINE')
         body.prop(operator, 'features_to_export', expand=True)
         body.prop(operator, 'collapse_armatures')
-
         body.separator(type='LINE')
         body.prop(operator, "axis_forward")
         body.prop(operator, "axis_up")
@@ -332,7 +328,7 @@ def export_files(layout, operator):
         body.prop(operator, 'copy_files')
         body.prop(operator, 'overwrite_files')
         body.enabled = operator.copy_files
-        body.row().prop(operator, 'file_structure', expand=True)
+        body.row().prop(operator, 'file_structure')
 
 
 def export_debug(layout, operator):
