@@ -114,7 +114,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     )
 
     object_types_to_export: EnumProperty(
-        name="Object Types to Export",
+        name="Object Types",
         description="Select which objects should be included in the exported",
         items=(
             ('EMPTY', "Empty", "Export empties"),
@@ -129,7 +129,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     )
 
     features_to_export: EnumProperty(
-        name="Features to Export",
+        name="Features",
         description="Select which features should be enabled for the export",
         items=(
             ('MERGE_GROUPS', "Merge Groups", "Export merge groups"),
