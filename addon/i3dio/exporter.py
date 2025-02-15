@@ -45,7 +45,6 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
     debugging.addon_console_handler.setLevel(logging.INFO)
     logger.info(f"Blender version is: {bpy.app.version_string}")
     logger.info(f"I3D Exporter version is: {sys.modules['i3dio'].__version__}")
-    logger.info(f"Exported using '{xml_i3d.xml_current_library}'")
     logger.info(f"Exporting to {filepath}")
 
     if operator.verbose_output:
