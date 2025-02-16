@@ -318,11 +318,14 @@ def parameter_element_as_dict(parameter):
     parameter_list = []
 
     try:
-        param_type = ShaderParameterType(parameter.attrib['type'])
-        type_length = int(param_type.value[-1]) if param_type != ShaderParameterType.FLOAT else 1
+        if (param_type := parameter.attrib['type']) in ['float', 'float1']:
+            param_type = ShaderParameterType.FLOAT
+        else:
+            param_type = ShaderParameterType(param_type)
+        type_length = int(param_type.value[-1]) if param_type.value[-1].isdigit() else 1
     except ValueError:
-        print(f"Shader Parameter type is unknown! {parameter.attrib['type']}")
-        pass
+        print(f"Shader Parameter type is unknown! {parameter.attrib.get('type', 'UNKNOWN')}")
+        return parameter_list
 
     def parse_default(default):
         default_parsed = []
@@ -353,9 +356,7 @@ def parameter_element_as_dict(parameter):
 
 
 def texture_element_as_dict(texture):
-    texture_dictionary = {'name': texture.attrib['name'],
-                          'default_file': texture.attrib.get('defaultFilename', '')
-                          }
+    texture_dictionary = {'name': texture.attrib['name'], 'default_file': texture.attrib.get('defaultFilename', '')}
     return texture_dictionary
 
 
