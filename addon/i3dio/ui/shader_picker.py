@@ -153,7 +153,7 @@ class I3DShaderTexture(bpy.types.PropertyGroup):
 
 @register
 class I3DShaderVariation(bpy.types.PropertyGroup):
-    name: StringProperty(default='Unnamed Variation')
+    name: StringProperty(default=SHADER_NO_VARIATION)
 
 
 def update_shader(material, shader_name):
@@ -205,6 +205,9 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
             update_variation(self.id_data, self['shader_name'], new_name)
 
     def variation_getter(self):
+        if len(self.shader_variations) == 0:
+            # Populate with default variation if collection is empty. e.g. when a new material is created
+            self.shader_variations.add().name = SHADER_NO_VARIATION
         return self.get('shader_variation_name', SHADER_NO_VARIATION)
 
     shader_variation_name: StringProperty(
