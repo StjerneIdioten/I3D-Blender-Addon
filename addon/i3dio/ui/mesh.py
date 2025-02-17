@@ -189,7 +189,7 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(mesh.i3d_attributes, "distance_blending")
         layout.prop(mesh.i3d_attributes, "is_occluder")
         layout.prop(mesh.i3d_attributes, "terrain_decal")
-        layout.prop(mesh.i3d_attributes, "cpu_mesh")
+        layout.prop(mesh.i3d_attributes, "cpu_mesh", expand=True)
         layout.prop(mesh.i3d_attributes, "double_sided")
         layout.prop(mesh.i3d_attributes, "material_holder")
         layout.prop(mesh.i3d_attributes, "nav_mesh_mask")

@@ -508,8 +508,11 @@ class I3D_IO_OT_set_split_type_preset(bpy.types.Operator):
                 f"Supports wood harvester: {'Yes' if support_harvester else 'No'}")
 
     def execute(self, context):
-        preset = SPLIT_TYPE_PRESETS.get(self.preset, {})
         i3d_attributes = context.object.i3d_attributes
+        if self.preset == "Default":
+            i3d_attributes.split_type = i3d_attributes.i3d_map['split_type']['default']
+            return {'FINISHED'}
+        preset = SPLIT_TYPE_PRESETS.get(self.preset, {})
         i3d_attributes.split_type = preset['split_type']
         return {'FINISHED'}
 
@@ -521,17 +524,12 @@ class I3D_IO_MT_split_type_presets(bpy.types.Menu):
 
     def draw(self, _context):
         layout = self.layout
-        row = layout.row(align=False)
-        col1 = row.column(align=True)
-        col2 = row.column(align=True)
-        presets = list(SPLIT_TYPE_PRESETS.keys())
-        middle = len(presets) // 2
+        grid = layout.grid_flow(columns=2, even_columns=True, even_rows=True)
+        for preset in list(SPLIT_TYPE_PRESETS.keys()):
+            grid.operator(I3D_IO_OT_set_split_type_preset.bl_idname, text=preset).preset = preset
 
-        for idx, preset in enumerate(presets):
-            if idx <= middle:
-                col1.operator(I3D_IO_OT_set_split_type_preset.bl_idname, text=preset).preset = preset
-            else:
-                col2.operator(I3D_IO_OT_set_split_type_preset.bl_idname, text=preset).preset = preset
+        layout.separator()
+        layout.operator(I3D_IO_OT_set_split_type_preset.bl_idname, text="Default").preset = "Default"
 
 
 @register
@@ -567,6 +565,7 @@ class I3D_IO_PT_object_attributes(Panel):
         i3d_property(layout, i3d_attributes, 'visibility', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
+        i3d_property(layout, i3d_attributes, 'object_mask', obj)
 
         layout.separator(type='LINE')
         box = layout.box()
