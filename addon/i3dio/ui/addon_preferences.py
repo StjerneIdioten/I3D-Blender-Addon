@@ -6,6 +6,8 @@ from bpy.types import AddonPreferences
 from bpy.props import (StringProperty, EnumProperty, BoolProperty)
 
 from .. import xml_i3d
+from .shader_picker import populate_shader_cache
+
 
 def xml_library_callback(scene, context):
     items = [
@@ -26,13 +28,18 @@ def xml_library_changed(self, context):
     xml_i3d.xml_current_library = self.xml_library
 
 
+def update_data_path(_self, _context):
+    populate_shader_cache()
+
+
 class I3D_IO_AddonPreferences(AddonPreferences):
     bl_idname = 'i3dio'
 
     fs_data_path: StringProperty(
         name="FS Data Folder",
         subtype='DIR_PATH',
-        default=""
+        default="",
+        update=update_data_path
     )
 
     xml_library: EnumProperty(
