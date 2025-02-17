@@ -326,9 +326,10 @@ def export_files(layout, operator):
     header.label(text="File Options")
     if body:
         body.prop(operator, 'copy_files')
-        body.prop(operator, 'overwrite_files')
-        body.enabled = operator.copy_files
-        body.row().prop(operator, 'file_structure')
+        col = body.column()
+        col.enabled = operator.copy_files
+        col.prop(operator, 'overwrite_files')
+        col.prop(operator, 'file_structure')
 
 
 def export_debug(layout, operator):
