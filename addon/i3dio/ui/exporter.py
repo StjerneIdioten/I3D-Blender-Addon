@@ -53,6 +53,13 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=''
     )
 
+    shader_extra_paths: CollectionProperty(
+        type=I3DShaderSearchPath,
+        name="Extra Shader Search Paths",
+        description=("A list of extra paths for the exporter to search for valid shader files. "
+                     "The paths will be stored relative to the .blend file in an attempt to keep them portable.")
+    )
+
 
 @register
 @orientation_helper(axis_forward='-Z', axis_up='Y')
@@ -211,13 +218,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                     "contain an '<i3dMapping> somewhere in the file",
         subtype='FILE_PATH',
         default=''
-    )
-
-    shader_extra_paths: CollectionProperty(
-        type=I3DShaderSearchPath,
-        name="Extra Shader Search Paths",
-        description=("A list of extra paths for the exporter to search for valid shader files. "
-                     "The paths will be stored relative to the .blend file in an attempt to keep them portable.")
     )
 
     scene_key = "i3dio_export_settings"
