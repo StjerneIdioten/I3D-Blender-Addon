@@ -27,7 +27,7 @@ class MergeGroupRoot(ShapeNode):
 
     # Override default shape behaviour to use the merge group mesh name instead of the blender objects name
     def add_shape(self):
-        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.merge_group_name, True, tangent=self.tangent)
+        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.merge_group_name, True)
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def add_mergegroup_child(self, child: MergeGroupChild):
