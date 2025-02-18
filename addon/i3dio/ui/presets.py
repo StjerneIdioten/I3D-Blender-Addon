@@ -21,6 +21,18 @@ class AddPresetBase(BlenderAddPresetBase):
             import os
             os.remove(filepath)
 
+def PresetSubdirFromObjectType(object_type):
+    match object_type:
+        case 'EMPTY':
+            subdir = 'empty'
+        case 'LIGHT':
+            subdir = 'light'
+        case 'MESH':
+            subdir = 'mesh'
+        case _:
+            subdir = ''
+    return PresetSubdirPath(subdir)
+
 def PresetSubdirPath(subdir: str):
     return PurePath('i3dio') / subdir
 
