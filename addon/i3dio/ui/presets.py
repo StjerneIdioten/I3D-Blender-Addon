@@ -7,8 +7,12 @@ from .. import __file__ as base_file_path
 PRESETS_PATH = PurePath(base_file_path).parent
 
 class PresetPanel(BlenderPresetPanel):
-    # In case we need to add future common behaviour
-    pass
+    # Same fix as https://projects.blender.org/blender/blender/commit/4f15c247052b6db49b5226b6c473bdb7b2be6293 because python registered properties,
+    # don't trigger redraws
+    def __del__(self):
+        # Sometimes context.area is null when this destructor is called 
+        if bpy.context.area:
+            bpy.context.area.tag_redraw()
 
 class AddPresetBase(BlenderAddPresetBase):
     # A hack because `_is_path_readonly` only considers the builtin Blender path or extension paths as read-only and not addons
@@ -21,20 +25,8 @@ class AddPresetBase(BlenderAddPresetBase):
             import os
             os.remove(filepath)
 
-def PresetSubdirFromObjectType(object_type):
-    match object_type:
-        case 'EMPTY':
-            subdir = 'empty'
-        case 'LIGHT':
-            subdir = 'light'
-        case 'MESH':
-            subdir = 'mesh'
-        case _:
-            subdir = ''
-    return PresetSubdirPath(subdir)
-
-def PresetSubdirPath(subdir: str):
-    return PurePath('i3dio') / subdir
+def PresetSubdir():
+    return PurePath('i3dio')
 
 def register():
     bpy.utils.register_preset_path(PRESETS_PATH)

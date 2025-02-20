@@ -910,7 +910,16 @@ class I3D_IO_PT_Object_Presets(presets.PresetPanel, Panel):
 
     @property
     def preset_subdir(self):
-        return presets.PresetSubdirFromObjectType(bpy.context.object.type)
+        subdir = presets.PresetSubdir() / 'object'
+        match bpy.context.object.type:
+            case 'EMPTY':
+                return subdir / 'empty'
+            case 'MESH':
+                return subdir / 'mesh'
+            case 'LIGHT':
+                return subdir / 'light'
+            case _:
+                return subdir
 
 
 @register
