@@ -3,7 +3,7 @@ A lot of classes in this file is purely to have different classes for different 
 but it helps with debugging big trees and seeing the structure.
 """
 from __future__ import annotations
-from typing import (Union, Dict, List)
+from typing import (Dict, List)
 from collections import (ChainMap, namedtuple)
 import mathutils
 import bpy
@@ -89,15 +89,12 @@ class SkinnedMeshBoneNode(TransformGroupNode):
 
 
 class SkinnedMeshRootNode(TransformGroupNode):
-    def __init__(self, id_: int, armature_object: bpy.types.Armature,
-                 i3d: I3D, parent: Union[SceneGraphNode, None] = None):
+    def __init__(self, id_: int, armature_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode | None = None):
         # The skinBindID essentially, but mapped with the bone names for easy reference. An ordered dict is important
         # but dicts should be ordered going forwards in python
         self.bones: List[SkinnedMeshBoneNode] = list()
         self.bone_mapping: Dict[str, int] = {}
         self.armature_object = armature_object
-        # To determine if we just added the armature through a modifier lookup or knows its position in the scenegraph
-        self.is_located = False
 
         super().__init__(id_=id_, empty_object=armature_object, i3d=i3d, parent=parent)
 
@@ -201,18 +198,17 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
 class SkinnedMeshShapeNode(ShapeNode):
     def __init__(self, id_: int, skinned_mesh_object: bpy.types.Object, i3d: I3D,
-                 parent: [SceneGraphNode or None] = None):
-        self.armature_nodes = []
-        self.skinned_mesh_name = xml_i3d.skinned_mesh_prefix + skinned_mesh_object.data.name
-        for modifier in skinned_mesh_object.modifiers:
-            if modifier.type == 'ARMATURE':
-                self.armature_nodes.append(i3d.add_armature(modifier.object))
+                 parent: SceneGraphNode | None = None):
+        self.armature_nodes: list[SkinnedMeshRootNode] = [
+            i3d.add_armature_from_modifier(modifier.object)
+            for modifier in skinned_mesh_object.modifiers if modifier.type == 'ARMATURE'
+        ]
+        self.skinned_mesh_name = f"{xml_i3d.skinned_mesh_prefix}{skinned_mesh_object.data.name}"
         self.bone_mapping = ChainMap(*[armature.bone_mapping for armature in self.armature_nodes])
         super().__init__(id_=id_, shape_object=skinned_mesh_object, i3d=i3d, parent=parent)
 
     def add_shape(self):
-        # Use a ChainMap to easily combine multiple bone mappings and get around any problems with multiple bones
-        # named the same as a ChainMap just gets the bone from the first armature added
+        # Combine multiple bone mappings while ensuring unique bone names are handled correctly
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.skinned_mesh_name,
                                            bone_mapping=self.bone_mapping, tangent=self.tangent)
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
@@ -222,9 +218,9 @@ class SkinnedMeshShapeNode(ShapeNode):
         vertex_group_binding = self.i3d.shapes[self.shape_id].vertex_group_ids
         self.logger.debug(f"Skinned groups: {vertex_group_binding}")
 
-        skin_bind_id = ''
-        for vertex_group_id in sorted(vertex_group_binding, key=vertex_group_binding.get):
-            skin_bind_id += f"{self.bone_mapping[self.blender_object.vertex_groups[vertex_group_id].name]} "
-        skin_bind_id = skin_bind_id[:-1]
+        skin_bind_ids = " ".join(
+            str(self.bone_mapping[self.blender_object.vertex_groups[vertex_group_id].name])
+            for vertex_group_id in sorted(vertex_group_binding, key=vertex_group_binding.get)
+        )
 
-        self._write_attribute('skinBindNodeIds', skin_bind_id)
+        self._write_attribute('skinBindNodeIds', skin_bind_ids)

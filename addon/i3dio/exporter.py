@@ -264,7 +264,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                     node = i3d.add_shape_node(obj, _parent)
 
         elif obj.type == 'ARMATURE':
-            node = i3d.add_armature(obj, _parent, is_located=True)
+            node = i3d.add_armature_from_scene(obj, _parent)
         elif obj.type == 'EMPTY':
             node = i3d.add_transformgroup_node(obj, _parent)
             if obj.instance_collection is not None:
