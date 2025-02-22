@@ -21,7 +21,7 @@ AssignParentResult = namedtuple('AssignParentResult', ['parent', 'is_child_of', 
 class SkinnedMeshBoneNode(TransformGroupNode):
     def __init__(self, id_: int, bone_object: bpy.types.Bone, i3d: I3D,
                  parent: SkinnedMeshRootNode | SkinnedMeshBoneNode,
-                 armature_object: bpy.types.Object = None):
+                 armature_object: bpy.types.Object):
         self.is_child_of = False
         self.parent = parent
         self.armature_object = armature_object
@@ -211,8 +211,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
 
 class SkinnedMeshShapeNode(ShapeNode):
-    def __init__(self, id_: int, skinned_mesh_object: bpy.types.Object, i3d: I3D,
-                 parent: SceneGraphNode | None = None):
+    def __init__(self, id_: int, skinned_mesh_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode | None = None):
         self.armature_nodes: list[SkinnedMeshRootNode] = [
             i3d.add_armature_from_modifier(modifier.object)
             for modifier in skinned_mesh_object.modifiers if modifier.type == 'ARMATURE'

@@ -102,7 +102,7 @@ class I3D:
     def add_armature_from_modifier(self, armature_object: bpy.types.Object) -> SceneGraphNode:
         if armature_object.name not in self.skinned_meshes:
             # Register an armature discovered via a modifier. The armature node is created here,
-            # but it will be added to the scene graph later in the export process.
+            # but it will be added to the scene graph later in the export process and parented to the correct node.
             root_node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self, None)
             self.skinned_meshes[armature_object.name] = root_node
         return self.skinned_meshes[armature_object.name]
@@ -119,7 +119,7 @@ class I3D:
                 node.update_bone_parent(parent)
             self.skinned_meshes[armature_object.name] = node
         else:
-            # Armature was already registered (possibly through an armature modifier)
+            # Armature was already registered (through an armature modifier)
             node = self.skinned_meshes[armature_object.name]
             if not self.settings['collapse_armatures']:
                 if parent is not None:
