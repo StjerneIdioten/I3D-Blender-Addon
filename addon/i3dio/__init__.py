@@ -41,7 +41,6 @@ bl_info = {
     "wiki_url": "https://stjerneidioten.github.io/I3D-Blender-Addon/"
 }
 
-
 def register():
     try:
         import lxml
@@ -73,6 +72,7 @@ def register():
     ui.shader_picker.register()
     ui.exporter.register()
     ui.bit_mask_editor.register()
+    ui.presets.register()
     ui.object.register()
     ui.user_attributes.register()
     ui.mesh.register()
@@ -84,6 +84,7 @@ def unregister():
     ui.exporter.unregister()
     ui.user_attributes.unregister()
     ui.bit_mask_editor.unregister()
+    ui.presets.unregister()
     ui.object.unregister()
     ui.mesh.unregister()
     ui.light.unregister()
