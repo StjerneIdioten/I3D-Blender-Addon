@@ -214,7 +214,7 @@ class SkinnedMeshShapeNode(ShapeNode):
         # Use a ChainMap to easily combine multiple bone mappings and get around any problems with multiple bones
         # named the same as a ChainMap just gets the bone from the first armature added
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.skinned_mesh_name,
-                                           bone_mapping=self.bone_mapping, tangent=self.tangent)
+                                           bone_mapping=self.bone_mapping)
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):

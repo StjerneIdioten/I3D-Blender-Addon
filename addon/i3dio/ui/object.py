@@ -1,12 +1,12 @@
 import bpy
 from bpy.types import (
+    Operator,
     Panel
 )
 from bpy.app.handlers import (
     persistent,
     load_post
 )
-
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -17,9 +17,9 @@ from bpy.props import (
     FloatVectorProperty,
     CollectionProperty,
 )
-
 from .helper_functions import i3d_property
 from ..xml_i3d import i3d_max
+from . import (presets, mesh, light)
 
 classes = []
 
@@ -32,54 +32,54 @@ def register(cls):
 @register
 class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'locked_group': {'name': 'lockedgroup', 'default': False},
+        'locked_group': {'name': 'lockedgroup', 'default': False, 'preset_group': 'ALL'},
         'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
                                                                            'mapping': {True: False,
                                                                                        False: True}}},
-        'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
-        'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
-        'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
-        'rigid_body_type': {'default': 'none'},
-        'lod_distances': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0)},
-        'lod_blending': {'name': 'lodBlending', 'default': True},
-        'collision': {'name': 'collision', 'default': True},
-        'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
-        'compound': {'name': 'compound', 'default': False},
-        'trigger': {'name': 'trigger', 'default': False},
-        'restitution': {'name': 'restitution', 'default': 0.0},
-        'static_friction': {'name': 'staticFriction', 'default': 0.5},
-        'dynamic_friction': {'name': 'dynamicFriction', 'default': 0.5},
-        'linear_damping': {'name': 'linearDamping', 'default': 0.0},
-        'angular_damping': {'name': 'angularDamping', 'default': 0.01},
-        'density': {'name': 'density', 'default': 1.0},
-        'solver_iteration_count': {'name': 'solverIterationCount', 'default': 4},
-        'split_type': {'name': 'splitType', 'default': 0},
-        'split_uvs': {'name': 'splitUvs', 'default': (0.0, 0.0, 1.0, 1.0, 1.0)},
-        'use_parent': {'name': 'useParent', 'default': True},
-        'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0},
-        'minute_of_day_end': {'name': 'minuteOfDayEnd', 'default': 0},
-        'day_of_year_start': {'name': 'dayOfYearStart', 'default': 0},
-        'day_of_year_end': {'name': 'dayOfYearEnd', 'default': 0},
-        'weather_required_mask': {'name': 'weatherRequiredMask', 'default': '0', 'type': 'HEX'},
-        'weather_prevent_mask': {'name': 'weatherPreventMask', 'default': '0', 'type': 'HEX'},
-        'viewer_spaciality_required_mask': {'name': 'viewerSpacialityRequiredMask', 'default': '0', 'type': 'HEX'},
-        'viewer_spaciality_prevent_mask': {'name': 'viewerSpacialityPreventMask', 'default': '0', 'type': 'HEX'},
-        'render_invisible': {'name': 'renderInvisible', 'default': False},
-        'visible_shader_parameter': {'name': 'visibleShaderParameter', 'default': 1.0},
-        'joint': {'name': 'joint', 'default': False},
-        'projection': {'name': 'projection', 'default': False},
-        'projection_distance': {'name': 'projDistance', 'default': 0.01},
-        'projection_angle': {'name': 'projAngle', 'default': 0.01},
-        'x_axis_drive': {'name': 'xAxisDrive', 'default': False},
-        'y_axis_drive': {'name': 'yAxisDrive', 'default': False},
-        'z_axis_drive': {'name': 'zAxisDrive', 'default': False},
-        'drive_position': {'name': 'drivePos', 'default': False},
-        'drive_force_limit': {'name': 'driveForceLimit', 'default': 100000.0},
-        'drive_spring': {'name': 'driveSpring', 'default': 1.0},
-        'drive_damping': {'name': 'driveDamping', 'default': 0.01},
-        'breakable_joint': {'name': 'breakableJoint', 'default': False},
-        'joint_break_force': {'name': 'jointBreakForce', 'default': 0.0},
-        'joint_break_torque': {'name': 'jointBreakTorque', 'default': 0.0},
+        'clip_distance': {'name': 'clipDistance', 'default': 1000000.0, 'preset_group': 'ALL'},
+        'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0, 'preset_group': 'ALL'},
+        'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX', 'preset_group': 'ALL'},
+        'rigid_body_type': {'default': 'none', 'preset_group': 'MESH'},
+        'lod_distances': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0), 'preset_group': 'EMPTY'},
+        'lod_blending': {'name': 'lodBlending', 'default': True, 'preset_group': 'EMPTY'},
+        'collision': {'name': 'collision', 'default': True, 'preset_group': 'MESH'},
+        'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
+        'compound': {'name': 'compound', 'default': False, 'preset_group': 'MESH'},
+        'trigger': {'name': 'trigger', 'default': False, 'preset_group': 'MESH'},
+        'restitution': {'name': 'restitution', 'default': 0.0, 'preset_group': 'MESH'},
+        'static_friction': {'name': 'staticFriction', 'default': 0.5, 'preset_group': 'MESH'},
+        'dynamic_friction': {'name': 'dynamicFriction', 'default': 0.5, 'preset_group': 'MESH'},
+        'linear_damping': {'name': 'linearDamping', 'default': 0.0, 'preset_group': 'MESH'},
+        'angular_damping': {'name': 'angularDamping', 'default': 0.01, 'preset_group': 'MESH'},
+        'density': {'name': 'density', 'default': 1.0, 'preset_group': 'MESH'},
+        'solver_iteration_count': {'name': 'solverIterationCount', 'default': 4, 'preset_group': 'MESH'},
+        'split_type': {'name': 'splitType', 'default': 0, 'preset_group': 'MESH'},
+        'split_uvs': {'name': 'splitUvs', 'default': (0.0, 0.0, 1.0, 1.0, 1.0), 'preset_group': 'MESH'},
+        'use_parent': {'name': 'useParent', 'default': True, 'preset_group': 'EMPTY'},
+        'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0, 'preset_group': 'EMPTY'},
+        'minute_of_day_end': {'name': 'minuteOfDayEnd', 'default': 0, 'preset_group': 'EMPTY'},
+        'day_of_year_start': {'name': 'dayOfYearStart', 'default': 0, 'preset_group': 'EMPTY'},
+        'day_of_year_end': {'name': 'dayOfYearEnd', 'default': 0, 'preset_group': 'EMPTY'},
+        'weather_required_mask': {'name': 'weatherRequiredMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'weather_prevent_mask': {'name': 'weatherPreventMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'viewer_spaciality_required_mask': {'name': 'viewerSpacialityRequiredMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'viewer_spaciality_prevent_mask': {'name': 'viewerSpacialityPreventMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'render_invisible': {'name': 'renderInvisible', 'default': False, 'preset_group': 'EMPTY'},
+        'visible_shader_parameter': {'name': 'visibleShaderParameter', 'default': 1.0, 'preset_group': 'EMPTY'},
+        'joint': {'name': 'joint', 'default': False, 'preset_group': 'EMPTY'},
+        'projection': {'name': 'projection', 'default': False, 'preset_group': 'EMPTY'},
+        'projection_distance': {'name': 'projDistance', 'default': 0.01, 'preset_group': 'EMPTY'},
+        'projection_angle': {'name': 'projAngle', 'default': 0.01, 'preset_group': 'EMPTY'},
+        'x_axis_drive': {'name': 'xAxisDrive', 'default': False, 'preset_group': 'EMPTY'},
+        'y_axis_drive': {'name': 'yAxisDrive', 'default': False, 'preset_group': 'EMPTY'},
+        'z_axis_drive': {'name': 'zAxisDrive', 'default': False, 'preset_group': 'EMPTY'},
+        'drive_position': {'name': 'drivePos', 'default': False, 'preset_group': 'EMPTY'},
+        'drive_force_limit': {'name': 'driveForceLimit', 'default': 100000.0, 'preset_group': 'EMPTY'},
+        'drive_spring': {'name': 'driveSpring', 'default': 1.0, 'preset_group': 'EMPTY'},
+        'drive_damping': {'name': 'driveDamping', 'default': 0.01, 'preset_group': 'EMPTY'},
+        'breakable_joint': {'name': 'breakableJoint', 'default': False, 'preset_group': 'EMPTY'},
+        'joint_break_force': {'name': 'jointBreakForce', 'default': 0.0, 'preset_group': 'EMPTY'},
+        'joint_break_torque': {'name': 'jointBreakTorque', 'default': 0.0, 'preset_group': 'EMPTY'},
     }
 
     locked_group: BoolProperty(
@@ -446,6 +446,41 @@ class I3DMergeGroup(bpy.types.PropertyGroup):
 
 
 @register
+class I3DMergeChildren(bpy.types.PropertyGroup):
+    enabled: BoolProperty(
+        name="Enable Merge Children",
+        description=(
+            "Enable this object to act as the merge root for exporting its child objects. "
+            "During export, all child objects will be combined into a single merged object."
+        ),
+        default=False
+    )
+    apply_transforms: bpy.props.BoolProperty(
+        name="Apply Transforms",
+        description=(
+            "Bake location, rotation, and scale into each child mesh. When enabled, child meshes retain their "
+            "current position and orientation relative to the root (merge root object). "
+            "When disabled, child meshes will be transformed to align directly with the root object, "
+            "removing their individual offsets and placing them at the root's location."
+        ),
+        default=False
+    )
+    interpolation_steps: bpy.props.IntProperty(
+        name="Interpolation Steps",
+        description=(
+            "Number of additional interpolation steps inserted between merged child objects. "
+            "This is useful for creating smoother animations or transitions in shaders "
+            "that utilize array textures (e.g., for motion paths). "
+            "Make sure the corresponding texture accounts for the same number of steps to "
+            "avoid unexpected offsets in the animation or effect."
+        ),
+        default=1,
+        min=1,
+        max=10
+    )
+
+
+@register
 class I3DMappingData(bpy.types.PropertyGroup):
     is_mapped: BoolProperty(
         name="Add to mapping",
@@ -543,6 +578,10 @@ class I3D_IO_PT_object_attributes(Panel):
     def poll(cls, context):
         return context.object is not None
 
+    def draw_header_preset(self, context):
+        if context.object.type in ['EMPTY', 'LIGHT', 'MESH']:
+            I3D_IO_PT_Object_Presets.draw_panel_header(self.layout)
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = False
@@ -565,7 +604,9 @@ class I3D_IO_PT_object_attributes(Panel):
         i3d_property(layout, i3d_attributes, 'visibility', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
-        i3d_property(layout, i3d_attributes, 'object_mask', obj)
+        row = layout.row(align=True)
+        i3d_property(row, i3d_attributes, 'object_mask', obj)
+        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'object_mask'
 
         layout.separator(type='LINE')
         box = layout.box()
@@ -574,8 +615,9 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.separator(type='LINE')
 
         if obj.type == 'EMPTY':
-            draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_level_of_detail_attributes(layout, obj, i3d_attributes)
+            draw_merge_children_attributes(layout, obj.i3d_merge_children)
+            draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_joint_attributes(layout, i3d_attributes)
 
         elif obj.type == 'MESH':
@@ -612,7 +654,9 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
             i3d_attributes.property_unset('compound')
 
         panel.prop(i3d_attributes, 'collision')
-        panel.prop(i3d_attributes, 'collision_mask')
+        row = panel.row(align=True)
+        row.prop(i3d_attributes, 'collision_mask')
+        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'collision_mask'
         panel.prop(i3d_attributes, 'trigger')
         panel.prop(i3d_attributes, 'restitution')
         panel.prop(i3d_attributes, 'static_friction')
@@ -660,6 +704,9 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
         for prop in PROPS:
             row = panel.row()
             row.prop(i3d_attributes, prop)
+            if prop.endswith('_mask'):
+                row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = prop
+
             row.enabled = not use_parent
 
         if use_parent:
@@ -726,6 +773,16 @@ def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.C
             col.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
             col = row.column(align=True)
             col.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
+
+
+def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_children: bpy.types.PropertyGroup) -> None:
+    header, panel = layout.panel('i3d_merge_children_panel', default_closed=True)
+    header.use_property_split = False
+    header.prop(i3d_merge_children, 'enabled', text="Merge Children")
+    if panel:
+        panel.enabled = i3d_merge_children.enabled
+        panel.prop(i3d_merge_children, 'apply_transforms')
+        panel.prop(i3d_merge_children, 'interpolation_steps')
 
 
 @register
@@ -898,6 +955,45 @@ class I3D_IO_PT_mapping_bone_attributes(Panel):
         row.prop(bone.i3d_mapping, 'mapping_name')
 
 
+@register
+class I3D_IO_PT_Object_Presets(presets.PresetPanel, Panel):
+    bl_label = "Object Presets"
+    preset_operator = "script.execute_preset"
+    preset_add_operator = "i3dio.add_object_preset"
+
+    @property
+    def preset_subdir(self):
+        subdir = presets.PresetSubdir() / 'object'
+        match bpy.context.object.type:
+            case 'EMPTY':
+                return subdir / 'empty'
+            case 'MESH':
+                return subdir / 'mesh'
+            case 'LIGHT':
+                return subdir / 'light'
+            case _:
+                return subdir
+
+
+@register
+class I3D_IO_OT_Object_Add_Preset(presets.AddPresetBase, Operator):
+    bl_idname = "i3dio.add_object_preset"
+    bl_label = "Add an Object Preset"
+    preset_menu = "I3D_IO_PT_Object_Presets"
+
+    @property
+    def preset_values(self):
+        base_values = [f"bpy.context.object.i3d_attributes.{name}" for name, attributes in I3DNodeObjectAttributes.i3d_map.items() if attributes.get('preset_group', None) in ['ALL', bpy.context.object.type]]
+        match bpy.context.object.type:
+            case 'MESH':
+                base_values.extend([f"bpy.context.object.data.i3d_attributes.{name}" for name in mesh.I3DNodeShapeAttributes.i3d_map.keys()])
+            case 'LIGHT':
+                base_values.extend([f"bpy.context.object.data.i3d_attributes.{name}" for name in light.I3DNodeLightAttributes.i3d_map.keys()])
+        return base_values
+
+    preset_subdir = I3D_IO_PT_Object_Presets.preset_subdir
+
+
 @persistent
 def handle_old_lod_distances(dummy):
     for obj in bpy.data.objects:
@@ -942,6 +1038,7 @@ def register():
     bpy.types.EditBone.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.Object.i3d_reference = PointerProperty(type=I3DReferenceData)
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
+    bpy.types.Object.i3d_merge_children = PointerProperty(type=I3DMergeChildren)
     load_post.append(handle_old_merge_groups)
     load_post.append(handle_old_lod_distances)
     load_post.append(handle_old_reference_paths)
@@ -951,6 +1048,7 @@ def unregister():
     load_post.remove(handle_old_reference_paths)
     load_post.remove(handle_old_lod_distances)
     load_post.remove(handle_old_merge_groups)
+    del bpy.types.Object.i3d_merge_children
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_reference
     del bpy.types.EditBone.i3d_mapping

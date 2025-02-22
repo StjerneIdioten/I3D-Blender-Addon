@@ -45,7 +45,6 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
     debugging.addon_console_handler.setLevel(logging.INFO)
     logger.info(f"Blender version is: {bpy.app.version_string}")
     logger.info(f"I3D Exporter version is: {sys.modules['i3dio'].__version__}")
-    logger.info(f"Exported using '{xml_i3d.xml_current_library}'")
     logger.info(f"Exporting to {filepath}")
 
     if operator.verbose_output:
@@ -266,11 +265,22 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         elif obj.type == 'ARMATURE':
             node = i3d.add_armature(obj, _parent, is_located=True)
         elif obj.type == 'EMPTY':
+            if 'MERGE_CHILDREN' in i3d.settings['features_to_export'] and obj.i3d_merge_children.enabled:
+                logger.debug(f"[{obj.name}] is a 'MergeChildren' object")
+                if obj.children and next((child for child in obj.children if child.type == 'MESH'), None):
+                    logger.debug(f"Processing MergeChildren for: {obj.name}")
+                    node = i3d.add_merge_children_node(obj, _parent)
+                    if node is not None:
+                        return  # Return to prevent children from being processed the "normal" way
+                else:
+                    logger.warning(f"Empty object {obj.name} has no children to merge. "
+                                   "Exporting as a regular TransformGroup instead.")
+
             node = i3d.add_transformgroup_node(obj, _parent)
             if obj.instance_collection is not None:
                 logger.debug(f"[{obj.name}] is a collection instance and will be instanced into the 'Empty' object")
-                # This is a collection instance so the children needs to be fetched from the referenced collection and
-                # be 'instanced' as children of the 'Empty' object directly.
+                # This is a collection instance so the children needs to be fetched from the referenced
+                # collection and be 'instanced' as children of the 'Empty' object directly.
                 _process_collection_objects(i3d, obj.instance_collection, node)
                 return
         elif obj.type == 'LIGHT':

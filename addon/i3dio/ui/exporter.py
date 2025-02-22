@@ -23,6 +23,8 @@ from .. import (
     xml_i3d
 )
 
+from .. import __package__ as base_package
+
 
 classes = []
 
@@ -130,7 +132,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     )
 
     object_types_to_export: EnumProperty(
-        name="Object types",
+        name="Object Types",
         description="Select which objects should be included in the exported",
         items=(
             ('EMPTY', "Empty", "Export empties"),
@@ -151,10 +153,12 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             ('MERGE_GROUPS', "Merge Groups", "Export merge groups"),
             ('SKINNED_MESHES', "Skinned Meshes", "Bind meshes to the bones of an armature in i3d. If disabled, "
                                                  "the armature and bone structure will still be exported, "
-                                                 "but the meshes wont be bound to it")
+                                                 "but the meshes wont be bound to it"),
+            ('MERGE_CHILDREN', "Merge Children", "Merge the child objects of empties with Merge Children enabled "
+                                                 "into a single exported mesh")
         ),
         options={'ENUM_FLAG'},
-        default={'MERGE_GROUPS', 'SKINNED_MESHES'},
+        default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN'},
     )
 
     collapse_armatures: BoolProperty(
@@ -300,7 +304,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
 
         # Since it is single threaded, this warning wouldn't be sent before the exported starts exporting.
         # So it can't come before the export and it drowns if the export time comes after it.
-        if context.preferences.addons['i3dio'].preferences.fs_data_path == '':
+        if context.preferences.addons[base_package].preferences.fs_data_path == '':
             self.report({'WARNING'},
                         "FS Data folder path is not set, "
                         "see https://stjerneidioten.github.io/"
@@ -315,35 +319,24 @@ def export_main(layout, operator, is_file_browser):
     layout.prop(operator, 'object_sorting_prefix')
 
 
-def export_options(layout, operator):
+def export_options(layout: bpy.types.UILayout, operator):
     header, body = layout.panel("I3D_export_options", default_closed=False)
     header.label(text="Export Options")
     if body:
-        body.use_property_split = False
         col = body.column()
-        col.enabled = bool(bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path)
+        col.enabled = bool(bpy.context.preferences.addons[base_package].preferences.i3d_converter_path)
         col.prop(operator, 'binarize_i3d')
-
         col = body.column()
         col.prop(operator, 'keep_collections_as_transformgroups')
         col.prop(operator, 'apply_modifiers')
         col.prop(operator, 'apply_unit_scale')
         col.prop(operator, 'alphabetic_uvs')
-
-        box = body.box()
-        row = box.row()
-        row.label(text='Object types to export:')
-        column = box.column()
-        column.props_enum(operator, 'object_types_to_export')
-
-        box = body.box()
-        row = box.row()
-        row.label(text='Features to enable:')
-        column = box.column()
-        column.props_enum(operator, 'features_to_export')
-        row = box.row()
-        row.prop(operator, 'collapse_armatures')
-
+        body.separator(type='LINE')
+        body.prop(operator, 'object_types_to_export', expand=True)
+        body.separator(type='LINE')
+        body.prop(operator, 'features_to_export', expand=True)
+        body.prop(operator, 'collapse_armatures')
+        body.separator(type='LINE')
         body.prop(operator, "axis_forward")
         body.prop(operator, "axis_up")
 
@@ -352,18 +345,17 @@ def export_files(layout, operator):
     header, body = layout.panel("I3D_export_files", default_closed=False)
     header.label(text="File Options")
     if body:
-        body.use_property_split = False
         body.prop(operator, 'copy_files')
-        body.prop(operator, 'overwrite_files')
-        body.enabled = operator.copy_files
-        body.prop(operator, 'file_structure')
+        col = body.column()
+        col.enabled = operator.copy_files
+        col.prop(operator, 'overwrite_files')
+        col.prop(operator, 'file_structure')
 
 
 def export_debug(layout, operator):
     header, body = layout.panel("I3D_export_debug", default_closed=False)
     header.label(text="Debug Options")
     if body:
-        body.use_property_split = False
         body.prop(operator, 'verbose_output')
         body.prop(operator, 'log_to_file')
 
@@ -372,7 +364,6 @@ def export_i3d_mapping(layout, operator):
     header, body = layout.panel("I3D_export_i3d_mapping", default_closed=False)
     header.label(text="I3D Mapping Options")
     if body:
-        body.use_property_split = False
         body.prop(operator, 'i3d_mapping_file_path')
 
 

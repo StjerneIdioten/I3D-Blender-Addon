@@ -7,7 +7,7 @@ import logging
 import math
 import mathutils
 import bpy
-import os
+from pathlib import Path
 import re
 
 logger = logging.getLogger(__name__)
@@ -42,41 +42,40 @@ def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon: float = 0.
     return True
 
 
-def as_fs_relative_path(filepath: str):
-    """Checks if a filepath is relative to the FS data directory
+def as_fs_relative_path(filepath: str) -> str:
+    """
+    Checks if a filepath is relative to the FS data directory
 
     Checks the addon settings for the FS installation path and compares that with the supplied filepath, to see if it
-    originates from within that.
+    originates from within that directory.
 
     Args:
-        filepath: The filepath to check
+        filepath (str): The filepath to check.
 
     Returns:
-        The $data replaced filepath, if applicable, or a cleaned up version of the supplied filepath
-
-    Todo:
-        This should check if the addon path is actually set to something
-
-    Todo:
-        This should be rewritten to use `pathlib <https://docs.python.org/3.7/library/pathlib.html>`_ instead
-        of just strings
+        str: The `$data`-replaced filepath if applicable, or a cleaned-up absolute path.
     """
     logger.debug(f"Original filepath: {filepath}")
-    filepath_clean = os.path.normpath(bpy.path.abspath(filepath))  # normpath cleans up stuff such as '../'
+
+    # Use strict=False to allow for non-existing paths
+    filepath_clean = Path(bpy.path.abspath(filepath)).resolve(strict=False)
     logger.debug(f"Cleaned filepath: {filepath_clean}")
-    fs_data_path = os.path.normpath(
-                        bpy.path.abspath(
-                            bpy.context.preferences.addons[__package__].preferences.fs_data_path))
+
+    fs_data_pref = bpy.context.preferences.addons[__package__].preferences.fs_data_path
+    if not fs_data_pref:
+        logger.warning("No FS data path set in the addon preferences")
+        return filepath_clean.as_posix()
+
+    fs_data_path = Path(bpy.path.abspath(fs_data_pref)).resolve(strict=False)
     logger.debug(f"FS data path: {fs_data_path}")
+
     try:
-        if fs_data_path != '':
-            path_to_return = '$data' + filepath_clean[filepath_clean.index(fs_data_path) + len(fs_data_path):]
-            logger.debug(f"Fs relative path: {path_to_return}")
-            return path_to_return
-        else:
-            raise ValueError
+        relative_path = filepath_clean.relative_to(fs_data_path)
+        path_to_return = Path('$data') / relative_path
+        logger.debug(f"Fs relative path: {path_to_return}")
+        return path_to_return.as_posix()
     except ValueError:
-        return filepath_clean
+        return filepath_clean.as_posix()
 
 
 def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderObject]:
