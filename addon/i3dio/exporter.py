@@ -186,15 +186,22 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
     objects_to_export = objects
     if sort_alphabetical:
         objects_to_export = sort_blender_objects_by_outliner_ordering(objects)
-    all_objects_to_export = [obj for root_obj in objects for obj in traverse_hierarchy(root_obj)]
+
+    new_objects_to_export = [obj for root_obj in objects for obj in traverse_hierarchy(root_obj)]
+    for obj in new_objects_to_export:
+        if obj not in i3d.all_objects_to_export:
+            i3d.all_objects_to_export.append(obj)
+
     for blender_object in objects_to_export:
-        _add_object_to_i3d(i3d, blender_object, export_candidates=all_objects_to_export)
+        _add_object_to_i3d(i3d, blender_object)
+
+    if i3d.deferred_constraints:
+        _process_deferred_constraints(i3d)
 
 
-def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None,
-                       export_candidates: list = None) -> None:
+def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
     # Check if object should be excluded from export (including its children)
-    if obj.i3d_attributes.exclude_from_export:
+    if hasattr(obj, 'i3d_attributes') and obj.i3d_attributes.exclude_from_export:
         logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
         return
 
@@ -210,7 +217,11 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
     # Collections are checked first since these are always exported in some form
     if isinstance(obj, bpy.types.Collection):
         logger.debug(f"[{obj.name}] is a 'Collection'")
-        node = i3d.add_transformgroup_node(obj, _parent)
+        node = None
+        if i3d.settings['keep_collections_as_transformgroups']:
+            node = i3d.add_transformgroup_node(obj, _parent)
+        else:
+            i3d.logger.info(f"[{obj.name}] will be be ignored and its children will be added to nearest parent")
         _process_collection_objects(i3d, obj, node)
         return  # Early return because collections are special
     else:
@@ -231,7 +242,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                             logger.warning(f"Armature modifier '{modifier.name}' on skinned mesh '{obj.name}' "
                                            "has no armature object assigned. Exporting as a regular shape instead.")
                             break
-                        elif modifier.object not in export_candidates:
+                        elif modifier.object not in i3d.all_objects_to_export:
                             logger.warning(
                                 f"Skinned mesh '{obj.name}' references armature '{modifier.object.name}', "
                                 "but the armature is not included in the export hierarchy. "
@@ -276,7 +287,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
         logger.debug(f"[{obj.name}] processing objects children")
         for child in sort_blender_objects_by_outliner_ordering(obj.children):
-            _add_object_to_i3d(i3d, child, node, export_candidates)
+            _add_object_to_i3d(i3d, child, node)
         logger.debug(f"[{obj.name}] no more children to process in object")
 
 
@@ -298,10 +309,27 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
         # a part of the collections objects. Which means that they would be added twice without this check. One for the
         # object itself and one for the collection.
         if child.parent is None:
-            _add_object_to_i3d(i3d, child, parent, export_candidates=collection.objects)
+            i3d.all_objects_to_export.append(child)
+            _add_object_to_i3d(i3d, child, parent)
     logger.debug(f"[{collection.name}] no more objects to process in collection")
 
 
 def traverse_hierarchy(obj: BlenderObject) -> List[BlenderObject]:
     """Recursively traverses an object hierarchy and returns all objects."""
     return [obj] + [child for child in obj.children for child in traverse_hierarchy(child)]
+
+
+def _process_deferred_constraints(i3d: I3D):
+    for armature, bone_object, target in i3d.deferred_constraints:
+        i3d.logger.debug(f"Processing deferred constraint for: {bone_object}, Target: {target}")
+
+        if target in i3d.processed_objects:
+            i3d.logger.debug(f"Target object '{target}' is included in the export hierarchy. Setting bone parent.")
+            bone_name = bone_object.name
+            bone = next((b for b in i3d.skinned_meshes[armature.name].bones if b.name == bone_name), None)
+
+            if bone is not None:
+                i3d.skinned_meshes[armature.name].update_bone_parent(None, custom_target=i3d.processed_objects[target],
+                                                                     bone=bone)
+            else:
+                i3d.logger.warning(f"Could not find bone {bone_name} in the armature's bone list!")

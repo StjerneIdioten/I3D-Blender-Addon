@@ -214,7 +214,7 @@ class SceneGraphNode(Node):
         self._write_properties()
         self._write_user_attributes()
         self._add_transform_to_xml_element(self._transform_for_conversion)
-        if not isinstance(self.blender_object, bpy.types.Collection):
+        if hasattr(self.blender_object, 'i3d_reference') and self.blender_object.type == 'EMPTY':
             self._add_reference_file()
 
     def add_child(self, node: SceneGraphNode):

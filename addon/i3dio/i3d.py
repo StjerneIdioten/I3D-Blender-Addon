@@ -1,6 +1,6 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, Dict, List, Type, OrderedDict, Optional)
+from typing import (Union, Dict, List, Type, OrderedDict, Optional, Tuple)
 import logging
 from . import xml_i3d
 
@@ -36,6 +36,8 @@ class I3D:
         self.xml_elements['UserAttributes'] = xml_i3d.SubElement(self.xml_elements['Root'], 'UserAttributes')
 
         self.scene_root_nodes = []
+        self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
+        self.deferred_constraints: List[Tuple[bpy.types.Object, bpy.types.Bone, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
 
         self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
@@ -50,6 +52,8 @@ class I3D:
 
         self.depsgraph = depsgraph
 
+        self.all_objects_to_export: List[bpy.types.Object] = []
+
     # Private Methods ##################################################################################################
     def _next_available_id(self, id_type: str) -> int:
         next_id = self._ids[id_type]
@@ -57,8 +61,9 @@ class I3D:
         return next_id
 
     def _add_node(self, node_type: Type[SceneGraphNode], object_: Type[bpy.types.bpy_struct],
-                  parent: Type[SceneGraphNode] = None) -> SceneGraphNode:
-        node = node_type(self._next_available_id('node'), object_, self, parent)
+                  parent: Type[SceneGraphNode] = None, **kwargs) -> SceneGraphNode:
+        node = node_type(self._next_available_id('node'), object_, self, parent, **kwargs)
+        self.processed_objects[object_] = node
         if parent is None:
             self.scene_root_nodes.append(node)
             self.xml_elements['Scene'].append(node.element)
@@ -89,9 +94,11 @@ class I3D:
 
         return node_to_return
 
-    def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode]) \
-            -> SceneGraphNode:
-        return self._add_node(SkinnedMeshBoneNode, bone_object, parent)
+    def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode],
+                 is_child_of: bool = False, armature_object: bpy.types.Object = None,
+                 target: bpy.types.Object = None) -> SceneGraphNode:
+        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, is_child_of=is_child_of,
+                              armature_object=armature_object, target=target)
 
     # TODO: Rethink this to not include an extra argument for when the node is actually discovered.
     #  Maybe two separate functions instead? This is just hack'n'slash code at this point!
@@ -146,7 +153,7 @@ class I3D:
         return self._add_node(CameraNode, camera_object, parent)
 
     def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None,
-                  bone_mapping: ChainMap = None, tangent = False) -> int:
+                  bone_mapping: ChainMap = None) -> int:
         if shape_name is None:
             name = evaluated_mesh.name
         else:
@@ -155,7 +162,7 @@ class I3D:
         if name not in self.shapes:
             shape_id = self._next_available_id('shape')
             indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name, is_merge_group,
-                                                      bone_mapping, tangent)
+                                                      bone_mapping)
             # Store a reference to the shape from both it's name and its shape id
             self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
@@ -269,6 +276,7 @@ class I3D:
             self.export_i3d_mapping()
 
     def export_i3d_mapping(self) -> None:
+        self.logger.info(f"Exporting i3d mappings to {self.settings['i3d_mapping_file_path']}")
         with open(bpy.path.abspath(self.settings['i3d_mapping_file_path']), 'r+') as xml_file:
             vehicle_xml = []
             i3d_mapping_idx = None

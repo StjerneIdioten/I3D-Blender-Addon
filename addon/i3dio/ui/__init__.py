@@ -5,6 +5,7 @@ if "bpy" in locals():
         'addon_preferences',
         'exporter',
         'collision_data',
+        'presets',
         'object',
         'mesh',
         'light',
@@ -17,5 +18,5 @@ if "bpy" in locals():
         if module_name in locals():
             importlib.reload(locals()[module_name])
 
-from . import (helper_functions, addon_preferences, exporter, collision_data, object, user_attributes, mesh, light,
-               shader_picker, udim_picker)
+from . import (helper_functions, addon_preferences, exporter, collision_data, object, presets, user_attributes, mesh,
+               light, shader_picker, udim_picker)

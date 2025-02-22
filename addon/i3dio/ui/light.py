@@ -1,5 +1,6 @@
 import bpy
 from bpy.types import (
+    Operator,
     Panel
 )
 
@@ -13,6 +14,8 @@ from bpy.props import (
 
 from .helper_functions import i3d_property
 from ..xml_i3d import i3d_max
+
+from . import presets
 
 classes = []
 
@@ -317,6 +320,30 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
 
 
 @register
+class I3D_IO_PT_Light_Presets(presets.PresetPanel, Panel):
+    bl_label = "Light Presets"
+    preset_operator = "script.execute_preset"
+    preset_add_operator = "i3dio.add_light_preset"
+
+    @property
+    def preset_subdir(self):
+        return presets.PresetSubdir() / 'light'
+        
+
+@register
+class I3D_IO_OT_Light_Add_Preset(presets.AddPresetBase, Operator):
+    bl_idname = "i3dio.add_light_preset"
+    bl_label = "Add a Light Preset"
+    preset_menu = "I3D_IO_PT_Light_Presets"
+
+    @property
+    def preset_values(self):
+        return [f"bpy.context.object.data.i3d_attributes.{name}" for name in I3DNodeLightAttributes.i3d_map.keys()]
+
+    preset_subdir = I3D_IO_PT_Light_Presets.preset_subdir
+
+
+@register
 class I3D_IO_PT_light_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -326,6 +353,9 @@ class I3D_IO_PT_light_attributes(Panel):
     @classmethod
     def poll(cls, context):
         return context.light
+    
+    def draw_header_preset(self, context):
+        I3D_IO_PT_Light_Presets.draw_panel_header(self.layout)
 
     def draw(self, context):
         layout = self.layout
