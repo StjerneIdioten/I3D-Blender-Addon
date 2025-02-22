@@ -25,16 +25,21 @@ class SkinnedMeshBoneNode(TransformGroupNode):
         self.is_child_of = False
         self.parent = parent
         self.armature_object = armature_object
+        self.deferred_target: bpy.types.Object | None = None
 
-        if type(self.parent) is SkinnedMeshRootNode:
-            if pose_bone := self.parent.blender_object.pose.bones.get(bone_object.name):
-                i3d.logger.debug(f"pose_bone {pose_bone.name} found")
-                if child_of := next((c for c in pose_bone.constraints if c.type == 'CHILD_OF'), None):
-                    i3d.logger.debug(f"child_of {child_of.name} found")
-                    if (target := child_of.target) and target in i3d.all_objects_to_export:
-                        if target in i3d.processed_objects:
-                            self.parent = i3d.processed_objects[target]
-                        self.is_child_of = True
+        if pose_bone := armature_object.pose.bones.get(bone_object.name):
+            i3d.logger.debug(f"pose_bone {pose_bone.name} found")
+            if child_of := next((c for c in pose_bone.constraints if c.type == 'CHILD_OF'), None):
+                i3d.logger.debug(f"child_of {child_of.name} found")
+                # Check if the target object is in the export list, if not it will just use the original parent
+                if (target := child_of.target) and target in i3d.all_objects_to_export:
+                    self.is_child_of = True
+                    if target in i3d.processed_objects:
+                        self.parent = i3d.processed_objects[target]
+                    else:
+                        i3d.logger.debug(f"Deferring CHILD_OF constraint for {bone_object}, target: {target}")
+                        self.deferred_target = target
+                        i3d.deferred_constraints.append((armature_object, bone_object, target))
 
         super().__init__(id_=id_, empty_object=bone_object, i3d=i3d, parent=self.parent)
 
@@ -104,110 +109,35 @@ class SkinnedMeshBoneNode(TransformGroupNode):
 
 class SkinnedMeshRootNode(TransformGroupNode):
     def __init__(self, id_: int, armature_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode | None = None):
-        # The skinBindID essentially, but mapped with the bone names for easy reference. An ordered dict is important
-        # but dicts should be ordered going forwards in python
+        # The skinBindID mapped with bone names for easy reference. An ordered dict is important,
+        # but dicts are ordered in Python 3.7+
         self.bones: List[SkinnedMeshBoneNode] = list()
         self.bone_mapping: Dict[str, int] = {}
         self.armature_object = armature_object
+        self.collapsed = i3d.settings['collapse_armatures']
 
         super().__init__(id_=id_, empty_object=armature_object, i3d=i3d, parent=parent)
 
         for bone in armature_object.data.bones:
+            # Only add root bones, bone children will be added recursively
             if bone.parent is None:
-                self._add_bone(bone, self)
+                # If collapse_armatures is enabled, the armature is removed in the I3D.
+                # The root bone(s) replaces the armature in the hierarchy. self = SkinnedMeshRootNode
+                self._add_bone(bone, parent if self.collapsed else self)
 
     def add_i3d_mapping_to_xml(self):
-        """Wont export armature mapping, if 'collapsing armatures' is enabled"""
-        if not self.i3d.settings['collapse_armatures']:
+        # Skip exporting i3d mapping if 'collapse_armatures' setting is enabled, as the armature is not exported
+        if not self.collapsed:
             super().add_i3d_mapping_to_xml()
 
     def _add_bone(self, bone_object: bpy.types.Bone, parent: SceneGraphNode):
-        """Recursive function for adding a bone along with all of its children"""
-        target = None
-        is_child_of = False
-
-        # Check for CHILD_OF constraint
-        """ if (pose_bone := self.blender_object.pose.bones.get(bone_object.name)) is not None:
-            child_of = next((c for c in pose_bone.constraints if c.type == 'CHILD_OF'), None)
-            if child_of:
-                if not child_of.target:
-                    self.logger.warning(f"CHILD_OF constraint on {bone_object.name} has no target. Ignoring.")
-                else:
-                    target = child_of.target
-                    result = self.assign_parent(bone_object, parent, target)
-                    parent = result.parent
-                    is_child_of = result.is_child_of
-
-                    if result.deferred:
-                        self.i3d.deferred_constraints.append((self.armature_object, bone_object, target))
-                        self.logger.debug(f"Deferred constraint added for: {bone_object}, target: {target}") """
-
-        self.bones.append(self.i3d.add_bone(bone_object, parent, is_child_of=is_child_of,
-                                            armature_object=self.armature_object, target=target))
-        current_bone = self.bones[-1]
-        self.bone_mapping[bone_object.name] = current_bone.id
+        """Recursively adds a bone and its children to the scene graph."""
+        bone_node = self.i3d.add_bone(bone_object, parent, self.blender_object)
+        self.bones.append(bone_node)
+        self.bone_mapping[bone_object.name] = bone_node.id
 
         for child_bone in bone_object.children:
-            self._add_bone(child_bone, current_bone)
-
-    def update_bone_parent(self, parent: SceneGraphNode = None,
-                           custom_target: SceneGraphNode = None, bone: SkinnedMeshBoneNode = None):
-        """Updates the parent of bones"""
-        if custom_target is not None and bone is not None:
-            self._assign_bone_parent(bone, custom_target)
-        else:
-            for bone in self.bones:
-                if bone.parent == self:
-                    new_parent = parent or None
-                    self._assign_bone_parent(bone, new_parent)
-
-    def _assign_bone_parent(self, bone: SkinnedMeshBoneNode, new_parent: SceneGraphNode):
-        """Assigns a new parent to a bone and updates the scene graph"""
-        self.logger.debug(f"Updating parent for {bone} to {new_parent}")
-        # Remove bone from its current parent
-        if bone.parent == self:
-            self.logger.debug(f"Removing {bone} from current parent")
-            self.element.remove(bone.element)
-            self.children.remove(bone)
-
-        # Add to the new parent or scene root
-        if new_parent:
-            if bone in self.i3d.scene_root_nodes:
-                # If collapse armature is enabled the bone would have moved to the scene root,
-                # but since we are now moving it to a new parent we have to remove it from the scene root
-                # Or else we can get problems with i3dmappings
-                self.logger.debug(f"Removing {bone} from scene root")
-                self.i3d.scene_root_nodes.remove(bone)
-                self.i3d.xml_elements['Scene'].remove(bone.element)
-            self.logger.debug(f"Adding {bone} to {new_parent}")
-            bone.parent = new_parent
-            new_parent.add_child(bone)
-            new_parent.element.append(bone.element)
-        else:
-            self.logger.debug(f"Adding {bone} to scene root")
-            bone.parent = None
-            self.i3d.scene_root_nodes.append(bone)
-            self.i3d.xml_elements['Scene'].append(bone.element)
-
-    def assign_parent(self, bone_object: bpy.types.Bone, parent: SceneGraphNode,
-                      target: bpy.types.Object) -> AssignParentResult:
-        """
-        Assign the parent for a bone. Returns the assigned parent, whether the bone is a child of a target,
-        and whether the assignment is deferred.
-        """
-        if target in self.i3d.processed_objects:
-            # Target is processed, use it as the parent
-            self.logger.debug(f"Target {target} is processed. Assigning as parent for {bone_object}.")
-            return AssignParentResult(parent=self.i3d.processed_objects[target], is_child_of=True, deferred=False)
-
-        if target not in self.i3d.all_objects_to_export:
-            # Target is not in the export list, fallback to the original parent
-            self.logger.debug(f"Target {target} is not in the export list. Using original parent for {bone_object}.")
-            return AssignParentResult(parent=parent, is_child_of=False, deferred=False)
-
-        # Defer the constraint and temporarily keep the original parent
-        self.logger.debug(f"Deferring CHILD_OF constraint for {bone_object}, target: {target}")
-        return AssignParentResult(parent=parent, is_child_of=False, deferred=True)
+            self._add_bone(child_bone, bone_node)
 
 
 class SkinnedMeshShapeNode(ShapeNode):

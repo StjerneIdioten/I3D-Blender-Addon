@@ -94,10 +94,9 @@ class I3D:
 
         return node_to_return
 
-    def add_bone(self, bone_object: bpy.types.Bone, parent: SkinnedMeshBoneNode | SkinnedMeshRootNode) -> SceneGraphNode:
-        bone_node = SkinnedMeshBoneNode(self._next_available_id('node'), bone_object, self, parent)
-        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, is_child_of=is_child_of,
-                              armature_object=armature_object, target=target)
+    def add_bone(self, bone_object: bpy.types.Bone, parent: SkinnedMeshBoneNode | SkinnedMeshRootNode,
+                 armature_object: bpy.types.Object) -> SceneGraphNode:
+        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, armature_object=armature_object)
 
     def add_armature_from_modifier(self, armature_object: bpy.types.Object) -> SceneGraphNode:
         if armature_object.name not in self.skinned_meshes:
@@ -116,7 +115,6 @@ class I3D:
             else:
                 # Collapsing armatures: Bones should be parented to armature's parent node
                 node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self, parent)
-                node.update_bone_parent(parent)
             self.skinned_meshes[armature_object.name] = node
         else:
             # Armature was already registered (through an armature modifier)
@@ -132,9 +130,6 @@ class I3D:
                     # If no parent, treat armature as root node
                     self.scene_root_nodes.append(node)
                     self.xml_elements['Scene'].append(node.element)
-            else:
-                # Collapsing armatures: Update bone hierarchy
-                node.update_bone_parent(parent)
         return self.skinned_meshes[armature_object.name]
 
     def add_skinned_mesh_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
