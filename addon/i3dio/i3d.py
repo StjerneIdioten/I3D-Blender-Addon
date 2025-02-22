@@ -153,7 +153,7 @@ class I3D:
         return self._add_node(CameraNode, camera_object, parent)
 
     def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None,
-                  bone_mapping: ChainMap = None, tangent = False) -> int:
+                  bone_mapping: ChainMap = None) -> int:
         if shape_name is None:
             name = evaluated_mesh.name
         else:
@@ -162,7 +162,7 @@ class I3D:
         if name not in self.shapes:
             shape_id = self._next_available_id('shape')
             indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name, is_merge_group,
-                                                      bone_mapping, tangent)
+                                                      bone_mapping)
             # Store a reference to the shape from both it's name and its shape id
             self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
