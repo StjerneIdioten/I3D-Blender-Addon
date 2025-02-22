@@ -446,6 +446,41 @@ class I3DMergeGroup(bpy.types.PropertyGroup):
 
 
 @register
+class I3DMergeChildren(bpy.types.PropertyGroup):
+    enabled: BoolProperty(
+        name="Enable Merge Children",
+        description=(
+            "Enable this object to act as the merge root for exporting its child objects. "
+            "During export, all child objects will be combined into a single merged object."
+        ),
+        default=False
+    )
+    apply_transforms: bpy.props.BoolProperty(
+        name="Apply Transforms",
+        description=(
+            "Bake location, rotation, and scale into each child mesh. When enabled, child meshes retain their "
+            "current position and orientation relative to the root (merge root object). "
+            "When disabled, child meshes will be transformed to align directly with the root object, "
+            "removing their individual offsets and placing them at the root's location."
+        ),
+        default=False
+    )
+    interpolation_steps: bpy.props.IntProperty(
+        name="Interpolation Steps",
+        description=(
+            "Number of additional interpolation steps inserted between merged child objects. "
+            "This is useful for creating smoother animations or transitions in shaders "
+            "that utilize array textures (e.g., for motion paths). "
+            "Make sure the corresponding texture accounts for the same number of steps to "
+            "avoid unexpected offsets in the animation or effect."
+        ),
+        default=1,
+        min=1,
+        max=10
+    )
+
+
+@register
 class I3DMappingData(bpy.types.PropertyGroup):
     is_mapped: BoolProperty(
         name="Add to mapping",
@@ -580,8 +615,9 @@ class I3D_IO_PT_object_attributes(Panel):
         layout.separator(type='LINE')
 
         if obj.type == 'EMPTY':
-            draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_level_of_detail_attributes(layout, obj, i3d_attributes)
+            draw_merge_children_attributes(layout, obj.i3d_merge_children)
+            draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_joint_attributes(layout, i3d_attributes)
 
         elif obj.type == 'MESH':
@@ -737,6 +773,16 @@ def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.C
             col.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
             col = row.column(align=True)
             col.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
+
+
+def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_children: bpy.types.PropertyGroup) -> None:
+    header, panel = layout.panel('i3d_merge_children_panel', default_closed=True)
+    header.use_property_split = False
+    header.prop(i3d_merge_children, 'enabled', text="Merge Children")
+    if panel:
+        panel.enabled = i3d_merge_children.enabled
+        panel.prop(i3d_merge_children, 'apply_transforms')
+        panel.prop(i3d_merge_children, 'interpolation_steps')
 
 
 @register
@@ -992,6 +1038,7 @@ def register():
     bpy.types.EditBone.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.Object.i3d_reference = PointerProperty(type=I3DReferenceData)
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
+    bpy.types.Object.i3d_merge_children = PointerProperty(type=I3DMergeChildren)
     load_post.append(handle_old_merge_groups)
     load_post.append(handle_old_lod_distances)
     load_post.append(handle_old_reference_paths)
@@ -1001,6 +1048,7 @@ def unregister():
     load_post.remove(handle_old_reference_paths)
     load_post.remove(handle_old_lod_distances)
     load_post.remove(handle_old_merge_groups)
+    del bpy.types.Object.i3d_merge_children
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_reference
     del bpy.types.EditBone.i3d_mapping

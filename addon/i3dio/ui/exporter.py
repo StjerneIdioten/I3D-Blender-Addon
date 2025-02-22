@@ -133,10 +133,12 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             ('MERGE_GROUPS', "Merge Groups", "Export merge groups"),
             ('SKINNED_MESHES', "Skinned Meshes", "Bind meshes to the bones of an armature in i3d. If disabled, "
                                                  "the armature and bone structure will still be exported, "
-                                                 "but the meshes wont be bound to it")
+                                                 "but the meshes wont be bound to it"),
+            ('MERGE_CHILDREN', "Merge Children", "Merge the child objects of empties with Merge Children enabled "
+                                                 "into a single exported mesh")
         ),
         options={'ENUM_FLAG'},
-        default={'MERGE_GROUPS', 'SKINNED_MESHES'},
+        default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN'},
     )
 
     collapse_armatures: BoolProperty(
