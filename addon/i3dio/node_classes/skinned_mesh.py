@@ -19,12 +19,24 @@ AssignParentResult = namedtuple('AssignParentResult', ['parent', 'is_child_of', 
 
 
 class SkinnedMeshBoneNode(TransformGroupNode):
-    def __init__(self, id_: int, bone_object: bpy.types.Bone, i3d: I3D, parent: SceneGraphNode,
-                 is_child_of: bool = False, armature_object: bpy.types.Object = None, target: bpy.types.Object = None):
-        self.is_child_of = is_child_of
+    def __init__(self, id_: int, bone_object: bpy.types.Bone, i3d: I3D,
+                 parent: SkinnedMeshRootNode | SkinnedMeshBoneNode,
+                 armature_object: bpy.types.Object = None):
+        self.is_child_of = False
+        self.parent = parent
         self.armature_object = armature_object
-        self.target = target  # Used for deferred constraints
-        super().__init__(id_=id_, empty_object=bone_object, i3d=i3d, parent=parent)
+
+        if type(self.parent) is SkinnedMeshRootNode:
+            if pose_bone := self.parent.blender_object.pose.bones.get(bone_object.name):
+                i3d.logger.debug(f"pose_bone {pose_bone.name} found")
+                if child_of := next((c for c in pose_bone.constraints if c.type == 'CHILD_OF'), None):
+                    i3d.logger.debug(f"child_of {child_of.name} found")
+                    if (target := child_of.target) and target in i3d.all_objects_to_export:
+                        if target in i3d.processed_objects:
+                            self.parent = i3d.processed_objects[target]
+                        self.is_child_of = True
+
+        super().__init__(id_=id_, empty_object=bone_object, i3d=i3d, parent=self.parent)
 
     def _matrix_to_i3d_space(self, matrix: mathutils.Matrix) -> mathutils.Matrix:
         return self.i3d.conversion_matrix @ matrix @ self.i3d.conversion_matrix.inverted()
@@ -35,6 +47,8 @@ class SkinnedMeshBoneNode(TransformGroupNode):
         Calculate the bone's transformation matrix in I3D space, considering parenting and deferred constraints.
         Handles scenarios like direct parenting, deferred CHILD_OF constraints, and collapsed armatures.
         """
+        self.logger.debug(f"What is self here? {self}, is_child_of: {self.is_child_of}, target: {self.target}")
+        self.logger.debug(f"Calculating transform for {self.blender_object.name}")
         if self.blender_object.parent and isinstance(self.blender_object.parent, bpy.types.Bone):
             # For bones parented to other bones, matrix_local is relative to the parent.
             # No transformation to I3D space is needed because the orientation is already relative to the parent bone.
@@ -113,7 +127,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
         is_child_of = False
 
         # Check for CHILD_OF constraint
-        if (pose_bone := self.blender_object.pose.bones.get(bone_object.name)) is not None:
+        """ if (pose_bone := self.blender_object.pose.bones.get(bone_object.name)) is not None:
             child_of = next((c for c in pose_bone.constraints if c.type == 'CHILD_OF'), None)
             if child_of:
                 if not child_of.target:
@@ -126,7 +140,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
 
                     if result.deferred:
                         self.i3d.deferred_constraints.append((self.armature_object, bone_object, target))
-                        self.logger.debug(f"Deferred constraint added for: {bone_object}, target: {target}")
+                        self.logger.debug(f"Deferred constraint added for: {bone_object}, target: {target}") """
 
         self.bones.append(self.i3d.add_bone(bone_object, parent, is_child_of=is_child_of,
                                             armature_object=self.armature_object, target=target))
