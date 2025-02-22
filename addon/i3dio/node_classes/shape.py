@@ -144,7 +144,7 @@ class IndexedTriangleSet(Node):
     ID_FIELD_NAME = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None,
-                 is_merge_group: bool = False, bone_mapping: ChainMap = None, tangent = False):
+                 is_merge_group: bool = False, bone_mapping: ChainMap = None):
         self.id: int = id_
         self.i3d: I3D = i3d
         self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
@@ -155,7 +155,8 @@ class IndexedTriangleSet(Node):
         self.bone_mapping: ChainMap = bone_mapping
         self.bind_index = 0
         self.vertex_group_ids = {}
-        self.tangent = tangent
+        self.tangent: bool = False
+        self.material_ids: List[int] = []
         if shape_name is None:
             self.shape_name = self.evaluated_mesh.name
         else:
@@ -285,25 +286,36 @@ class IndexedTriangleSet(Node):
         mesh = self.evaluated_mesh.mesh
 
         if len(mesh.materials) == 0:
-            self.logger.info(f"has no material assigned, assigning default material")
+            self.logger.info("has no material assigned, assigning default material")
             mesh.materials.append(self.i3d.get_default_material().blender_material)
-            self.logger.info(f"assigned default material i3d_default_material")
-        
-        for _ in mesh.materials:
-            self.subsets.append(SubSet())
+            self.logger.info(f"assigned default material '{mesh.materials[-1].name}'")
 
+        material_to_subset = {}
         has_warned_for_empty_slot = False
+        used_materials = []
         for triangle in mesh.loop_triangles:
             triangle_material = mesh.materials[triangle.material_index]
 
             if triangle_material is None:
-                if not has_warned_for_empty_slot: 
-                    self.logger.warning(f"triangle(s) found with empty material slot, assigning default material")
+                if not has_warned_for_empty_slot:
+                    self.logger.warning("triangle(s) found with empty material slot, assigning default material")
                     has_warned_for_empty_slot = True
                 triangle_material = self.i3d.get_default_material().blender_material
 
+            if triangle_material not in material_to_subset:
+                material_to_subset[triangle_material] = SubSet()
+                self.subsets.append(material_to_subset[triangle_material])
+                used_materials.append(triangle_material)
+
             # Add triangle to subset
-            self.subsets[triangle.material_index].add_triangle(triangle)
+            material_to_subset[triangle_material].add_triangle(triangle)
+
+        unused_materials = set(mesh.materials) - set(used_materials)
+        for material in (m for m in unused_materials if m is not None):
+            self.logger.warning(f"Material '{material.name}' is not used by any triangle, material will be ignored!")
+
+        self.material_ids = [self.i3d.add_material(m) for m in used_materials]
+        self.tangent = any((self.i3d.materials[m_id].is_normalmapped() for m_id in self.material_ids))
 
         self.process_subsets(mesh)
 
@@ -563,7 +575,6 @@ class ShapeNode(SceneGraphNode):
     def __init__(self, id_: int, shape_object: Optional[bpy.types.Object], i3d: I3D,
                  parent: Optional[SceneGraphNode] = None):
         self.shape_id = None
-        self.tangent = False
         super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent)
 
     @property
@@ -575,15 +586,13 @@ class ShapeNode(SceneGraphNode):
             self.shape_id = self.i3d.add_curve(EvaluatedNurbsCurve(self.i3d, self.blender_object))
             self.xml_elements['NurbsCurve'] = self.i3d.shapes[self.shape_id].element
         else:
-            self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), tangent=self.tangent)
+            self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object))
             self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):
-        if self.blender_object.type == 'MESH':
-            m_ids = [self.i3d.add_material(m.material) for m in self.blender_object.material_slots]
-            self._write_attribute('materialIds', ' '.join(map(str, m_ids)) or str(self.i3d.add_material(self.i3d.get_default_material())))
-            self.tangent = any((self.i3d.materials[m_id].is_normalmapped() for m_id in m_ids))
         self.add_shape()
+        if self.blender_object.type == 'MESH':
+            self._write_attribute('materialIds', ' '.join(map(str, self.i3d.shapes[self.shape_id].material_ids)))
         self.logger.debug(f"has shape ID '{self.shape_id}'")
         self._write_attribute('shapeId', self.shape_id)
         super().populate_xml_element()
