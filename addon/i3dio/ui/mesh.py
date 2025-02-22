@@ -1,5 +1,6 @@
 import bpy
 from bpy.types import (
+    Operator,
     Panel
 )
 
@@ -14,9 +15,9 @@ from bpy.props import (
     FloatVectorProperty,
 )
 
-classes = []
+from . import presets
 
-from ..xml_i3d import i3d_max
+classes = []
 
 def register(cls):
     classes.append(cls)
@@ -123,6 +124,30 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
 
 
 @register
+class I3D_IO_PT_Mesh_Presets(presets.PresetPanel, Panel):
+    bl_label = "Mesh Presets"
+    preset_operator = "script.execute_preset"
+    preset_add_operator = "i3dio.add_mesh_preset"
+
+    @property
+    def preset_subdir(self):
+        return presets.PresetSubdir() / 'mesh'
+        
+
+@register
+class I3D_IO_OT_Mesh_Add_Preset(presets.AddPresetBase, Operator):
+    bl_idname = "i3dio.add_mesh_preset"
+    bl_label = "Add a Mesh Preset"
+    preset_menu = "I3D_IO_PT_Mesh_Presets"
+
+    @property
+    def preset_values(self):
+        return [f"bpy.context.object.data.i3d_attributes.{name}" for name in I3DNodeShapeAttributes.i3d_map.keys()]
+
+    preset_subdir = I3D_IO_PT_Mesh_Presets.preset_subdir
+
+
+@register
 class I3D_IO_PT_shape_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -132,6 +157,9 @@ class I3D_IO_PT_shape_attributes(Panel):
     @classmethod
     def poll(cls, context):
         return context.mesh
+
+    def draw_header_preset(self, context):
+        I3D_IO_PT_Mesh_Presets.draw_panel_header(self.layout)
 
     def draw(self, context):
         layout = self.layout
@@ -145,7 +173,7 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(mesh.i3d_attributes, "non_renderable")
         layout.prop(mesh.i3d_attributes, "distance_blending")
         layout.prop(mesh.i3d_attributes, "is_occluder")
-        layout.prop(mesh.i3d_attributes, "cpu_mesh")
+        layout.prop(mesh.i3d_attributes, "cpu_mesh", expand=True)
         layout.prop(mesh.i3d_attributes, "nav_mesh_mask")
         layout.prop(mesh.i3d_attributes, "decal_layer")
         layout.prop(mesh.i3d_attributes, 'fill_volume')

@@ -1,12 +1,12 @@
 import bpy
 from bpy.types import (
+    Operator,
     Panel
 )
 from bpy.app.handlers import (
     persistent,
     load_post
 )
-
 from bpy.props import (
     StringProperty,
     BoolProperty,
@@ -17,9 +17,9 @@ from bpy.props import (
     FloatVectorProperty,
     CollectionProperty,
 )
-
 from .helper_functions import i3d_property
 from ..xml_i3d import i3d_max
+from . import (presets, mesh, light)
 
 classes = []
 
@@ -32,54 +32,54 @@ def register(cls):
 @register
 class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'locked_group': {'name': 'lockedgroup', 'default': False},
+        'locked_group': {'name': 'lockedgroup', 'default': False, 'preset_group': 'ALL'},
         'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
                                                                            'mapping': {True: False,
                                                                                        False: True}}},
-        'clip_distance': {'name': 'clipDistance', 'default': 1000000.0},
-        'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0},
-        'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX'},
-        'rigid_body_type': {'default': 'none'},
-        'lod_distances': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0)},
-        'lod_blending': {'name': 'lodBlending', 'default': True},
-        'collision': {'name': 'collision', 'default': True},
-        'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX'},
-        'compound': {'name': 'compound', 'default': False},
-        'trigger': {'name': 'trigger', 'default': False},
-        'restitution': {'name': 'restitution', 'default': 0.0},
-        'static_friction': {'name': 'staticFriction', 'default': 0.5},
-        'dynamic_friction': {'name': 'dynamicFriction', 'default': 0.5},
-        'linear_damping': {'name': 'linearDamping', 'default': 0.0},
-        'angular_damping': {'name': 'angularDamping', 'default': 0.01},
-        'density': {'name': 'density', 'default': 1.0},
-        'solver_iteration_count': {'name': 'solverIterationCount', 'default': 4},
-        'split_type': {'name': 'splitType', 'default': 0},
-        'split_uvs': {'name': 'splitUvs', 'default': (0.0, 0.0, 1.0, 1.0, 1.0)},
-        'use_parent': {'name': 'useParent', 'default': True},
-        'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0},
-        'minute_of_day_end': {'name': 'minuteOfDayEnd', 'default': 0},
-        'day_of_year_start': {'name': 'dayOfYearStart', 'default': 0},
-        'day_of_year_end': {'name': 'dayOfYearEnd', 'default': 0},
-        'weather_required_mask': {'name': 'weatherRequiredMask', 'default': '0', 'type': 'HEX'},
-        'weather_prevent_mask': {'name': 'weatherPreventMask', 'default': '0', 'type': 'HEX'},
-        'viewer_spaciality_required_mask': {'name': 'viewerSpacialityRequiredMask', 'default': '0', 'type': 'HEX'},
-        'viewer_spaciality_prevent_mask': {'name': 'viewerSpacialityPreventMask', 'default': '0', 'type': 'HEX'},
-        'render_invisible': {'name': 'renderInvisible', 'default': False},
-        'visible_shader_parameter': {'name': 'visibleShaderParameter', 'default': 1.0},
-        'joint': {'name': 'joint', 'default': False},
-        'projection': {'name': 'projection', 'default': False},
-        'projection_distance': {'name': 'projDistance', 'default': 0.01},
-        'projection_angle': {'name': 'projAngle', 'default': 0.01},
-        'x_axis_drive': {'name': 'xAxisDrive', 'default': False},
-        'y_axis_drive': {'name': 'yAxisDrive', 'default': False},
-        'z_axis_drive': {'name': 'zAxisDrive', 'default': False},
-        'drive_position': {'name': 'drivePos', 'default': False},
-        'drive_force_limit': {'name': 'driveForceLimit', 'default': 100000.0},
-        'drive_spring': {'name': 'driveSpring', 'default': 1.0},
-        'drive_damping': {'name': 'driveDamping', 'default': 0.01},
-        'breakable_joint': {'name': 'breakableJoint', 'default': False},
-        'joint_break_force': {'name': 'jointBreakForce', 'default': 0.0},
-        'joint_break_torque': {'name': 'jointBreakTorque', 'default': 0.0},
+        'clip_distance': {'name': 'clipDistance', 'default': 1000000.0, 'preset_group': 'ALL'},
+        'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0, 'preset_group': 'ALL'},
+        'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX', 'preset_group': 'ALL'},
+        'rigid_body_type': {'default': 'none', 'preset_group': 'MESH'},
+        'lod_distances': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0), 'preset_group': 'EMPTY'},
+        'lod_blending': {'name': 'lodBlending', 'default': True, 'preset_group': 'EMPTY'},
+        'collision': {'name': 'collision', 'default': True, 'preset_group': 'MESH'},
+        'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
+        'compound': {'name': 'compound', 'default': False, 'preset_group': 'MESH'},
+        'trigger': {'name': 'trigger', 'default': False, 'preset_group': 'MESH'},
+        'restitution': {'name': 'restitution', 'default': 0.0, 'preset_group': 'MESH'},
+        'static_friction': {'name': 'staticFriction', 'default': 0.5, 'preset_group': 'MESH'},
+        'dynamic_friction': {'name': 'dynamicFriction', 'default': 0.5, 'preset_group': 'MESH'},
+        'linear_damping': {'name': 'linearDamping', 'default': 0.0, 'preset_group': 'MESH'},
+        'angular_damping': {'name': 'angularDamping', 'default': 0.01, 'preset_group': 'MESH'},
+        'density': {'name': 'density', 'default': 1.0, 'preset_group': 'MESH'},
+        'solver_iteration_count': {'name': 'solverIterationCount', 'default': 4, 'preset_group': 'MESH'},
+        'split_type': {'name': 'splitType', 'default': 0, 'preset_group': 'MESH'},
+        'split_uvs': {'name': 'splitUvs', 'default': (0.0, 0.0, 1.0, 1.0, 1.0), 'preset_group': 'MESH'},
+        'use_parent': {'name': 'useParent', 'default': True, 'preset_group': 'EMPTY'},
+        'minute_of_day_start': {'name': 'minuteOfDayStart', 'default': 0, 'preset_group': 'EMPTY'},
+        'minute_of_day_end': {'name': 'minuteOfDayEnd', 'default': 0, 'preset_group': 'EMPTY'},
+        'day_of_year_start': {'name': 'dayOfYearStart', 'default': 0, 'preset_group': 'EMPTY'},
+        'day_of_year_end': {'name': 'dayOfYearEnd', 'default': 0, 'preset_group': 'EMPTY'},
+        'weather_required_mask': {'name': 'weatherRequiredMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'weather_prevent_mask': {'name': 'weatherPreventMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'viewer_spaciality_required_mask': {'name': 'viewerSpacialityRequiredMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'viewer_spaciality_prevent_mask': {'name': 'viewerSpacialityPreventMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'render_invisible': {'name': 'renderInvisible', 'default': False, 'preset_group': 'EMPTY'},
+        'visible_shader_parameter': {'name': 'visibleShaderParameter', 'default': 1.0, 'preset_group': 'EMPTY'},
+        'joint': {'name': 'joint', 'default': False, 'preset_group': 'EMPTY'},
+        'projection': {'name': 'projection', 'default': False, 'preset_group': 'EMPTY'},
+        'projection_distance': {'name': 'projDistance', 'default': 0.01, 'preset_group': 'EMPTY'},
+        'projection_angle': {'name': 'projAngle', 'default': 0.01, 'preset_group': 'EMPTY'},
+        'x_axis_drive': {'name': 'xAxisDrive', 'default': False, 'preset_group': 'EMPTY'},
+        'y_axis_drive': {'name': 'yAxisDrive', 'default': False, 'preset_group': 'EMPTY'},
+        'z_axis_drive': {'name': 'zAxisDrive', 'default': False, 'preset_group': 'EMPTY'},
+        'drive_position': {'name': 'drivePos', 'default': False, 'preset_group': 'EMPTY'},
+        'drive_force_limit': {'name': 'driveForceLimit', 'default': 100000.0, 'preset_group': 'EMPTY'},
+        'drive_spring': {'name': 'driveSpring', 'default': 1.0, 'preset_group': 'EMPTY'},
+        'drive_damping': {'name': 'driveDamping', 'default': 0.01, 'preset_group': 'EMPTY'},
+        'breakable_joint': {'name': 'breakableJoint', 'default': False, 'preset_group': 'EMPTY'},
+        'joint_break_force': {'name': 'jointBreakForce', 'default': 0.0, 'preset_group': 'EMPTY'},
+        'joint_break_torque': {'name': 'jointBreakTorque', 'default': 0.0, 'preset_group': 'EMPTY'},
     }
 
     locked_group: BoolProperty(
@@ -578,6 +578,10 @@ class I3D_IO_PT_object_attributes(Panel):
     def poll(cls, context):
         return context.object is not None
 
+    def draw_header_preset(self, context):
+        if context.object.type in ['EMPTY', 'LIGHT', 'MESH']:
+            I3D_IO_PT_Object_Presets.draw_panel_header(self.layout)
+
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = False
@@ -942,6 +946,45 @@ class I3D_IO_PT_mapping_bone_attributes(Panel):
         row.prop(bone.i3d_mapping, 'is_mapped')
         row = layout.row()
         row.prop(bone.i3d_mapping, 'mapping_name')
+
+
+@register
+class I3D_IO_PT_Object_Presets(presets.PresetPanel, Panel):
+    bl_label = "Object Presets"
+    preset_operator = "script.execute_preset"
+    preset_add_operator = "i3dio.add_object_preset"
+
+    @property
+    def preset_subdir(self):
+        subdir = presets.PresetSubdir() / 'object'
+        match bpy.context.object.type:
+            case 'EMPTY':
+                return subdir / 'empty'
+            case 'MESH':
+                return subdir / 'mesh'
+            case 'LIGHT':
+                return subdir / 'light'
+            case _:
+                return subdir
+
+
+@register
+class I3D_IO_OT_Object_Add_Preset(presets.AddPresetBase, Operator):
+    bl_idname = "i3dio.add_object_preset"
+    bl_label = "Add an Object Preset"
+    preset_menu = "I3D_IO_PT_Object_Presets"
+
+    @property
+    def preset_values(self):
+        base_values = [f"bpy.context.object.i3d_attributes.{name}" for name, attributes in I3DNodeObjectAttributes.i3d_map.items() if attributes.get('preset_group', None) in ['ALL', bpy.context.object.type]]
+        match bpy.context.object.type:
+            case 'MESH':
+                base_values.extend([f"bpy.context.object.data.i3d_attributes.{name}" for name in mesh.I3DNodeShapeAttributes.i3d_map.keys()])
+            case 'LIGHT':
+                base_values.extend([f"bpy.context.object.data.i3d_attributes.{name}" for name in light.I3DNodeLightAttributes.i3d_map.keys()])
+        return base_values
+
+    preset_subdir = I3D_IO_PT_Object_Presets.preset_subdir
 
 
 @persistent
