@@ -100,7 +100,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
         self.bones: List[SkinnedMeshBoneNode] = list()
         self.bone_mapping: Dict[str, int] = {}
         self.armature_object = armature_object
-        self.is_collapsed = i3d.settings['collapse_armatures']
+        self.is_collapsed = armature_object.i3d_attributes.collapse_armature
         super().__init__(id_=id_, empty_object=armature_object, i3d=i3d, parent=None if self.is_collapsed else parent)
 
         bone_parent = parent if self.is_collapsed else self
@@ -133,6 +133,9 @@ class SkinnedMeshRootNode(TransformGroupNode):
         if self.parent is None:
             self.parent = parent  # If the armature was created via a modifier, its parent was not set.
 
+        if self.parent is parent and self.parent is not None:
+            return  # Already in the correct hierarchy
+
         if parent is not None:
             parent.add_child(self)
             parent.element.append(self.element)
@@ -142,7 +145,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
         self.i3d.processed_objects[self.blender_object] = self
 
     def add_i3d_mapping_to_xml(self):
-        # Skip exporting i3d mapping if 'collapse_armatures' setting is enabled, because the armature is not exported
+        # Skip exporting i3d mapping if 'collapse_armature' setting is enabled, because the armature is not exported
         if not self.is_collapsed:
             super().add_i3d_mapping_to_xml()
 
