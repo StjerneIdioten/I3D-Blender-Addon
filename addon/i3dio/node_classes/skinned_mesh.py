@@ -7,7 +7,6 @@ from typing import (Dict, List)
 from collections import ChainMap
 import mathutils
 import bpy
-import math
 
 from .node import (TransformGroupNode, SceneGraphNode)
 from .shape import (ShapeNode, EvaluatedMesh)
@@ -41,7 +40,10 @@ class SkinnedMeshBoneNode(TransformGroupNode):
 
         super().__init__(id_=id_, empty_object=bone_object, i3d=i3d, parent=self.parent)
 
-    def _matrix_to_i3d_space(self, matrix: mathutils.Matrix) -> mathutils.Matrix:
+    def _matrix_to_i3d_space(self, matrix: mathutils.Matrix, is_bone: bool = False) -> mathutils.Matrix:
+        if is_bone:
+            # Bones are already in their armature's local space, so no need to apply the inverse transformation.
+            return self.i3d.conversion_matrix @ matrix
         return self.i3d.conversion_matrix @ matrix @ self.i3d.conversion_matrix.inverted()
 
     @property
@@ -55,15 +57,8 @@ class SkinnedMeshBoneNode(TransformGroupNode):
             # No transformation to I3D space is needed because the orientation is already relative to the parent bone.
             return self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
 
-        # Get the bone's transformation in armature space, bones matrix is relative to the armature object
-        bone_matrix = self._matrix_to_i3d_space(self.blender_object.matrix_local)
-        # Giants Engine expects bones to point along the Z-axis (Blender's visual alignment).
-        # However, root bones in Blender internally align along the Y-axis. Rotate -90° around X-axis to
-        # correct root bone orientation. Child bones remain unaffected with early return above.
-        rot_fix = mathutils.Matrix.Rotation(math.radians(-90.0), 4, 'X')
-        translation = bone_matrix.to_translation()
-        bone_matrix = rot_fix @ bone_matrix.to_3x3().to_4x4()
-        bone_matrix.translation = translation
+        bone_matrix = self._matrix_to_i3d_space(self.blender_object.matrix_local, is_bone=True)
+        armature_matrix = self._matrix_to_i3d_space(self.armature_object.matrix_local)
 
         if (self.is_child_of and not self.deferred_target and self.parent is not None) \
                 or self.deferred_target is not None:
@@ -75,7 +70,6 @@ class SkinnedMeshBoneNode(TransformGroupNode):
             # This ensures the bone remains visually unchanged after re-parenting in I3D space.
             target = self.deferred_target or self.parent.blender_object
             target_matrix = self._matrix_to_i3d_space(target.matrix_world)
-            armature_matrix = self._matrix_to_i3d_space(self.armature_object.matrix_local)
             return target_matrix.inverted() @ armature_matrix @ bone_matrix
 
         # For bones parented directly to the armature, matrix_local already represents their transform
@@ -84,7 +78,7 @@ class SkinnedMeshBoneNode(TransformGroupNode):
             # If collapse_armatures is enabled, the armature is not added to the scene graph.
             # The root bone(s) in the armature replace the armature in the hierarchy,
             # so multiply its matrix with the armature matrix to preserve the correct transformation.
-            return self._matrix_to_i3d_space(self.armature_object.matrix_local) @ bone_matrix
+            return armature_matrix @ bone_matrix
 
         # If armature is not collapsed, the bone's matrix is already relative to the armature.
         return bone_matrix

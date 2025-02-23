@@ -64,11 +64,49 @@ class I3D:
                   parent: Type[SceneGraphNode] = None, **kwargs) -> SceneGraphNode:
         node = node_type(self._next_available_id('node'), object_, self, parent, **kwargs)
         self.processed_objects[object_] = node
-        if parent is None:
-            self.logger.debug(f"Adding root node: {node.name}")
+        # Skip adding SkinnedMeshBoneNodes to the scene root nodes, handled separately if needed
+        if parent is None and not isinstance(node, SkinnedMeshBoneNode):
             self.scene_root_nodes.append(node)
             self.xml_elements['Scene'].append(node.element)
         return node
+
+    def _get_or_create_armature_node(self, armature_object: bpy.types.Object,
+                                     parent: SceneGraphNode | None) -> SkinnedMeshRootNode:
+        """Either retrieve a previously created SkinnedMeshRootNode or create a new one."""
+        node = self.skinned_meshes.get(armature_object.name)
+        if node is None:
+            node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self, parent=parent)
+            self.skinned_meshes[armature_object.name] = node
+        return node
+
+    def _attach_armature_node(self, armature_node: SkinnedMeshRootNode, parent: SceneGraphNode | None) -> None:
+        """Attach a SkinnedMeshRootNode to the scene graph based on 'collapse_armatures' setting."""
+        if not self.settings['collapse_armatures']:
+            if parent is not None:
+                if armature_node.parent is None:
+                    # This covers the case where the armature was created via a modifier and parent was not known
+                    armature_node.parent = parent
+                parent.add_child(armature_node)
+                parent.element.append(armature_node.element)
+            else:
+                # No parent -> treat armature as root node
+                if armature_node not in self.scene_root_nodes:
+                    self.scene_root_nodes.append(armature_node)
+                self.xml_elements['Scene'].append(armature_node.element)
+            self.processed_objects[armature_node.blender_object] = armature_node
+        else:
+            # Collapsing armatures: The armature node does not appear in the final hierarchy.
+            # The bones are parented to where the armature would have been.
+            # If the parent is known, re-parent the root bones.
+            # If the parent is None, that means they are in the scene root
+            for bone in armature_node.bones:
+                if not bone.deferred_target and (bone.parent is None or bone.parent is armature_node):
+                    if parent is not None:
+                        bone.reparent(parent)
+                    else:
+                        # If there still is no parent, move the bone to the scene root
+                        self.scene_root_nodes.append(bone)
+                        self.xml_elements['Scene'].append(bone.element)
 
     # Public Methods ###################################################################################################
     def add_shape_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
@@ -152,54 +190,19 @@ class I3D:
                  root_node: SkinnedMeshRootNode) -> SceneGraphNode:
         return self._add_node(SkinnedMeshBoneNode, bone_object, parent, root_node=root_node)
 
-    def add_armature_from_modifier(self, armature_object: bpy.types.Object) -> SceneGraphNode:
-        if armature_object.name not in self.skinned_meshes:
-            # Register an armature discovered via a modifier. The armature node is created here,
-            # but it will be added to the scene graph later in the export process and parented to the correct node.
-            root_node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self, None)
-            self.skinned_meshes[armature_object.name] = root_node
-        return self.skinned_meshes[armature_object.name]
+    def add_armature_from_modifier(self, armature_object: bpy.types.Object) -> SkinnedMeshRootNode:
+        """
+        Creates (or retrieves) a SkinnedMeshRootNode for an armature discovered via an ARMATURE modifier on
+        SkinnedMeshShapeNode. At this point, the parent for SkinnedMeshRootNode is not known, so we set it to None.
+        The parent will be fixed later when we traverse the scene hierarchy and get to the armature object.
+        """
+        return self._get_or_create_armature_node(armature_object, parent=None)
 
-    def add_armature_from_scene(self, armature_object: bpy.types.Object,
-                                parent: SceneGraphNode = None) -> SceneGraphNode:
-        if armature_object.name not in self.skinned_meshes:
-            if not self.settings['collapse_armatures']:
-                # Normal case: Create and add armature directly to scene graph
-                node = self._add_node(SkinnedMeshRootNode, armature_object, parent)
-            else:
-                # Collapsing armatures: Bones should be parented to armature's parent node
-                node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self, parent)
-            self.skinned_meshes[armature_object.name] = node
-        else:
-            # Armature was already registered (through an armature modifier)
-            node = self.skinned_meshes[armature_object.name]
-            if not self.settings['collapse_armatures']:
-                if parent is not None:
-                    if node.parent is None:
-                        # If armature was registered via a modifier parent was not known at the time, so parent it now
-                        node.parent = parent
-                    parent.add_child(node)
-                    parent.element.append(node.element)
-                else:
-                    # If no parent, treat armature as root node
-                    self.scene_root_nodes.append(node)
-                    self.xml_elements['Scene'].append(node.element)
-            else:
-                # Bones were processed through armature modifier, ensure they are parented to the correct node
-                for bone in node.bones:
-                    # When collapse armatures is enabled, the armature is proccessed from modifier,
-                    # which would initilize SkinnedMeshRootNode parent as None. Since we now know the parent,
-                    # we can reparent the bones to the correct node parent. We have to skip deferred bones here,
-                    # because those will be run through last to ensure their target is added to the scene graph.
-                    if parent is not None and not bone.deferred_target and (bone.parent is None or bone.parent is node):
-                        bone.reparent(parent)
-                    # When collapse armatures is enabled, bone is child of and armature is proccessed from modifier,
-                    # parent for the bones is initially passed as None and then reassigned to child of constraint target
-                    elif bone.is_child_of and bone.parent is not None and bone in self.scene_root_nodes:
-                        self.scene_root_nodes.remove(bone)
-                        self.xml_elements['Scene'].remove(bone.element)
-
-        return self.skinned_meshes[armature_object.name]
+    def add_armature_from_scene(self, armature_object: bpy.types.Object, parent: SceneGraphNode) -> SceneGraphNode:
+        """Called when traversing the Blender scene and encountering an armature object in the hierarchy."""
+        armature_node = self._get_or_create_armature_node(armature_object, parent)
+        self._attach_armature_node(armature_node, parent)
+        return armature_node
 
     def add_skinned_mesh_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         return self._add_node(SkinnedMeshShapeNode, mesh_object, parent)
