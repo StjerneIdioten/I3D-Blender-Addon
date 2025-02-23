@@ -192,13 +192,9 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(CameraNode, camera_object, parent)
 
-    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None,
-                  is_generic=None, bone_mapping: ChainMap = None) -> int:
-        if shape_name is None:
-            name = evaluated_mesh.name
-        else:
-            name = shape_name
-
+    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=False,
+                  is_generic=False, bone_mapping: ChainMap = None) -> int:
+        name = shape_name or evaluated_mesh.name
         if name not in self.shapes:
             shape_id = self._next_available_id('shape')
             indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name, is_merge_group,
@@ -210,11 +206,7 @@ class I3D:
         return self.shapes[name].id
 
     def add_curve(self, evaluated_curve: EvaluatedNurbsCurve, curve_name: Optional[str] = None) -> int:
-        if curve_name is None:
-            name = evaluated_curve.name
-        else:
-            name = curve_name
-
+        name = curve_name or evaluated_curve.name
         if name not in self.shapes:
             curve_id = self._next_available_id('shape')
             nurbs_curve = NurbsCurve(curve_id, self, evaluated_curve, curve_name)
@@ -224,7 +216,6 @@ class I3D:
             return curve_id
         return self.shapes[name].id
 
-
     def get_shape_by_id(self, shape_id: int):
         return self.shapes[shape_id]
 
@@ -232,7 +223,7 @@ class I3D:
         node_attribute_element = self.xml_elements['UserAttributes'].find(f"UserAttribute[@nodeId='{node_id:d}']")
         if node_attribute_element is None:
             node_attribute_element = xml_i3d.SubElement(self.xml_elements['UserAttributes'], 'UserAttribute',
-                                                   attrib={'nodeId': str(node_id)})
+                                                        attrib={'nodeId': str(node_id)})
 
         for attribute in user_attributes:
             attrib = {'name': attribute.name, 'type': attribute.type.replace('data_', '')}
