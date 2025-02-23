@@ -584,22 +584,13 @@ class I3D_IO_PT_object_attributes(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = False
+        layout.use_property_split = True
         layout.use_property_decorate = False
         obj = context.object
         i3d_attributes = obj.i3d_attributes
 
-        box = layout.box()
-        row = box.row(align=True)
-        row.alignment = 'CENTER'
-        row.label(text="I3D Mapping")
-        row = box.row(align=True)
-        row.prop(obj.i3d_mapping, 'is_mapped', text="Add to mapping")
-        row = row.row(align=True)
-        row.enabled = obj.i3d_mapping.is_mapped
-        row.prop(obj.i3d_mapping, 'mapping_name', text="", placeholder="Custom Mapping Name")
+        draw_i3d_mapping_box(layout, obj.i3d_mapping)
 
-        layout.use_property_split = True
         i3d_property(layout, i3d_attributes, 'locked_group', obj)
         i3d_property(layout, i3d_attributes, 'visibility', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
@@ -785,6 +776,19 @@ def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_childre
         panel.prop(i3d_merge_children, 'interpolation_steps')
 
 
+def draw_i3d_mapping_box(layout: bpy.types.UILayout, i3d_mapping: bpy.types.PropertyGroup) -> None:
+    layout.use_property_split = False
+    box = layout.box()
+    row = box.row(align=True)
+    row.alignment = 'CENTER'
+    row.label(text="I3D Mapping")
+    row = box.row(align=True)
+    row.prop(i3d_mapping, 'is_mapped', text="Add to mapping")
+    row = row.row(align=True)
+    row.enabled = i3d_mapping.is_mapped
+    row.prop(i3d_mapping, 'mapping_name', text="", placeholder="Custom Mapping Name")
+
+
 @register
 class I3D_IO_OT_choose_merge_group(bpy.types.Operator):
     bl_idname = "i3dio.choose_merge_group"
@@ -948,11 +952,7 @@ class I3D_IO_PT_mapping_bone_attributes(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         bone = context.bone or context.edit_bone
-
-        row = layout.row()
-        row.prop(bone.i3d_mapping, 'is_mapped')
-        row = layout.row()
-        row.prop(bone.i3d_mapping, 'mapping_name')
+        draw_i3d_mapping_box(layout, bone.i3d_mapping)
 
 
 @register
