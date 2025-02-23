@@ -777,8 +777,8 @@ def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_childre
 
 
 def draw_i3d_mapping_box(layout: bpy.types.UILayout, i3d_mapping: bpy.types.PropertyGroup) -> None:
-    layout.use_property_split = False
     box = layout.box()
+    box.use_property_split = False
     row = box.row(align=True)
     row.alignment = 'CENTER'
     row.label(text="I3D Mapping")
