@@ -265,11 +265,22 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         elif obj.type == 'ARMATURE':
             node = i3d.add_armature_from_scene(obj, _parent)
         elif obj.type == 'EMPTY':
+            if 'MERGE_CHILDREN' in i3d.settings['features_to_export'] and obj.i3d_merge_children.enabled:
+                logger.debug(f"[{obj.name}] is a 'MergeChildren' object")
+                if obj.children and next((child for child in obj.children if child.type == 'MESH'), None):
+                    logger.debug(f"Processing MergeChildren for: {obj.name}")
+                    node = i3d.add_merge_children_node(obj, _parent)
+                    if node is not None:
+                        return  # Return to prevent children from being processed the "normal" way
+                else:
+                    logger.warning(f"Empty object {obj.name} has no children to merge. "
+                                   "Exporting as a regular TransformGroup instead.")
+
             node = i3d.add_transformgroup_node(obj, _parent)
             if obj.instance_collection is not None:
                 logger.debug(f"[{obj.name}] is a collection instance and will be instanced into the 'Empty' object")
-                # This is a collection instance so the children needs to be fetched from the referenced collection and
-                # be 'instanced' as children of the 'Empty' object directly.
+                # This is a collection instance so the children needs to be fetched from the referenced
+                # collection and be 'instanced' as children of the 'Empty' object directly.
                 _process_collection_objects(i3d, obj.instance_collection, node)
                 return
         elif obj.type == 'LIGHT':

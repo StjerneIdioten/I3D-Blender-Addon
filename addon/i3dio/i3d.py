@@ -95,6 +95,59 @@ class I3D:
 
         return node_to_return
 
+    def add_merge_children_node(self, empty_object: bpy.types.Object,
+                                parent: Optional[SceneGraphNode] = None) -> SceneGraphNode:
+        self.logger.debug(f"Adding MergeChildrenRoot: {empty_object.name}")
+
+        materials_from_children = set()
+
+        def collect_materials_recursive(obj):
+            for child in obj.children:
+                if child.type == 'MESH':
+                    materials_from_children.update(child.data.materials)
+                collect_materials_recursive(child)
+
+        collect_materials_recursive(empty_object)
+
+        if not materials_from_children:
+            self.logger.warning(f"No materials found in children of {empty_object.name}. "
+                                f"MergeChildrenRoot will not be created.")
+            return None
+
+        # Create a merged mesh object to act as a container for the children
+        # This is necessary to utilize the ShapeNode class and include materials
+        dummy_mesh_data = bpy.data.meshes.new(f"MergeChildren_{empty_object.name}")
+        for material in materials_from_children:
+            dummy_mesh_data.materials.append(material)
+        dummy_mesh_object = bpy.data.objects.new(f"{empty_object.name}_dummy", dummy_mesh_data)
+
+        # Match the transformation of the original empty object
+        dummy_mesh_object.matrix_world = empty_object.matrix_world
+        if empty_object.parent is not None:
+            dummy_mesh_object.parent = empty_object.parent
+            dummy_mesh_object.matrix_parent_inverse = empty_object.matrix_world.inverted()
+
+        first_mesh_child = next(child for child in empty_object.children if child.type == 'MESH')
+
+        def copy_custom_properties(source, target):
+            for key in source.keys():
+                self.logger.debug(f"Copying custom property: {key}")
+                target[key] = source[key]
+
+        copy_custom_properties(first_mesh_child, dummy_mesh_object)
+        copy_custom_properties(first_mesh_child.data.i3d_attributes, dummy_mesh_data.i3d_attributes)
+
+        # Initialize the root node with the dummy mesh object
+        merge_children_root = self._add_node(MergeChildrenRoot, dummy_mesh_object, parent)
+        # Add the children meshes to the root node
+        merge_children_root.add_children_meshes(empty_object)
+
+        # Cleanup the temporary dummy object after processing
+        bpy.data.objects.remove(dummy_mesh_object, do_unlink=True)
+        bpy.data.meshes.remove(dummy_mesh_data, do_unlink=True)
+        self.logger.info(f"Finished merging children into root: {empty_object.name}")
+        return merge_children_root
+
     def add_bone(self, bone_object: bpy.types.Bone, parent: SkinnedMeshBoneNode | SkinnedMeshRootNode | None,
                  root_node: SkinnedMeshRootNode) -> SceneGraphNode:
         return self._add_node(SkinnedMeshBoneNode, bone_object, parent, root_node=root_node)
@@ -164,7 +217,7 @@ class I3D:
         return self._add_node(CameraNode, camera_object, parent)
 
     def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None,
-                  bone_mapping: ChainMap = None) -> int:
+                  is_generic=None, bone_mapping: ChainMap = None) -> int:
         if shape_name is None:
             name = evaluated_mesh.name
         else:
@@ -173,7 +226,7 @@ class I3D:
         if name not in self.shapes:
             shape_id = self._next_available_id('shape')
             indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name, is_merge_group,
-                                                      bone_mapping)
+                                                      is_generic, bone_mapping)
             # Store a reference to the shape from both it's name and its shape id
             self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
@@ -345,6 +398,7 @@ class I3D:
 from i3dio.node_classes.node import *
 from i3dio.node_classes.shape import *
 from i3dio.node_classes.merge_group import *
+from i3dio.node_classes.merge_children import *
 from i3dio.node_classes.skinned_mesh import *
 from i3dio.node_classes.material import *
 from i3dio.node_classes.file import *
