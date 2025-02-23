@@ -204,10 +204,11 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
         return
 
-    # Special handling of armature nodes, since they are sort of "extra" compared to how other programs like Maya
-    # handles bones. So the option for turning them off is provided.
     _parent = parent
-    if not i3d.settings['collapse_armatures'] and isinstance(parent, SkinnedMeshRootNode):
+    # Special handling when the parent is an armature node, as armatures are treated differently
+    # compared to how other programs like Maya handle bones. If the armature is collapsed,
+    # reassign its child to the armature’s original parent to maintain hierarchy.
+    if isinstance(parent, SkinnedMeshRootNode) and parent.is_collapsed:
         try:
             _parent = parent.parent
         except AttributeError:
