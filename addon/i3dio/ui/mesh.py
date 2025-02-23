@@ -220,7 +220,11 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.prop(mesh.i3d_attributes, "cpu_mesh", expand=True)
         layout.prop(mesh.i3d_attributes, "double_sided")
         layout.prop(mesh.i3d_attributes, "material_holder")
-        layout.prop(mesh.i3d_attributes, "nav_mesh_mask")
+        row = layout.row()
+        row.prop(mesh.i3d_attributes, "nav_mesh_mask")
+        op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+        op.target_prop = "nav_mesh_mask"
+        op.used_bits = 8
         layout.prop(mesh.i3d_attributes, "decal_layer")
         layout.prop(mesh.i3d_attributes, "vertex_compression_range")
         layout.prop(mesh.i3d_attributes, 'fill_volume')

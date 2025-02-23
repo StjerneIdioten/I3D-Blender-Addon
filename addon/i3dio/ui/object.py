@@ -429,6 +429,17 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=False
     )
 
+    collapse_armature: BoolProperty(
+        name="Collapse Armature",
+        description=(
+            "If enabled, the armature itself will not be exported. "
+            "Instead, its root bones will take its position in the scene graph. "
+            "If disabled, the armature will be exported as a transform group, "
+            "with bones structured as they appear in Blender."
+        ),
+        default=True
+    )
+
 
 @register
 class I3DMergeGroup(bpy.types.PropertyGroup):
@@ -442,6 +453,41 @@ class I3DMergeGroup(bpy.types.PropertyGroup):
         name="Merge Group Root Object",
         description="The object acting as the root for the merge group",
         type=bpy.types.Object
+    )
+
+
+@register
+class I3DMergeChildren(bpy.types.PropertyGroup):
+    enabled: BoolProperty(
+        name="Enable Merge Children",
+        description=(
+            "Enable this object to act as the merge root for exporting its child objects. "
+            "During export, all child objects will be combined into a single merged object."
+        ),
+        default=False
+    )
+    apply_transforms: bpy.props.BoolProperty(
+        name="Apply Transforms",
+        description=(
+            "Bake location, rotation, and scale into each child mesh. When enabled, child meshes retain their "
+            "current position and orientation relative to the root (merge root object). "
+            "When disabled, child meshes will be transformed to align directly with the root object, "
+            "removing their individual offsets and placing them at the root's location."
+        ),
+        default=False
+    )
+    interpolation_steps: bpy.props.IntProperty(
+        name="Interpolation Steps",
+        description=(
+            "Number of additional interpolation steps inserted between merged child objects. "
+            "This is useful for creating smoother animations or transitions in shaders "
+            "that utilize array textures (e.g., for motion paths). "
+            "Make sure the corresponding texture accounts for the same number of steps to "
+            "avoid unexpected offsets in the animation or effect."
+        ),
+        default=1,
+        min=1,
+        max=10
     )
 
 
@@ -549,37 +595,33 @@ class I3D_IO_PT_object_attributes(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = False
+        layout.use_property_split = True
         layout.use_property_decorate = False
         obj = context.object
         i3d_attributes = obj.i3d_attributes
 
-        box = layout.box()
-        row = box.row(align=True)
-        row.alignment = 'CENTER'
-        row.label(text="I3D Mapping")
-        row = box.row(align=True)
-        row.prop(obj.i3d_mapping, 'is_mapped', text="Add to mapping")
-        row = row.row(align=True)
-        row.enabled = obj.i3d_mapping.is_mapped
-        row.prop(obj.i3d_mapping, 'mapping_name', text="", placeholder="Custom Mapping Name")
+        draw_i3d_mapping_box(layout, obj.i3d_mapping)
 
-        layout.use_property_split = True
         i3d_property(layout, i3d_attributes, 'locked_group', obj)
         i3d_property(layout, i3d_attributes, 'visibility', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
-        i3d_property(layout, i3d_attributes, 'object_mask', obj)
+        row = layout.row(align=True)
+        i3d_property(row, i3d_attributes, 'object_mask', obj)
+        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'object_mask'
 
         layout.separator(type='LINE')
         box = layout.box()
         box.label(text="Exporter Specific:")
         box.prop(i3d_attributes, 'exclude_from_export')
+        if obj.type == 'ARMATURE':
+            box.prop(i3d_attributes, 'collapse_armature')
         layout.separator(type='LINE')
 
         if obj.type == 'EMPTY':
-            draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_level_of_detail_attributes(layout, obj, i3d_attributes)
+            draw_merge_children_attributes(layout, obj.i3d_merge_children)
+            draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_joint_attributes(layout, i3d_attributes)
 
         elif obj.type == 'MESH':
@@ -616,7 +658,9 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
             i3d_attributes.property_unset('compound')
 
         panel.prop(i3d_attributes, 'collision')
-        panel.prop(i3d_attributes, 'collision_mask')
+        row = panel.row(align=True)
+        row.prop(i3d_attributes, 'collision_mask')
+        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'collision_mask'
         panel.prop(i3d_attributes, 'trigger')
         panel.prop(i3d_attributes, 'restitution')
         panel.prop(i3d_attributes, 'static_friction')
@@ -664,6 +708,9 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
         for prop in PROPS:
             row = panel.row()
             row.prop(i3d_attributes, prop)
+            if prop.endswith('_mask'):
+                row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = prop
+
             row.enabled = not use_parent
 
         if use_parent:
@@ -730,6 +777,29 @@ def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.C
             col.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
             col = row.column(align=True)
             col.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
+
+
+def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_children: bpy.types.PropertyGroup) -> None:
+    header, panel = layout.panel('i3d_merge_children_panel', default_closed=True)
+    header.use_property_split = False
+    header.prop(i3d_merge_children, 'enabled', text="Merge Children")
+    if panel:
+        panel.enabled = i3d_merge_children.enabled
+        panel.prop(i3d_merge_children, 'apply_transforms')
+        panel.prop(i3d_merge_children, 'interpolation_steps')
+
+
+def draw_i3d_mapping_box(layout: bpy.types.UILayout, i3d_mapping: bpy.types.PropertyGroup) -> None:
+    box = layout.box()
+    box.use_property_split = False
+    row = box.row(align=True)
+    row.alignment = 'CENTER'
+    row.label(text="I3D Mapping")
+    row = box.row(align=True)
+    row.prop(i3d_mapping, 'is_mapped', text="Add to mapping")
+    row = row.row(align=True)
+    row.enabled = i3d_mapping.is_mapped
+    row.prop(i3d_mapping, 'mapping_name', text="", placeholder="Custom Mapping Name")
 
 
 @register
@@ -895,11 +965,7 @@ class I3D_IO_PT_mapping_bone_attributes(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         bone = context.bone or context.edit_bone
-
-        row = layout.row()
-        row.prop(bone.i3d_mapping, 'is_mapped')
-        row = layout.row()
-        row.prop(bone.i3d_mapping, 'mapping_name')
+        draw_i3d_mapping_box(layout, bone.i3d_mapping)
 
 
 @register
@@ -985,6 +1051,7 @@ def register():
     bpy.types.EditBone.i3d_mapping = PointerProperty(type=I3DMappingData)
     bpy.types.Object.i3d_reference = PointerProperty(type=I3DReferenceData)
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
+    bpy.types.Object.i3d_merge_children = PointerProperty(type=I3DMergeChildren)
     load_post.append(handle_old_merge_groups)
     load_post.append(handle_old_lod_distances)
     load_post.append(handle_old_reference_paths)
@@ -994,6 +1061,7 @@ def unregister():
     load_post.remove(handle_old_reference_paths)
     load_post.remove(handle_old_lod_distances)
     load_post.remove(handle_old_merge_groups)
+    del bpy.types.Object.i3d_merge_children
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_reference
     del bpy.types.EditBone.i3d_mapping

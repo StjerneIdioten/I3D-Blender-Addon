@@ -37,7 +37,8 @@ class SubSet:
 
 
 class Vertex:
-    def __init__(self, subset_idx: int, position, normal, vertex_color, uvs, blend_ids=None, blend_weights=None):
+    def __init__(self, subset_idx: int, position, normal, vertex_color, uvs, blend_ids=None,
+                 blend_weights=None, generic_value=None):
         self._subset_idx = subset_idx
         self._position = position
         self._normal = normal
@@ -45,11 +46,14 @@ class Vertex:
         self._uvs = uvs
         self._blend_ids = blend_ids
         self._blend_weights = blend_weights
+        self._generic_value = generic_value
         self._str = ''
         self._make_hash_string()
 
     def _make_hash_string(self):
         self._str = f"{self._subset_idx}{self._position}{self._normal}{self._vertex_color}"
+        if self._generic_value is not None:
+            self._str += f"{self._generic_value}"
 
         for uv in self._uvs:
             self._str += f"{uv}"
@@ -87,6 +91,9 @@ class Vertex:
     def blend_weights_for_xml(self):
         return "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*self._blend_weights)
 
+    def generic_value_for_xml(self):
+        return "{}".format(self._generic_value)
+
 
 class EvaluatedMesh:
     def __init__(self, i3d: I3D, mesh_object: bpy.types.Object, name: str = None,
@@ -102,13 +109,13 @@ class EvaluatedMesh:
                                                   {'object_name': self.name})
         self.generate_evaluated_mesh(mesh_object, reference_frame)
 
-    def generate_evaluated_mesh(self, mesh_object: bpy.types.Object, reference_frame: mathutils.Matrix = None):
+    def generate_evaluated_mesh(self, mesh_object: bpy.types.Object, reference_frame: mathutils.Matrix = None) -> None:
         if self.i3d.get_setting('apply_modifiers'):
             self.object = mesh_object.evaluated_get(self.i3d.depsgraph)
-            self.logger.debug(f"is exported with modifiers applied")
+            self.logger.debug("is exported with modifiers applied")
         else:
             self.object = mesh_object
-            self.logger.debug(f"is exported without modifiers applied")
+            self.logger.debug("is exported without modifiers applied")
 
         self.mesh = self.object.to_mesh(preserve_all_data_layers=False, depsgraph=self.i3d.depsgraph)
 
@@ -144,7 +151,7 @@ class IndexedTriangleSet(Node):
     ID_FIELD_NAME = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None,
-                 is_merge_group: bool = False, bone_mapping: ChainMap = None):
+                 is_merge_group: bool = False, is_generic: bool = False, bone_mapping: ChainMap = None):
         self.id: int = id_
         self.i3d: I3D = i3d
         self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
@@ -152,8 +159,11 @@ class IndexedTriangleSet(Node):
         self.triangles: List[List[int]] = list()  # List of lists of vertex indexes
         self.subsets: List[SubSet] = []
         self.is_merge_group = is_merge_group
+        self.is_generic = is_generic
+        self.is_generic_from_geometry_nodes = False
         self.bone_mapping: ChainMap = bone_mapping
         self.bind_index = 0
+        self.generic_value = 0.0
         self.vertex_group_ids = {}
         self.tangent: bool = False
         self.material_ids: List[int] = []
@@ -220,6 +230,15 @@ class IndexedTriangleSet(Node):
                             self.logger.warning(f"Incompatible color attribute {color_layer.name}: "
                                                 f"domain={color_layer.domain}, data_type={color_layer.data_type}")
 
+                generic_value = None
+                if self.is_generic_from_geometry_nodes:
+                    # Get the generic value from the mesh attributes, can come from Geometry Nodes
+                    generic_layer = mesh.attributes["generic"]
+                    generic_vertex_index = mesh.loops[loop_index].vertex_index
+                    generic_value = generic_layer.data[generic_vertex_index].value
+                elif self.is_generic:
+                    generic_value = self.generic_value
+
                 # Add uvs
                 uvs = []
                 uv_keys = mesh.uv_layers.keys()
@@ -262,7 +281,8 @@ class IndexedTriangleSet(Node):
                                 vertex_color,
                                 uvs,
                                 blend_ids,
-                                blend_weights)
+                                blend_weights,
+                                generic_value)
 
                 if vertex not in self.vertices:
                     vertex_index = len(self.vertices)
@@ -284,6 +304,13 @@ class IndexedTriangleSet(Node):
 
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh
+
+        # Check if evaluated mesh has "generic" attribute in its attributes
+        if "generic" in mesh.attributes:
+            self.logger.debug("'generic' was found in mesh attributes, likely from a 'Geometry Nodes' modifer. "
+                              "Exporting as generic")
+            self.is_generic = True
+            self.is_generic_from_geometry_nodes = True
 
         if len(mesh.materials) == 0:
             self.logger.info("has no material assigned, assigning default material")
@@ -353,6 +380,43 @@ class IndexedTriangleSet(Node):
         for key, value in self.subsets[-1].as_dict().items():
             subset.set(key, value)
 
+    def append_from_evaluated_mesh_generic(self, mesh_to_append: EvaluatedMesh, generic_value: float):
+        if not self.is_generic:
+            self.logger.warning("Cannot add a mesh to a non-generic IndexedTriangleSet")
+            return
+
+        mesh = mesh_to_append.mesh
+
+        # Material validation
+        if len(mesh.materials) == 0:
+            self.logger.warning(f"Mesh '{mesh.name}' has no materials, skipping.")
+            return
+        elif len(mesh.materials) > 1:
+            self.logger.warning(f"Mesh '{mesh.name}' has multiple materials, skipping.")
+            return
+
+        self.logger.debug(f"Adding mesh '{mesh.name}' to merge children root")
+
+        triangle_offset = len(self.subsets[-1].triangles)
+        vertex_offset = self.subsets[-1].number_of_vertices
+
+        # Add triangles to the subset
+        for triangle in mesh.loop_triangles:
+            self.subsets[-1].add_triangle(triangle)
+
+        self.logger.debug(f"Added mesh '{mesh.name}' with generic value '{generic_value}'")
+        self.generic_value = generic_value
+
+        # Process the subset and write vertices/triangles
+        self.process_subset(mesh, self.subsets[-1], triangle_offset)
+        self.write_vertices(vertex_offset)
+        self.write_triangles(triangle_offset)
+
+        # Update the subset's generic value
+        subset = list(self.xml_elements['subsets'])[0]
+        for key, value in self.subsets[-1].as_dict().items():
+            subset.set(key, value)
+
     def write_vertices(self, offset=0):
         # Vertices
         self._write_attribute('count', len(self.vertices), 'vertices')
@@ -364,6 +428,8 @@ class IndexedTriangleSet(Node):
 
         if self.is_merge_group:
             self._write_attribute('singleblendweights', True, 'vertices')
+        elif self.is_generic:
+            self._write_attribute('generic', True, 'vertices')
         elif self.bone_mapping is not None:
             self._write_attribute('blendweights', True, 'vertices')
 
@@ -384,6 +450,8 @@ class IndexedTriangleSet(Node):
 
             if self.is_merge_group:
                 vertex_attributes['bi'] = str(self.bind_index)
+            elif self.is_generic:
+                vertex_attributes['g'] = str(vertex.generic_value_for_xml())
             elif self.bone_mapping is not None:
                 vertex_attributes['bw'] = vertex.blend_weights_for_xml()
                 vertex_attributes['bi'] = vertex.blend_ids_for_xml()
@@ -401,8 +469,25 @@ class IndexedTriangleSet(Node):
             xml_i3d.SubElement(self.xml_elements['triangles'], 't', {'vi': "{0} {1} {2}".format(*triangle)})
 
     def populate_xml_element(self):
-        if len(self.evaluated_mesh.mesh.vertices) == 0:
-            self.logger.warning(f"has no vertices! Export of this mesh is aborted.")
+        if len(self.evaluated_mesh.mesh.vertices) == 0 or self.is_generic:
+            if self.is_generic:
+                self.logger.debug(f"Setting up generic merge children root: '{self.name}'")
+                self.subsets.append(SubSet())
+                self._write_attribute('count', len(self.subsets), 'subsets')
+
+                self._process_bounding_volume()
+
+                for subset in self.subsets:
+                    xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
+
+                # NOTE: Very hacky way to add material ids to generic/merge children shapes,
+                # because the root generic shape does not contain any data in its mesh we cannot run it with
+                # populate_from_evaluated_mesh need to be revisted, but works for FS22 version
+                for material in self.evaluated_mesh.mesh.materials:
+                    self.material_ids.append(self.i3d.add_material(material))
+                return
+
+            self.logger.warning("has no vertices! Export of this mesh is aborted.")
             return
         self.populate_from_evaluated_mesh()
         self.logger.debug(f"Has '{len(self.subsets)}' subsets, "
@@ -415,6 +500,13 @@ class IndexedTriangleSet(Node):
         # Subsets
         self._write_attribute('count', len(self.subsets), 'subsets')
 
+        self._process_bounding_volume()
+
+        # Write subsets
+        for subset in self.subsets:
+            xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
+
+    def _process_bounding_volume(self):
         bounding_volume_object = self.evaluated_mesh.mesh.i3d_attributes.bounding_volume_object
         if bounding_volume_object is not None:
             # Calculate the bounding volume center from the corners of the bounding box
@@ -433,10 +525,6 @@ class IndexedTriangleSet(Node):
             self._write_attribute(
                 "bvRadius", max(bounding_volume_object.dimensions) / 2
             )
-
-        # Write subsets
-        for subset in self.subsets:
-            xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
 
 
 class ControlVertex:
@@ -573,7 +661,7 @@ class ShapeNode(SceneGraphNode):
     ELEMENT_TAG = 'Shape'
 
     def __init__(self, id_: int, shape_object: Optional[bpy.types.Object], i3d: I3D,
-                 parent: Optional[SceneGraphNode] = None):
+                 parent: Optional[SceneGraphNode] = None, custom_name: Optional[str] = None):
         self.shape_id = None
         super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent)
 

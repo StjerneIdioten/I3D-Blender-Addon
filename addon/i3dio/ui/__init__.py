@@ -4,6 +4,7 @@ if "bpy" in locals():
         'helper_functions',
         'addon_preferences',
         'exporter',
+        'bit_mask_editor',
         'presets',
         'object',
         'mesh',
@@ -17,5 +18,5 @@ if "bpy" in locals():
         if module_name in locals():
             importlib.reload(locals()[module_name])
 
-from . import (helper_functions, addon_preferences, exporter, object, presets, user_attributes, mesh, light, shader_picker,
-               udim_picker)
+from . import (helper_functions, addon_preferences, exporter, bit_mask_editor, object, presets, user_attributes, mesh,
+               light, shader_picker, udim_picker)
