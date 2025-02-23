@@ -429,6 +429,17 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=False
     )
 
+    collapse_armature: BoolProperty(
+        name="Collapse Armature",
+        description=(
+            "If enabled, the armature itself will not be exported. "
+            "Instead, its root bones will take its position in the scene graph. "
+            "If disabled, the armature will be exported as a transform group, "
+            "with bones structured as they appear in Blender."
+        ),
+        default=True
+    )
+
 
 @register
 class I3DMergeGroup(bpy.types.PropertyGroup):
@@ -603,6 +614,8 @@ class I3D_IO_PT_object_attributes(Panel):
         box = layout.box()
         box.label(text="Exporter Specific:")
         box.prop(i3d_attributes, 'exclude_from_export')
+        if obj.type == 'ARMATURE':
+            box.prop(i3d_attributes, 'collapse_armature')
         layout.separator(type='LINE')
 
         if obj.type == 'EMPTY':
