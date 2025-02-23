@@ -23,8 +23,7 @@ class MergeChildrenRoot(ShapeNode):
 
     def add_shape(self):
         """Override to add the merged mesh as the shape."""
-        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), is_generic=True,
-                                           tangent=self.tangent)
+        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), is_generic=True)
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def add_children_meshes(self, empty_object: bpy.types.Object):
