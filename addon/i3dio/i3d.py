@@ -37,7 +37,7 @@ class I3D:
 
         self.scene_root_nodes = []
         self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
-        self.deferred_constraints: List[Tuple[bpy.types.Object, bpy.types.Bone, bpy.types.Object]] = []
+        self.deferred_constraints: list[tuple[SkinnedMeshBoneNode, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
 
         self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
@@ -65,6 +65,7 @@ class I3D:
         node = node_type(self._next_available_id('node'), object_, self, parent, **kwargs)
         self.processed_objects[object_] = node
         if parent is None:
+            self.logger.debug(f"Adding root node: {node.name}")
             self.scene_root_nodes.append(node)
             self.xml_elements['Scene'].append(node.element)
         return node
@@ -94,9 +95,9 @@ class I3D:
 
         return node_to_return
 
-    def add_bone(self, bone_object: bpy.types.Bone, parent: SkinnedMeshBoneNode | SkinnedMeshRootNode,
-                 armature_object: bpy.types.Object) -> SceneGraphNode:
-        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, armature_object=armature_object)
+    def add_bone(self, bone_object: bpy.types.Bone, parent: SkinnedMeshBoneNode | SkinnedMeshRootNode | None,
+                 root_node: SkinnedMeshRootNode) -> SceneGraphNode:
+        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, root_node=root_node)
 
     def add_armature_from_modifier(self, armature_object: bpy.types.Object) -> SceneGraphNode:
         if armature_object.name not in self.skinned_meshes:
@@ -122,7 +123,7 @@ class I3D:
             if not self.settings['collapse_armatures']:
                 if parent is not None:
                     if node.parent is None:
-                        # If armature was registered via a modifier, ensure it has the correct parent
+                        # If armature was registered via a modifier parent was not known at the time, so parent it now
                         node.parent = parent
                     parent.add_child(node)
                     parent.element.append(node.element)
@@ -130,6 +131,21 @@ class I3D:
                     # If no parent, treat armature as root node
                     self.scene_root_nodes.append(node)
                     self.xml_elements['Scene'].append(node.element)
+            else:
+                # Bones were processed through armature modifier, ensure they are parented to the correct node
+                for bone in node.bones:
+                    # When collapse armatures is enabled, the armature is proccessed from modifier,
+                    # which would initilize SkinnedMeshRootNode parent as None. Since we now know the parent,
+                    # we can reparent the bones to the correct node parent. We have to skip deferred bones here,
+                    # because those will be run through last to ensure their target is added to the scene graph.
+                    if parent is not None and not bone.deferred_target and (bone.parent is None or bone.parent is node):
+                        bone.reparent(parent)
+                    # When collapse armatures is enabled, bone is child of and armature is proccessed from modifier,
+                    # parent for the bones is initially passed as None and then reassigned to child of constraint target
+                    elif bone.is_child_of and bone.parent is not None and bone in self.scene_root_nodes:
+                        self.scene_root_nodes.remove(bone)
+                        self.xml_elements['Scene'].remove(bone.element)
+
         return self.skinned_meshes[armature_object.name]
 
     def add_skinned_mesh_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:

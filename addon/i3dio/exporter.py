@@ -319,16 +319,9 @@ def traverse_hierarchy(obj: BlenderObject) -> List[BlenderObject]:
 
 
 def _process_deferred_constraints(i3d: I3D):
-    for armature, bone_object, target in i3d.deferred_constraints:
-        i3d.logger.debug(f"Processing deferred constraint for: {bone_object}, Target: {target}")
-
-        if target in i3d.processed_objects:
-            i3d.logger.debug(f"Target object '{target}' is included in the export hierarchy. Setting bone parent.")
-            bone_name = bone_object.name
-            bone = next((b for b in i3d.skinned_meshes[armature.name].bones if b.name == bone_name), None)
-
-            if bone is not None:
-                i3d.skinned_meshes[armature.name].update_bone_parent(None, custom_target=i3d.processed_objects[target],
-                                                                     bone=bone)
-            else:
-                i3d.logger.warning(f"Could not find bone {bone_name} in the armature's bone list!")
+    for bone_node, target_obj in i3d.deferred_constraints:
+        i3d.logger.debug(f"Processing deferred constraint for: {bone_node}, Target: {target_obj}")
+        if target_node := i3d.processed_objects.get(target_obj):
+            bone_node.reparent(target_node)
+        else:
+            i3d.logger.warning(f"Target '{target_obj}' is not processed or not in export list. Skipping.")
