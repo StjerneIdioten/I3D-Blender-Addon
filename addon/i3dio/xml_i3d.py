@@ -7,49 +7,16 @@ import logging
 import bpy
 import mathutils
 
-# Load in the xml modules
-xml_libraries = {'element_tree'}
-xml_current_library = 'element_tree'
-import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
-XML_Element = ET.Element
-xml_parsing_exceptions = [ET.ParseError, FileNotFoundError]
-try:
-    from lxml import etree
-    xml_libraries.add('lxml')
-    XML_Element = Union[ET.Element, etree.Element]
-    xml_parsing_exceptions.append(etree.ParseError)
-    xml_current_library = 'lxml'
-except ImportError as e:
-    etree = e
-
 from . import utility
+import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
 
 logger = logging.getLogger(__name__)
 
+XML_Element = ET.Element
 file_ending = '.i3d'
-
 merge_group_prefix = 'MergedMesh_'
 skinned_mesh_prefix = 'SkinnedMesh_'
-
 i3d_max = 3.40282e+38
-
-
-def _generic_library_switcher(function: str, *argv, **kwargs):
-    """
-    Very generic way of calling functions that have the same signature between the two libraries
-
-    Args:
-        function:
-        *argv:
-        **kwargs:
-
-    Returns:
-
-    """
-    if xml_current_library == 'lxml':
-        return getattr(etree, function)(*argv, **kwargs)
-    else:
-        return getattr(ET, function)(*argv, **kwargs)
 
 
 class CommentedTreeBuilder(ET.TreeBuilder):
@@ -62,43 +29,33 @@ class CommentedTreeBuilder(ET.TreeBuilder):
         self.end(ET.Comment)
 
 
-def parse(*argv, **kwargs):
+def parse(*argv, **kwargs) -> ET.ElementTree:
     tree = None
     try:
-        if xml_current_library == 'lxml':
-            tree = etree.parse(*argv, **kwargs, parser=etree.XMLParser(remove_blank_text=True))
-        else:
-            tree = ET.parse(*argv, **kwargs, parser=ET.XMLParser(target=CommentedTreeBuilder()))
-    except tuple(xml_parsing_exceptions) as e:
+        tree = ET.parse(*argv, **kwargs, parser=ET.XMLParser(target=CommentedTreeBuilder()))
+    except (ET.ParseError, FileNotFoundError) as e:
         print(f"Error while parsing xml file: {e}")
     return tree
 
 
-def SubElement(*argv, **kwargs):
-    return _generic_library_switcher('SubElement', *argv, **kwargs)
+def SubElement(*args, **kwargs) -> ET.Element:
+    return ET.SubElement(*args, **kwargs)
 
 
-def Element(*argv, **kwargs):
-    return _generic_library_switcher('Element', *argv, **kwargs)
+def Element(*args, **kwargs) -> ET.Element:
+    return ET.Element(*args, **kwargs)
 
 
-def ElementTree(*argv, **kwargs):
-    return _generic_library_switcher('ElementTree', *argv, **kwargs)
+def ElementTree(*args, **kwargs) -> ET.ElementTree:
+    return ET.ElementTree(*args, **kwargs)
 
 
-def write_tree_to_file(tree, file_path: str, *argv, **kwargs):
-    if xml_current_library == 'lxml':
-        f = open(file_path, 'w')
-        i3d_string = etree.tostring(tree, *argv, pretty_print=True, **kwargs).decode(kwargs['encoding'])
-        i3d_string = i3d_string.replace("&gt;", ">")
-        f.write(i3d_string)
-        f.close()
-    else:
-        add_indentations(tree.getroot())
-        tree.write(file_path, *argv, **kwargs)
+def write_tree_to_file(tree, file_path: str, *argv, **kwargs) -> None:
+    add_indentations(tree.getroot())
+    tree.write(file_path, *argv, **kwargs)
 
 
-def export_to_i3d_file(source: XML_Element, file_path: str, *argv, **kwargs):
+def export_to_i3d_file(source: XML_Element, file_path: str, *argv, **kwargs) -> None:
     settings = {
         'xml_declaration': True,
         'encoding': 'iso-8859-1',
@@ -108,26 +65,15 @@ def export_to_i3d_file(source: XML_Element, file_path: str, *argv, **kwargs):
     write_tree_to_file(ElementTree(source), file_path, *argv, **settings, **kwargs)
 
 
-def i3d_root_element(name: str):
-
+def i3d_root_element(name: str) -> XML_Element:
     root_attributes = {
         'version': '1.6',
     }
-
     namespaced_attributes = {
         'xsi:noNamespaceSchemaLocation': 'http://i3d.giants.ch/schema/i3d-1.6.xsd',
         'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance'
     }
-
-    if xml_current_library == 'lxml':
-        nsmap = {
-            'xsi': 'http://www.w3.org/2001/XMLSchema-instance'
-        }
-        attr_qname = etree.QName("http://www.w3.org/2001/XMLSchema-instance", 'noNamespaceSchemaLocation')
-        return Element('i3D', attrib={'name': name, **root_attributes,
-                                      attr_qname: 'http://i3d.giants.ch/schema/i3d-1.6.xsd'}, nsmap=nsmap)
-    else:
-        return Element('i3D', attrib={'name': name, **root_attributes, **namespaced_attributes})
+    return Element('i3D', attrib={'name': name, **root_attributes, **namespaced_attributes})
 
 
 def write_int(element: XML_Element, attribute: str, value: int) -> None:
@@ -258,7 +204,7 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
                     logger.error(f"Supplied value '{value}' for '{prop_name}' is not a hex value!")
                     continue
                 else:
-                    if 0 <= value_decimal <= 2**32-1:  # Check that it is actually a 32-bit unsigned int
+                    if 0 <= value_decimal <= 2**32 - 1:  # Check that it is actually a 32-bit unsigned int
                         value_to_write = value_decimal
                     else:
                         logger.warning(f"Supplied value '{value}' for '{prop_name}' is out of bounds."
@@ -319,7 +265,7 @@ def escape_attrib_element_tree(text):
         if ">" in text:
             # Needed for the i3d format
             pass
-            #text = text.replace(">", "&gt;")
+            # text = text.replace(">", "&gt;")
         if "\"" in text:
             text = text.replace("\"", "&quot;")
         # The following business with carriage returns is to satisfy
@@ -330,7 +276,7 @@ def escape_attrib_element_tree(text):
             text = text.replace("\r\n", "\n")
         if "\r" in text:
             text = text.replace("\r", "\n")
-        #The following four lines are issue 17582
+        # The following four lines are issue 17582
         if "\n" in text:
             text = text.replace("\n", "&#10;")
         if "\t" in text:
@@ -342,5 +288,3 @@ def escape_attrib_element_tree(text):
 
 # Assign the escape attribute function to replace the default implementation
 ET._escape_attrib = escape_attrib_element_tree
-
-

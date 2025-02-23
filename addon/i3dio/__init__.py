@@ -20,7 +20,7 @@ if "bpy" in locals():
         if __name__ in module:
             del sys.modules[module]
 
-from . import ui, xml_i3d
+from . import ui
 
 import bpy
 
@@ -42,36 +42,13 @@ bl_info = {
 }
 
 def register():
-    try:
-        import lxml
-    except ImportError as e:
-        import os
-        import ctypes
-        if ctypes.windll.shell32.IsUserAnAdmin():
-            import subprocess
-            import sys
-            python_exe = sys.executable
-            result = subprocess.run(['echo', 'yes', '|', python_exe, '-m', 'pip', 'install', '-r',
-                                     f'{os.path.dirname(os.path.realpath(__file__))}\\requirements.txt'],
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, shell=True)
-            try:
-                import lxml
-            except ImportError as e:
-                raise ImportError('Lxml could not be installed, despite prerequisites being met') from e
-            else:
-                print("Lxml is now installed and ready for use")
-                # TODO: See if it is even necessary to import xml_i3d beforehand, maybe reload can be avoided
-                import importlib
-                importlib.reload(xml_i3d)  # We need to reload this library so it now has access to lxml
-        else:
-            print('You must run blender as administrator to be able to install lxml!')
-
     ui.helper_functions.register()
     ui.addon_preferences.register()
     ui.udim_picker.register()
     ui.shader_picker.register()
     ui.exporter.register()
     ui.collision_data.register()
+    ui.bit_mask_editor.register()
     ui.presets.register()
     ui.object.register()
     ui.user_attributes.register()
@@ -84,6 +61,7 @@ def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(ui.exporter.menu_func_export)
     ui.exporter.unregister()
     ui.user_attributes.unregister()
+    ui.bit_mask_editor.unregister()
     ui.presets.unregister()
     ui.object.unregister()
     ui.collision_data.unregister()
