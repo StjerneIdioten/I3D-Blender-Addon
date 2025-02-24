@@ -669,7 +669,10 @@ class I3D_IO_PT_object_attributes(Panel):
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
         row = layout.row(align=True)
         i3d_property(row, i3d_attributes, 'object_mask', obj)
-        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'object_mask'
+        op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+        op.target_prop = 'object_mask'
+        op.layout_mode = 'HORIZONTAL'
+        op.dialog_width = 400
 
         layout.separator(type='LINE')
         box = layout.box()
@@ -776,7 +779,11 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
             row = panel.row()
             row.prop(i3d_attributes, prop)
             if prop.endswith('_mask'):
-                row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = prop
+                op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+                op.target_prop = prop
+                op.layout_mode = 'HORIZONTAL'  # Vertical in FS25
+                # 375 and 677 for FS25
+                op.dialog_width = 750 if prop.startswith("weather_") else 950
 
             row.enabled = not use_parent
 
