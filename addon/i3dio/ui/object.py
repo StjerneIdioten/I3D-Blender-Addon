@@ -729,8 +729,18 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
         col_filter_header.emboss = 'NONE'
         col_filter_header.menu(I3D_IO_MT_collision_presets.bl_idname, icon='PRESET', text="")
         if col_filter_panel:
-            col_filter_panel.prop(i3d_attributes, 'collision_filter_group')
-            col_filter_panel.prop(i3d_attributes, 'collision_filter_mask')
+            row = col_filter_panel.row()
+            row.prop(i3d_attributes, 'collision_filter_group')
+            op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+            op.target_prop = 'collision_filter_group'
+            op.layout_mode = 'VERTICAL'
+            op.dialog_width = 890
+            row = col_filter_panel.row()
+            row.prop(i3d_attributes, 'collision_filter_mask')
+            op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+            op.target_prop = 'collision_filter_mask'
+            op.layout_mode = 'VERTICAL'
+            op.dialog_width = 890
 
         panel.prop(i3d_attributes, 'restitution')
         panel.prop(i3d_attributes, 'static_friction')
