@@ -43,6 +43,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'locked_group': {'name': 'lockedgroup', 'default': False, 'preset_group': 'ALL'},
         'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
                                                                            'mapping': {True: False,
+                                                                                       False: True}}},
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0, 'preset_group': 'ALL'},
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0, 'preset_group': 'ALL'},
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX', 'preset_group': 'ALL'},
