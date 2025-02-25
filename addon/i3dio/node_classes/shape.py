@@ -15,15 +15,13 @@ from ..utility import print
 
 
 class MaterialStorage:
-    material_slot_name: str = None
     triangles: List = None
 
     def __init__(self):
         self.triangles = []
 
     def __str__(self):
-        return f"material_slot_name={self.material_slot_name}, " \
-               f"triangles={len(self.triangles)}-{self.triangles}"
+        return f"triangles={len(self.triangles)}-{self.triangles}"
 
     def __repr__(self):
         return self.__str__()
@@ -36,7 +34,6 @@ class SubSet:
         self.number_of_indices = 0
         self.number_of_vertices = 0
         self.triangles = []
-        self.mat_name = None
 
     def as_dict(self):
         subset_attributes = {'firstIndex': f"{self.first_index}",
