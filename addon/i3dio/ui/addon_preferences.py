@@ -64,8 +64,7 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
     def execute(self, context):
         for addon in addon_utils.modules():
             if addon.bl_info.get("name") == "GIANTS I3D Exporter Tools":
-                path = pathlib.PurePath(addon.__file__).parent.joinpath('util/i3dConverter.exe')
-                context.preferences.addons['i3dio'].preferences.i3d_converter_path = str(path)
+                bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path = str(pathlib.PurePath(addon.__file__).parent.joinpath('util/i3dConverter.exe'))
                 break
         return {"FINISHED"}
 
