@@ -38,7 +38,7 @@ class I3D:
 
         self.scene_root_nodes = []
         self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
-        self.deferred_constraints: List[Tuple[bpy.types.Object, bpy.types.Bone, bpy.types.Object]] = []
+        self.deferred_constraints: list[tuple[SkinnedMeshBoneNode, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
 
         self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
@@ -70,6 +70,15 @@ class I3D:
             self.xml_elements['Scene'].append(node.element)
         return node
 
+    def _get_or_create_armature_node(self, armature_object: bpy.types.Object,
+                                     parent: SceneGraphNode | None) -> SkinnedMeshRootNode:
+        """Retrieves an existing SkinnedMeshRootNode for the armature or creates a new one if needed."""
+        node = self.skinned_meshes.get(armature_object.name)
+        if node is None:
+            node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self, parent=parent)
+            self.skinned_meshes[armature_object.name] = node
+        return node
+
     # Public Methods ###################################################################################################
     def add_shape_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
@@ -95,48 +104,79 @@ class I3D:
 
         return node_to_return
 
-    def add_bone(self, bone_object: bpy.types.Bone, parent: Union[SkinnedMeshBoneNode, SkinnedMeshRootNode],
-                 is_child_of: bool = False, armature_object: bpy.types.Object = None,
-                 target: bpy.types.Object = None) -> SceneGraphNode:
-        return self._add_node(SkinnedMeshBoneNode, bone_object, parent, is_child_of=is_child_of,
-                              armature_object=armature_object, target=target)
+    def add_merge_children_node(self, empty_object: bpy.types.Object,
+                                parent: Optional[SceneGraphNode] = None) -> SceneGraphNode:
+        self.logger.debug(f"Adding MergeChildrenRoot: {empty_object.name}")
 
-    # TODO: Rethink this to not include an extra argument for when the node is actually discovered.
-    #  Maybe two separate functions instead? This is just hack'n'slash code at this point!
-    def add_armature(self, armature_object: bpy.types.Armature, parent: SceneGraphNode = None,
-                     is_located: bool = False) -> SceneGraphNode:
-        if armature_object.name not in self.skinned_meshes:
-            if is_located and not self.settings['collapse_armatures']:
-                skinned_mesh_root_node = self._add_node(SkinnedMeshRootNode, armature_object, parent)
-            elif is_located and self.settings['collapse_armatures']:
-                skinned_mesh_root_node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self,
-                                                             None)
-                skinned_mesh_root_node.update_bone_parent(parent)
+        materials_from_children = set()
 
-            else:
-                skinned_mesh_root_node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self,
-                                                             None)
+        def collect_materials_recursive(obj):
+            for child in obj.children:
+                if child.type == 'MESH':
+                    materials_from_children.update(child.data.materials)
+                collect_materials_recursive(child)
 
-            skinned_mesh_root_node.is_located = is_located
-            self.skinned_meshes[armature_object.name] = skinned_mesh_root_node
-        elif is_located:
-            if not self.settings['collapse_armatures']:
-                if parent is not None:
-                    # The armature was created from a modifier, which may introduce a parent relationship.
-                    # However, the parent might not have been known at the time of creation.
-                    if self.skinned_meshes[armature_object.name].parent is None:
-                        self.skinned_meshes[armature_object.name].parent = parent
-                    parent.add_child(self.skinned_meshes[armature_object.name])
-                    parent.element.append(self.skinned_meshes[armature_object.name].element)
-                else:
-                    self.scene_root_nodes.append(self.skinned_meshes[armature_object.name])
-                    self.xml_elements['Scene'].append(self.skinned_meshes[armature_object.name].element)
-            else:
-                self.skinned_meshes[armature_object.name].update_bone_parent(parent)
+        collect_materials_recursive(empty_object)
 
-            self.skinned_meshes[armature_object.name].is_located = is_located
+        if not materials_from_children:
+            self.logger.warning(f"No materials found in children of {empty_object.name}. "
+                                f"MergeChildrenRoot will not be created.")
+            return None
 
-        return self.skinned_meshes[armature_object.name]
+        # Create a merged mesh object to act as a container for the children
+        # This is necessary to utilize the ShapeNode class and include materials
+        dummy_mesh_data = bpy.data.meshes.new(f"MergeChildren_{empty_object.name}")
+        for material in materials_from_children:
+            dummy_mesh_data.materials.append(material)
+        dummy_mesh_object = bpy.data.objects.new(f"{empty_object.name}_dummy", dummy_mesh_data)
+
+        # Match the transformation of the original empty object
+        dummy_mesh_object.matrix_world = empty_object.matrix_world
+        if empty_object.parent is not None:
+            dummy_mesh_object.parent = empty_object.parent
+            dummy_mesh_object.matrix_parent_inverse = empty_object.matrix_world.inverted()
+
+        first_mesh_child = next(child for child in empty_object.children if child.type == 'MESH')
+
+        def copy_custom_properties(source, target):
+            for key in source.keys():
+                self.logger.debug(f"Copying custom property: {key}")
+                target[key] = source[key]
+
+        copy_custom_properties(first_mesh_child, dummy_mesh_object)
+        copy_custom_properties(first_mesh_child.data.i3d_attributes, dummy_mesh_data.i3d_attributes)
+
+        # Initialize the root node with the dummy mesh object
+        merge_children_root = self._add_node(MergeChildrenRoot, dummy_mesh_object, parent)
+        # Add the children meshes to the root node
+        merge_children_root.add_children_meshes(empty_object)
+
+        # Cleanup the temporary dummy object after processing
+        bpy.data.objects.remove(dummy_mesh_object, do_unlink=True)
+        bpy.data.meshes.remove(dummy_mesh_data, do_unlink=True)
+        self.logger.info(f"Finished merging children into root: {empty_object.name}")
+        return merge_children_root
+
+    def add_bone(self, bone_object: bpy.types.Bone, parent: SceneGraphNode | None,
+                 root_node: SkinnedMeshRootNode) -> SceneGraphNode:
+        # Prevent the bone from getting added to the scene root node if added through a armature modifier.
+        # If it actually should be added to scene root we will handle it when we get to the armature object
+        node = SkinnedMeshBoneNode(self._next_available_id('node'), bone_object, self, parent, root_node)
+        self.processed_objects[bone_object] = node
+        return node
+
+    def add_armature_from_modifier(self, armature_object: bpy.types.Object) -> SkinnedMeshRootNode:
+        """Gets or creates an armature node for a SkinnedMeshShapeNode.
+        When processing a mesh with an ARMATURE modifier, the armature must be retrieved or created
+        to ensure the skinned mesh can properly bind to its bones.
+        """
+        return self._get_or_create_armature_node(armature_object, parent=None)
+
+    def add_armature_from_scene(self, armature_object: bpy.types.Object, parent: SceneGraphNode) -> SceneGraphNode:
+        """Gets or creates an armature node during scene traversal and assigns hierarchy."""
+        armature_node = self._get_or_create_armature_node(armature_object, parent)
+        armature_node.organize_armature_hierarchy(parent)
+        return armature_node
 
     def add_skinned_mesh_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         return self._add_node(SkinnedMeshShapeNode, mesh_object, parent)
@@ -153,17 +193,13 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(CameraNode, camera_object, parent)
 
-    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=None,
-                  bone_mapping: ChainMap = None, tangent = False) -> int:
-        if shape_name is None:
-            name = evaluated_mesh.name
-        else:
-            name = shape_name
-
+    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=False,
+                  is_generic=False, bone_mapping: ChainMap = None) -> int:
+        name = shape_name or evaluated_mesh.name
         if name not in self.shapes:
             shape_id = self._next_available_id('shape')
             indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name, is_merge_group,
-                                                      bone_mapping, tangent)
+                                                      is_generic, bone_mapping)
             # Store a reference to the shape from both it's name and its shape id
             self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
@@ -171,11 +207,7 @@ class I3D:
         return self.shapes[name].id
 
     def add_curve(self, evaluated_curve: EvaluatedNurbsCurve, curve_name: Optional[str] = None) -> int:
-        if curve_name is None:
-            name = evaluated_curve.name
-        else:
-            name = curve_name
-
+        name = curve_name or evaluated_curve.name
         if name not in self.shapes:
             curve_id = self._next_available_id('shape')
             nurbs_curve = NurbsCurve(curve_id, self, evaluated_curve, curve_name)
@@ -185,7 +217,6 @@ class I3D:
             return curve_id
         return self.shapes[name].id
 
-
     def get_shape_by_id(self, shape_id: int):
         return self.shapes[shape_id]
 
@@ -193,7 +224,7 @@ class I3D:
         node_attribute_element = self.xml_elements['UserAttributes'].find(f"UserAttribute[@nodeId='{node_id:d}']")
         if node_attribute_element is None:
             node_attribute_element = xml_i3d.SubElement(self.xml_elements['UserAttributes'], 'UserAttribute',
-                                                   attrib={'nodeId': str(node_id)})
+                                                        attrib={'nodeId': str(node_id)})
 
         for attribute in user_attributes:
             attrib = {'name': attribute.name, 'type': attribute.type.replace('data_', '')}
@@ -277,64 +308,79 @@ class I3D:
             self.export_i3d_mapping()
 
     def export_i3d_mapping(self) -> None:
-        self.logger.info(f"Exporting i3d mappings to {self.settings['i3d_mapping_file_path']}")
-        with open(bpy.path.abspath(self.settings['i3d_mapping_file_path']), 'r+') as xml_file:
-            vehicle_xml = []
-            i3d_mapping_idx = None
-            i3d_mapping_end_found = False
-            for idx,line in enumerate(xml_file):
-                if i3d_mapping_idx is None:
-                    if '<i3dMappings>' in line:
-                        i3d_mapping_idx = idx 
-                        vehicle_xml.append(line)
-                        xml_indentation = line[0:line.find('<')]
-                    
-                if i3d_mapping_idx is None or i3d_mapping_end_found:
-                    vehicle_xml.append(line)
-                
-                if not (i3d_mapping_idx is None or i3d_mapping_end_found):
-                    i3d_mapping_end_found = True if '</i3dMappings>' in line else False
+        file_path = bpy.path.abspath(self.settings['i3d_mapping_file_path'])
+        self.logger.info(f"Exporting i3d mappings to {file_path}")
 
-            if i3d_mapping_idx is None:
-                for i in reversed(range(len(vehicle_xml))):
-                    if vehicle_xml[i].startswith('</vehicle>'):
-                        xml_indentation = ' '*4
-                        vehicle_xml.insert(i, f"\n{xml_indentation}<i3dMappings>\n")
-                        i3d_mapping_idx = i
-                        self.logger.info(f"Vehicle file does not have an <i3dMappings> tag, inserting one above </vehicle> with default indentation")
-                        break
+        # Only use ElementTree for parsing the file, writing is done manually to avoid formatting the entire file
+        tree = xml_i3d.parse(file_path)
+        if tree is None:
+            self.logger.error(f"Failed to parse the XML file: {file_path}")
+            return
+        root = tree.getroot()
+        i3d_mappings_element = root.find('i3dMappings')
 
-            if i3d_mapping_idx is None:
-                self.logger.warning(f"Cannot export i3d mapping, provided file has no <i3dMappings> or root level <vehicle> tag!")
-                return
-            
-            def build_index_string(node_to_index):
-                if node_to_index.parent is None:
-                    index = f"{self.scene_root_nodes.index(node_to_index):d}>"
-                else:
-                    index = build_index_string(node_to_index.parent)
-                    if index[-1] != '>':
-                        index += '|'
-                    index += str(node_to_index.parent.children.index(node_to_index))
-                return index
+        with open(file_path, 'r', encoding='utf-8') as xml_file:
+            lines = xml_file.readlines()
 
-            for mapping_node in self.i3d_mapping:
-                # If the mapping is an empty string, use the node name
-                if not (mapping_name := getattr(mapping_node.blender_object.i3d_mapping, 'mapping_name')):
-                    mapping_name = mapping_node.name
-                
-                vehicle_xml[i3d_mapping_idx] += f'{xml_indentation*2}<i3dMapping id="{mapping_name}" node="{build_index_string(mapping_node)}" />\n'
-                
-            vehicle_xml[i3d_mapping_idx] += f'{xml_indentation}</i3dMappings>\n'
+        i3d_mapping_idx = None
+        closing_root_idx = None
+        xml_indentation = ' ' * 4
+        for idx, line in enumerate(lines):
+            stripped_line = line.strip()  # Remove leading and trailing whitespace
+            if '<i3dMappings>' in stripped_line:
+                i3d_mapping_idx = idx
+                xml_indentation = line[:line.find('<')]  # Preserve indentation
+                break
+            if stripped_line == f"</{root.tag}>":
+                closing_root_idx = idx  # Preserve the index of the closing root tag
 
-            xml_file.seek(0)
-            xml_file.truncate()
-            xml_file.writelines(vehicle_xml)
+        if i3d_mapping_idx is None and closing_root_idx is not None:
+            i3d_mapping_idx = closing_root_idx
+            lines.insert(i3d_mapping_idx, f"\n{xml_indentation}<i3dMappings>\n")
+            self.logger.info(f"Inserted missing <i3dMappings> before </{root.tag}>.")
+
+        if i3d_mapping_idx is None:
+            self.logger.warning("Cannot export i3d mapping. No valid root element found!")
+            return
+
+        def _build_index_string(node_to_index) -> str:
+            if node_to_index.parent is None:  # Root node should end with '>'
+                return f"{self.scene_root_nodes.index(node_to_index)}>"
+            index = _build_index_string(node_to_index.parent)
+            if index[-1] != '>':  # If it's not a root use '|'
+                index += '|'
+            # Add the child index
+            index += str(node_to_index.parent.children.index(node_to_index))
+            return index
+
+        new_mappings = []
+        for mapping_node in self.i3d_mapping:
+            # If the mapping is an empty string, use the node name
+            mapping_name = getattr(mapping_node.blender_object.i3d_mapping, 'mapping_name', '') or mapping_node.name
+            new_mappings.append(
+                f'{xml_indentation*2}<i3dMapping id="{mapping_name}" node="{_build_index_string(mapping_node)}" />\n'
+            )
+
+        # Remove old mappings and insert new ones
+        if i3d_mappings_element is not None:
+            # Remove existing mappings while keeping <i3dMappings> tag
+            end_idx = i3d_mapping_idx
+            while end_idx < len(lines) and '</i3dMappings>' not in lines[end_idx]:
+                end_idx += 1
+            lines[i3d_mapping_idx + 1:end_idx] = new_mappings  # Replace contents
+        else:
+            lines.insert(i3d_mapping_idx + 1, ''.join(new_mappings) + f"{xml_indentation}</i3dMappings>\n")
+
+        with open(file_path, 'w', encoding='utf-8') as xml_file:
+            xml_file.writelines(lines)
+
+        self.logger.info(f"Successfully exported i3dMappings to {file_path}")
 
 # To avoid a circular import, since all nodes rely on the I3D class, but i3d itself contains all the different nodes.
 from i3dio.node_classes.node import *
 from i3dio.node_classes.shape import *
 from i3dio.node_classes.merge_group import *
+from i3dio.node_classes.merge_children import *
 from i3dio.node_classes.skinned_mesh import *
 from i3dio.node_classes.material import *
 from i3dio.node_classes.file import *

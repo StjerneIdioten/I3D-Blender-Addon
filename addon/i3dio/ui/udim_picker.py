@@ -1,5 +1,5 @@
 import logging
-import os
+from pathlib import Path
 from mathutils import Vector
 import math
 from collections import defaultdict
@@ -97,25 +97,20 @@ addon_keymaps = []
 classes = []
 
 
-def generate_udim_previews():
-    def no_number(name):
+def generate_udim_previews() -> None:
+    def no_number(name) -> str:
         """Return name without number prefix"""
         return name.split('_', 1)[1]
 
     preview_collection = preview_collections[udim_picker_preview_collection]
-    image_paths = []
     # Get all icons from folder
-    directory = os.path.join(os.path.dirname(__file__), 'icons')
-    for path in os.listdir(directory):
-        if path.lower().endswith('.png'):
-            image_paths.append(path)
-
-    image_paths = sorted(image_paths, key=no_number)
+    directory = Path(__file__).parent / 'icons'
+    image_paths = sorted(directory.glob('*.png'), key=lambda p: no_number(p.name))
 
     # Generate icons and build enum
-    for i, filename in enumerate(image_paths):
-        filepath = os.path.join(directory, filename)
-        thumbnail = preview_collection.load(filename, filepath, 'IMAGE')
+    for i, filepath in enumerate(image_paths):
+        filename = filepath.name
+        thumbnail = preview_collection.load(filename, str(filepath), 'IMAGE')
         name = udim_mapping[filename]['name']
         preview_collection.udim_previews.append((filename, name, name, thumbnail.icon_id, i))
 

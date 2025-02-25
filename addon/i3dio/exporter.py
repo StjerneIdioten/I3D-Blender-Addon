@@ -45,7 +45,6 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
     debugging.addon_console_handler.setLevel(logging.INFO)
     logger.info(f"Blender version is: {bpy.app.version_string}")
     logger.info(f"I3D Exporter version is: {sys.modules['i3dio'].__version__}")
-    logger.info(f"Exported using '{xml_i3d.xml_current_library}'")
     logger.info(f"Exporting to {filepath}")
 
     if operator.verbose_output:
@@ -205,10 +204,11 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
         return
 
-    # Special handling of armature nodes, since they are sort of "extra" compared to how other programs like Maya
-    # handles bones. So the option for turning them off is provided.
     _parent = parent
-    if not i3d.settings['collapse_armatures'] and isinstance(parent, SkinnedMeshRootNode):
+    # Special handling when the parent is an armature node, as armatures are treated differently
+    # compared to how other programs like Maya handle bones. If the armature is collapsed,
+    # reassign its child to the armature’s original parent to maintain hierarchy.
+    if isinstance(parent, SkinnedMeshRootNode) and parent.is_collapsed:
         try:
             _parent = parent.parent
         except AttributeError:
@@ -264,13 +264,24 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                     node = i3d.add_shape_node(obj, _parent)
 
         elif obj.type == 'ARMATURE':
-            node = i3d.add_armature(obj, _parent, is_located=True)
+            node = i3d.add_armature_from_scene(obj, _parent)
         elif obj.type == 'EMPTY':
+            if 'MERGE_CHILDREN' in i3d.settings['features_to_export'] and obj.i3d_merge_children.enabled:
+                logger.debug(f"[{obj.name}] is a 'MergeChildren' object")
+                if obj.children and next((child for child in obj.children if child.type == 'MESH'), None):
+                    logger.debug(f"Processing MergeChildren for: {obj.name}")
+                    node = i3d.add_merge_children_node(obj, _parent)
+                    if node is not None:
+                        return  # Return to prevent children from being processed the "normal" way
+                else:
+                    logger.warning(f"Empty object {obj.name} has no children to merge. "
+                                   "Exporting as a regular TransformGroup instead.")
+
             node = i3d.add_transformgroup_node(obj, _parent)
             if obj.instance_collection is not None:
                 logger.debug(f"[{obj.name}] is a collection instance and will be instanced into the 'Empty' object")
-                # This is a collection instance so the children needs to be fetched from the referenced collection and
-                # be 'instanced' as children of the 'Empty' object directly.
+                # This is a collection instance so the children needs to be fetched from the referenced
+                # collection and be 'instanced' as children of the 'Empty' object directly.
                 _process_collection_objects(i3d, obj.instance_collection, node)
                 return
         elif obj.type == 'LIGHT':
@@ -320,16 +331,9 @@ def traverse_hierarchy(obj: BlenderObject) -> List[BlenderObject]:
 
 
 def _process_deferred_constraints(i3d: I3D):
-    for armature, bone_object, target in i3d.deferred_constraints:
-        i3d.logger.debug(f"Processing deferred constraint for: {bone_object}, Target: {target}")
-
-        if target in i3d.processed_objects:
-            i3d.logger.debug(f"Target object '{target}' is included in the export hierarchy. Setting bone parent.")
-            bone_name = bone_object.name
-            bone = next((b for b in i3d.skinned_meshes[armature.name].bones if b.name == bone_name), None)
-
-            if bone is not None:
-                i3d.skinned_meshes[armature.name].update_bone_parent(None, custom_target=i3d.processed_objects[target],
-                                                                     bone=bone)
-            else:
-                i3d.logger.warning(f"Could not find bone {bone_name} in the armature's bone list!")
+    for bone_node, target_obj in i3d.deferred_constraints:
+        i3d.logger.debug(f"Processing deferred constraint for: {bone_node}, Target: {target_obj}")
+        if target_node := i3d.processed_objects.get(target_obj):
+            bone_node.reparent(target_node)
+        else:
+            i3d.logger.warning(f"Target '{target_obj}' is not processed or not in export list. Skipping.")
