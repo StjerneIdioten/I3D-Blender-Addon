@@ -8,7 +8,7 @@ from .. import __package__ as base_package
 
 
 class I3D_IO_AddonPreferences(AddonPreferences):
-    bl_idname = 'i3dio'
+    bl_idname = base_package
 
     fs_data_path: StringProperty(
         name="FS Data Folder",
