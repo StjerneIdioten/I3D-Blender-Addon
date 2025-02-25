@@ -60,7 +60,7 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
     bl_label = "Get I3D converter path from Giants addon"
     bl_description = "Get the i3d converter path from the Giants exporter addon"
     bl_options = {'INTERNAL'}
-
+    
     def execute(self, context):
         for addon in addon_utils.modules():
             if addon.bl_info.get("name") == "GIANTS I3D Exporter Tools":
