@@ -33,7 +33,7 @@ class I3D_IO_AddonPreferences(AddonPreferences):
     fs_data_path: StringProperty(
         name="FS Data Folder",
         subtype='DIR_PATH',
-        default=r'F:\SteamLibrary\steamapps\common\Farming Simulator 25\data'
+        default='',
     )
 
     xml_library: EnumProperty(

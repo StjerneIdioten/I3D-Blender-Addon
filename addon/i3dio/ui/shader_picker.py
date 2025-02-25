@@ -303,18 +303,6 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         default='1x1'
     )
 
-    export_material_slot_name: BoolProperty(
-        name='Export Material Slot Name',
-        description='Export the material slot name to the i3d file',
-        default=False
-    )
-
-    material_slot_name: StringProperty(
-        name='Material Slot Name',
-        description='Name of the material slot in the i3d file',
-        default=''
-    )
-
 @register
 class I3D_IO_PT_material_shader(Panel):
     bl_space_type = 'PROPERTIES'
@@ -327,18 +315,7 @@ class I3D_IO_PT_material_shader(Panel):
         return context.object is not None and context.object.active_material is not None
 
     def draw(self, context):
-        mat = context.active_object.active_material
         layout = self.layout
-        box = layout.box()
-        row = box.row(align=True)
-        row.alignment = 'CENTER'
-        row.label(text="Material Slot Name")
-        row = box.row(align=True)
-        row.prop(mat.i3d_attributes, 'export_material_slot_name', text="Add material slot name")
-        row = row.row(align=True)
-        row.enabled = mat.i3d_attributes.export_material_slot_name
-        row.prop(mat.i3d_attributes, 'material_slot_name', text="", placeholder="Custom Slot Name")
-        layout.separator(type='LINE')
         layout.use_property_split = True
         layout.use_property_decorate = False
         material = context.active_object.active_material

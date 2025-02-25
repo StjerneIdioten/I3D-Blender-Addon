@@ -36,7 +36,6 @@ class SubSet:
         self.number_of_indices = 0
         self.number_of_vertices = 0
         self.triangles = []
-        self.material_slot_name = None
         self.mat_name = None
 
     def as_dict(self):
@@ -44,15 +43,12 @@ class SubSet:
                              'firstVertex': f"{self.first_vertex}",
                              'numIndices': f"{self.number_of_indices}",
                              'numVertices': f"{self.number_of_vertices}"}
-        if self.material_slot_name is not None:
-            subset_attributes['materialSlotName'] = self.material_slot_name
         return subset_attributes
 
     def __str__(self):
         return f'numTriangles="{len(self.triangles)}" ' \
                f'firstIndex="{self.first_index}" firstVertex="{self.first_vertex}" ' \
-               f'numIndices="{self.number_of_indices}" numVertices="{self.number_of_vertices}"' \
-               f'materialSlotName="{self.material_slot_name}"'
+               f'numIndices="{self.number_of_indices}" numVertices="{self.number_of_vertices}"'
 
     def add_triangle(self, triangle):
         self.triangles.append(triangle)
@@ -329,7 +325,6 @@ class IndexedTriangleSet(Node):
         has_warned_for_empty_slot = False
         for triangle in mesh.loop_triangles:
             triangle_material = mesh.materials[triangle.material_index]
-            i3d_attr = triangle_material.i3d_attributes
 
             if triangle_material is None:
                 if not has_warned_for_empty_slot:
@@ -341,15 +336,7 @@ class IndexedTriangleSet(Node):
                 if triangle_material.name not in self.materials:
                     self.materials[triangle_material.name] = MaterialStorage()
                 self.materials[triangle_material.name].triangles.append((triangle, self.bind_index, mesh))
-                if i3d_attr.export_material_slot_name:
-                    self.materials[triangle_material.name].material_slot_name = (
-                        triangle_material.name if i3d_attr.material_slot_name == "" else i3d_attr.material_slot_name
-                    )
             else:
-                if i3d_attr.export_material_slot_name:
-                    self.subsets[triangle.material_index].material_slot_name = (
-                        triangle_material.name if i3d_attr.material_slot_name == "" else i3d_attr.material_slot_name
-                    )
                 # Add triangle to subset
                 self.subsets[triangle.material_index].add_triangle(triangle)
 
@@ -366,7 +353,6 @@ class IndexedTriangleSet(Node):
             for key, mat in self.materials.items():
                 subset = SubSet()
                 subset.triangles = mat.triangles
-                subset.material_slot_name = mat.material_slot_name
                 subset.mat_name = key
                 self.subsets.append(subset)
 
@@ -383,14 +369,12 @@ class IndexedTriangleSet(Node):
         self.bind_index += 1
         for triangle in mesh.loop_triangles:
             triangle_material = mesh.materials[triangle.material_index]
-            i3d_attr = triangle_material.i3d_attributes
             if triangle_material.name not in self.materials:
                 self.materials[triangle_material.name] = MaterialStorage()
             self.materials[triangle_material.name].triangles.append((triangle, self.bind_index, mesh))
-            if i3d_attr.export_material_slot_name:
-                self.materials[triangle_material.name].material_slot_name = (
-                    triangle_material.name if i3d_attr.material_slot_name == "" else i3d_attr.material_slot_name
-                )
+            self.materials[triangle_material.name].material_slot_name = (
+                triangle_material.name if i3d_attr.material_slot_name == "" else i3d_attr.material_slot_name
+            )
             # self.subsets[-1].add_triangle(triangle)
         [self.i3d.add_material(mat) for mat in mesh.materials]
 
@@ -403,7 +387,6 @@ class IndexedTriangleSet(Node):
         for key, mat in self.materials.items():
             subset = SubSet()
             subset.triangles = mat.triangles
-            subset.material_slot_name = mat.material_slot_name
             subset.mat_name = key
             self.subsets.append(subset)
 
