@@ -2,7 +2,7 @@
 import logging
 
 # A top level logger with the module name
-addon_name = 'i3dio'
+addon_name = __package__
 addon_logger = logging.getLogger(addon_name)
 addon_logger.setLevel(logging.DEBUG)
 addon_logger.handlers = []  # Reset upon reload, since reloading the addon does not reload the logging module
