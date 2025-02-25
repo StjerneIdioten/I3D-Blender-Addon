@@ -4,11 +4,10 @@ import pathlib
 import bpy
 from bpy.types import AddonPreferences
 from bpy.props import (StringProperty, EnumProperty, BoolProperty)
-from .. import __package__ as base_package
 
 
 class I3D_IO_AddonPreferences(AddonPreferences):
-    bl_idname = base_package
+    bl_idname = 'i3dio'
 
     fs_data_path: StringProperty(
         name="FS Data Folder",
@@ -66,7 +65,7 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
         for addon in addon_utils.modules():
             if addon.bl_info.get("name") == "GIANTS I3D Exporter Tools":
                 path = pathlib.PurePath(addon.__file__).parent.joinpath('util/i3dConverter.exe')
-                context.preferences.addons[base_package].preferences.i3d_converter_path = str(path)
+                context.preferences.addons['i3dio'].preferences.i3d_converter_path = str(path)
                 break
         return {"FINISHED"}
 
@@ -131,7 +130,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
             with zipfile.open('io_export_i3d/util/i3dConverter.exe') as zipped_binary, open(binary_path, 'wb') as saved_binary:
                 copyfileobj(zipped_binary, saved_binary)
             # Set I3D Converter Binary path to newly downloaded converter
-            context.preferences.addons[base_package].preferences.i3d_converter_path = str(binary_path)
+            context.preferences.addons['i3dio'].preferences.i3d_converter_path = str(binary_path)
         except (BadZipfile, KeyError, OSError) as e:
             self.report({'WARNING'}, f"The Community I3D Exporter did not succesfully fetch and install the Giants I3D Converter binary! ({e})")
             return {'CANCELLED'}
