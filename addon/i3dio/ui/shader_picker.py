@@ -303,6 +303,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         default='1x1'
     )
 
+
 @register
 class I3D_IO_PT_material_shader(Panel):
     bl_space_type = 'PROPERTIES'
