@@ -377,7 +377,6 @@ class IndexedTriangleSet(Node):
         self.tangent = any((self.i3d.materials[m_id].is_normalmapped() for m_id in self.material_ids))
 
         if self.is_merge_group:
-            [self.i3d.add_material(mat) for mat in mesh.materials]
             ids = list()
             for mat in self.materials.keys():
                 ids.append(self.i3d.materials[mat].id)
