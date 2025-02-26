@@ -320,7 +320,6 @@ class I3D_IO_PT_material_shader(Panel):
         layout.use_property_decorate = False
         material = context.active_object.active_material
 
-
         layout.prop(material.i3d_attributes, 'shading_rate')
         layout.prop(material.i3d_attributes, 'alpha_blending')
 
