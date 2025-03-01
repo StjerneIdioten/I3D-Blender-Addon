@@ -6,13 +6,40 @@ from bpy.types import AddonPreferences
 from bpy.props import (StringProperty, EnumProperty, BoolProperty)
 
 
+def show_popup(title: str, message: str, icon: str = 'ERROR', units: int = 10):
+    def draw_popup(popup, _context):
+        layout: bpy.types.UILayout = popup.layout
+        layout.label(text=title, icon=icon)
+        layout.separator(type="LINE")
+        layout.label(text=message)
+        layout.template_popup_confirm("", text="", cancel_text="Close")
+    wm = bpy.context.window_manager
+    wm.popover(draw_popup, ui_units_x=units)
+
+
+def update_fs_data_path(self, _context):
+    if not (path := pathlib.Path(self.fs_data_path).resolve()).exists():
+        show_popup("Invalid Path", "The provided path does not exist", units=9)
+        return
+    if path.name.lower() != "data":  # Try to append "data" folder if not already present
+        data_path = path / "data"
+        if not data_path.exists():  # Check if "data" actually exists inside the given folder
+            show_popup("Invalid Path", "Could not find 'data' folder inside provided path", units=13)
+            return
+        path = data_path  # Append "data" if valid
+    corrected_path = str(path) + ('\\' if path.drive else '/')
+    if corrected_path != self.fs_data_path:  # Prevent infinite recursion by only updating if different
+        self.fs_data_path = corrected_path
+
+
 class I3D_IO_AddonPreferences(AddonPreferences):
     bl_idname = 'i3dio'
 
     fs_data_path: StringProperty(
         name="FS Data Folder",
         subtype='DIR_PATH',
-        default=""
+        default="",
+        update=update_fs_data_path
     )
 
     i3d_converter_path: StringProperty(
