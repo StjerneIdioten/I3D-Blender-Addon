@@ -11,8 +11,6 @@ from .node import (Node, SceneGraphNode)
 from .. import (debugging, utility, xml_i3d)
 from ..i3d import I3D
 
-from ..utility import print
-
 
 class MaterialStorage:
     triangles: List = None
@@ -331,7 +329,6 @@ class IndexedTriangleSet(Node):
 
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh
-        print("Called For Parent")
         # Check if evaluated mesh has "generic" attribute in its attributes
         if "generic" in mesh.attributes:
             self.logger.debug("'generic' was found in mesh attributes, likely from a 'Geometry Nodes' modifer. "
@@ -398,7 +395,6 @@ class IndexedTriangleSet(Node):
             self.logger.warning("Can't add a mesh to a IndexedTriangleSet that is not a merge group")
             return
 
-        print("Called For Children")
         # Material checks for subset consistency
         mesh = mesh_to_append.mesh
         self.bind_index += 1

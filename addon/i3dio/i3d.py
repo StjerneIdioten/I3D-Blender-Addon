@@ -6,9 +6,6 @@ from . import xml_i3d
 
 logger = logging.getLogger(__name__)
 
-logging.disable(logging.INFO)
-
-
 class I3D:
     """A special node which is the root node for the entire I3D file. It essentially represents the i3d file"""
     def __init__(self, name: str, i3d_file_path: str, conversion_matrix: mathutils.Matrix,
