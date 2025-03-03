@@ -93,7 +93,7 @@ class Material(Node):
             if use_emission:
                 self.skip_diffuse = True  # If emission has a color, skip exporting diffuse color
                 self._write_color(socket_data.color, 'emissiveColor')
-            elif not self.skip_diffuse:
+            elif not self.skip_diffuse and xml_key == 'Texture':
                 self._write_color(socket_data.color, 'diffuseColor')
 
     def _extract_socket_data(self, socket: bpy.types.NodeSocket) -> SocketData:
