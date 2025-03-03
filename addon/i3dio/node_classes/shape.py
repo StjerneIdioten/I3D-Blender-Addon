@@ -2,13 +2,12 @@ import math
 import mathutils
 import collections
 import logging
-from typing import (OrderedDict, Optional, List, Dict, ChainMap, Union)
-from itertools import zip_longest
+from typing import (OrderedDict, Optional, List, ChainMap)
 import bpy
 
 from .node import (Node, SceneGraphNode)
 
-from .. import (debugging, utility, xml_i3d)
+from .. import (debugging, xml_i3d)
 from ..i3d import I3D
 
 
@@ -126,14 +125,14 @@ class EvaluatedMesh:
 
         conversion_matrix = self.i3d.conversion_matrix
         if self.i3d.get_setting('apply_unit_scale'):
-            self.logger.debug(f"applying unit scaling")
+            self.logger.debug("applying unit scaling")
             conversion_matrix = \
                 mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) @ conversion_matrix
 
         self.mesh.transform(conversion_matrix)
         if conversion_matrix.is_negative:
             self.mesh.flip_normals()
-            self.logger.debug(f"conversion matrix is negative, flipping normals")
+            self.logger.debug("conversion matrix is negative, flipping normals")
 
         # Calculates triangles from mesh polygons
         self.mesh.calc_loop_triangles()
@@ -142,7 +141,7 @@ class EvaluatedMesh:
     # everything. Further investigation is needed.
     def __del__(self):
         pass
-        #self.object.to_mesh_clear()
+        # self.object.to_mesh_clear()
 
 
 class IndexedTriangleSet(Node):
@@ -263,15 +262,15 @@ class IndexedTriangleSet(Node):
                                     blend_ids.append(self.vertex_group_ids[vertex_group.group])
                                     blend_weights.append(vertex_group.weight)
                             else:
-                                self.logger.warning(f"Vertex has weights from more than 4 bones! Rest of bones will be"
-                                                    f"ignored for export!")
+                                self.logger.warning("Vertex has weights from more than 4 bones! Rest of bones will be"
+                                                    "ignored for export!")
                                 break
 
                     if len(blend_ids) == 0:
                         zero_weight_vertices.add(blender_vertex.index)
 
                     if len(blend_ids) < 4:
-                        padding = [0]*(4-len(blend_ids))
+                        padding = [0] * (4 - len(blend_ids))
                         blend_ids += padding
                         blend_weights += padding
 
@@ -346,56 +345,24 @@ class IndexedTriangleSet(Node):
 
         self.process_subsets(mesh)
 
-    def append_from_evaluated_mesh(self, mesh_to_append):
-        if not self.is_merge_group:
-            self.logger.warning("Can't add a mesh to a IndexedTriangleSet that is not a merge group")
+    def append_from_evaluated_mesh(self, mesh_to_append: EvaluatedMesh, generic_value: float = None):
+        if not (self.is_merge_group or self.is_generic):
+            self.logger.warning("Cannot add a mesh to an IndexedTriangleSet that is neither a merge group nor generic.")
             return
 
         # Material checks for subset consistency
         mesh = mesh_to_append.mesh
-        if len(mesh.materials) == 0:
-            self.logger.warning(f"Mesh '{mesh.name}' to be added has no materials, "
-                                f"mergegroups need to share the same subset!")
-            return
-        elif len(mesh.materials) > 1:
-            self.logger.warning(f"Mesh '{mesh.name}' has more than one material, "
-                                f"merge groups need to share the same subset!")
-            return
-        else:
-            if mesh.materials[0].name != self.evaluated_mesh.mesh.materials[0].name:
-                self.logger.warning(f"Mesh '{mesh.name}' has a different material from merge group root, "
-                                    f"which is not allowed!")
-                return
-
-        triangle_offset = len(self.subsets[-1].triangles)
-        vertex_offset = self.subsets[-1].number_of_vertices
-        for triangle in mesh.loop_triangles:
-            self.subsets[-1].add_triangle(triangle)
-
-        self.bind_index += 1
-        self.process_subset(mesh, self.subsets[-1], triangle_offset)
-        self.write_vertices(vertex_offset)
-        self.write_triangles(triangle_offset)
-        subset = list(self.xml_elements['subsets'])[0]
-        for key, value in self.subsets[-1].as_dict().items():
-            subset.set(key, value)
-
-    def append_from_evaluated_mesh_generic(self, mesh_to_append: EvaluatedMesh, generic_value: float):
-        if not self.is_generic:
-            self.logger.warning("Cannot add a mesh to a non-generic IndexedTriangleSet")
-            return
-
-        mesh = mesh_to_append.mesh
-
-        # Material validation
         if len(mesh.materials) == 0:
             self.logger.warning(f"Mesh '{mesh.name}' has no materials, skipping.")
             return
         elif len(mesh.materials) > 1:
             self.logger.warning(f"Mesh '{mesh.name}' has multiple materials, skipping.")
             return
+        elif self.is_merge_group and mesh.materials[0].name != self.evaluated_mesh.mesh.materials[0].name:
+            self.logger.warning(f"Mesh '{mesh.name}' has a different material than the merge group root, not allowed!")
+            return
 
-        self.logger.debug(f"Adding mesh '{mesh.name}' to merge children root")
+        self.logger.debug(f"Adding mesh '{mesh.name}' to {'merge group' if self.is_merge_group else 'generic group'}")
 
         triangle_offset = len(self.subsets[-1].triangles)
         vertex_offset = self.subsets[-1].number_of_vertices
@@ -404,8 +371,11 @@ class IndexedTriangleSet(Node):
         for triangle in mesh.loop_triangles:
             self.subsets[-1].add_triangle(triangle)
 
-        self.logger.debug(f"Added mesh '{mesh.name}' with generic value '{generic_value}'")
-        self.generic_value = generic_value
+        if self.is_generic and generic_value is not None:
+            self.logger.debug(f"Added mesh '{mesh.name}' with generic value '{generic_value}'")
+            self.generic_value = generic_value
+        else:
+            self.bind_index += 1
 
         # Process the subset and write vertices/triangles
         self.process_subset(mesh, self.subsets[-1], triangle_offset)
@@ -513,7 +483,8 @@ class IndexedTriangleSet(Node):
             bv_center = mathutils.Vector([sum(x) for x in zip(*bounding_volume_object.bound_box)]) * 0.125
             # Transform the bounding volume center to world coordinates
             bv_center_world = bounding_volume_object.matrix_world @ bv_center
-            # Get the translation offset between the bounding volume center in world coordinates and the data objects world coordinates
+            # Get the translation offset between the bounding volume center in world coordinates
+            # and the data objects world coordinates
             bv_center_offset = bv_center_world - self.evaluated_mesh.object.matrix_world.to_translation()
             # Get the bounding volume center in coordinates relative to the data object using it
             bv_center_relative = self.evaluated_mesh.object.matrix_world.to_3x3().inverted() @ bv_center_offset
@@ -576,7 +547,7 @@ class EvaluatedNurbsCurve:
 
         conversion_matrix = self.i3d.conversion_matrix
         if self.i3d.get_setting('apply_unit_scale'):
-            self.logger.debug(f"applying unit scaling")
+            self.logger.debug("applying unit scaling")
             conversion_matrix = \
                 mathutils.Matrix.Scale(bpy.context.scene.unit_settings.scale_length, 4) @ conversion_matrix
 
@@ -645,7 +616,7 @@ class NurbsCurve(Node):
 
     def populate_xml_element(self):
         if len(self.evaluated_curve_data.curve_data.splines) == 0:
-            self.logger.warning(f"has no splines! Export of this curve is aborted.")
+            self.logger.warning("has no splines! Export of this curve is aborted.")
             return
 
         self.populate_from_evaluated_nurbscurve()
@@ -663,7 +634,7 @@ class ShapeNode(SceneGraphNode):
     def __init__(self, id_: int, shape_object: Optional[bpy.types.Object], i3d: I3D,
                  parent: Optional[SceneGraphNode] = None, custom_name: Optional[str] = None):
         self.shape_id = None
-        super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent)
+        super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent, custom_name=custom_name)
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:

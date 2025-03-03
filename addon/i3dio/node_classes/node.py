@@ -97,10 +97,7 @@ class SceneGraphNode(Node):
         self.blender_object = blender_object
         self.xml_elements: Dict[str, Union[xml_i3d.XML_Element, None]] = {'Node': None}
 
-        if custom_name is not None:
-            self._name = custom_name
-        else:
-            self._name = self.blender_object.name
+        self._name = custom_name or self.blender_object.name
 
         prefix = i3d.settings.get('object_sorting_prefix', "")
         if prefix and (prefix_index := self._name.find(prefix)) > -1 and prefix_index < len(self._name) - 1:
