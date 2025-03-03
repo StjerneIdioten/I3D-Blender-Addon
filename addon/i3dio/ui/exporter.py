@@ -161,14 +161,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN'},
     )
 
-    collapse_armatures: BoolProperty(
-        name="Collapse Armatures",
-        description="If enabled the armature itself will get exported as a transformgroup, "
-                    "where all its bones are organized as children. "
-                    "If not then the armatures parent will be used",
-        default=True
-    )
-
     copy_files: BoolProperty(
         name="Copy Files",
         description="Copies the files to have them together with the i3d file. Structure is determined by 'File "
@@ -240,7 +232,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             "alphabetic_uvs",
             "object_types_to_export",
             "features_to_export",
-            "collapse_armatures",
             "copy_files",
             "overwrite_files",
             "file_structure",
@@ -335,7 +326,6 @@ def export_options(layout: bpy.types.UILayout, operator):
         body.prop(operator, 'object_types_to_export', expand=True)
         body.separator(type='LINE')
         body.prop(operator, 'features_to_export', expand=True)
-        body.prop(operator, 'collapse_armatures')
         body.separator(type='LINE')
         body.prop(operator, "axis_forward")
         body.prop(operator, "axis_up")

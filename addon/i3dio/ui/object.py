@@ -429,6 +429,17 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=False
     )
 
+    collapse_armature: BoolProperty(
+        name="Collapse Armature",
+        description=(
+            "If enabled, the armature itself will not be exported. "
+            "Instead, its root bones will take its position in the scene graph. "
+            "If disabled, the armature will be exported as a transform group, "
+            "with bones structured as they appear in Blender."
+        ),
+        default=True
+    )
+
 
 @register
 class I3DMergeGroup(bpy.types.PropertyGroup):
@@ -584,34 +595,30 @@ class I3D_IO_PT_object_attributes(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.use_property_split = False
+        layout.use_property_split = True
         layout.use_property_decorate = False
         obj = context.object
         i3d_attributes = obj.i3d_attributes
 
-        box = layout.box()
-        row = box.row(align=True)
-        row.alignment = 'CENTER'
-        row.label(text="I3D Mapping")
-        row = box.row(align=True)
-        row.prop(obj.i3d_mapping, 'is_mapped', text="Add to mapping")
-        row = row.row(align=True)
-        row.enabled = obj.i3d_mapping.is_mapped
-        row.prop(obj.i3d_mapping, 'mapping_name', text="", placeholder="Custom Mapping Name")
+        draw_i3d_mapping_box(layout, obj.i3d_mapping)
 
-        layout.use_property_split = True
         i3d_property(layout, i3d_attributes, 'locked_group', obj)
         i3d_property(layout, i3d_attributes, 'visibility', obj)
         i3d_property(layout, i3d_attributes, 'clip_distance', obj)
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
         row = layout.row(align=True)
         i3d_property(row, i3d_attributes, 'object_mask', obj)
-        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'object_mask'
+        op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+        op.target_prop = 'object_mask'
+        op.layout_mode = 'HORIZONTAL'
+        op.dialog_width = 400
 
         layout.separator(type='LINE')
         box = layout.box()
         box.label(text="Exporter Specific:")
         box.prop(i3d_attributes, 'exclude_from_export')
+        if obj.type == 'ARMATURE':
+            box.prop(i3d_attributes, 'collapse_armature')
         layout.separator(type='LINE')
 
         if obj.type == 'EMPTY':
@@ -705,7 +712,11 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
             row = panel.row()
             row.prop(i3d_attributes, prop)
             if prop.endswith('_mask'):
-                row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = prop
+                op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+                op.target_prop = prop
+                op.layout_mode = 'HORIZONTAL'  # Vertical in FS25
+                # 375 and 677 for FS25
+                op.dialog_width = 750 if prop.startswith("weather_") else 950
 
             row.enabled = not use_parent
 
@@ -783,6 +794,19 @@ def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_childre
         panel.enabled = i3d_merge_children.enabled
         panel.prop(i3d_merge_children, 'apply_transforms')
         panel.prop(i3d_merge_children, 'interpolation_steps')
+
+
+def draw_i3d_mapping_box(layout: bpy.types.UILayout, i3d_mapping: bpy.types.PropertyGroup) -> None:
+    box = layout.box()
+    box.use_property_split = False
+    row = box.row(align=True)
+    row.alignment = 'CENTER'
+    row.label(text="I3D Mapping")
+    row = box.row(align=True)
+    row.prop(i3d_mapping, 'is_mapped', text="Add to mapping")
+    row = row.row(align=True)
+    row.enabled = i3d_mapping.is_mapped
+    row.prop(i3d_mapping, 'mapping_name', text="", placeholder="Custom Mapping Name")
 
 
 @register
@@ -948,11 +972,7 @@ class I3D_IO_PT_mapping_bone_attributes(Panel):
         layout.use_property_split = True
         layout.use_property_decorate = False
         bone = context.bone or context.edit_bone
-
-        row = layout.row()
-        row.prop(bone.i3d_mapping, 'is_mapped')
-        row = layout.row()
-        row.prop(bone.i3d_mapping, 'mapping_name')
+        draw_i3d_mapping_box(layout, bone.i3d_mapping)
 
 
 @register

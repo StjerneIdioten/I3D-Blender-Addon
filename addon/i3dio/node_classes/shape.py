@@ -151,7 +151,7 @@ class IndexedTriangleSet(Node):
     ID_FIELD_NAME = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None,
-                 is_merge_group: bool = False, bone_mapping: ChainMap = None):
+                 is_merge_group: bool = False, is_generic: bool = False, bone_mapping: ChainMap = None):
         self.id: int = id_
         self.i3d: I3D = i3d
         self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
@@ -479,6 +479,12 @@ class IndexedTriangleSet(Node):
 
                 for subset in self.subsets:
                     xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
+
+                # NOTE: Very hacky way to add material ids to generic/merge children shapes,
+                # because the root generic shape does not contain any data in its mesh we cannot run it with
+                # populate_from_evaluated_mesh need to be revisted, but works for FS22 version
+                for material in self.evaluated_mesh.mesh.materials:
+                    self.material_ids.append(self.i3d.add_material(material))
                 return
 
             self.logger.warning("has no vertices! Export of this mesh is aborted.")
