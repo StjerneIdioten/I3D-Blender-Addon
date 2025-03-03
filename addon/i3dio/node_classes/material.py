@@ -104,7 +104,7 @@ class Material(Node):
                 self.xml_elements['Normalmap'] = xml_i3d.SubElement(self.element, 'Normalmap')
                 self._write_attribute('fileId', file_id, 'Normalmap')
         else:
-            self.logger.debug("Has no Normalmap")
+            self.logger.debug(f"Has no Normalmap")
 
     def _diffuse_from_nodes(self, node):
         color_socket = node.inputs['Base Color']
@@ -143,7 +143,7 @@ class Material(Node):
                 else:
                     emissive_path = emission_socket.links[0].from_node.image.filepath
             except (AttributeError, IndexError, KeyError):
-                self.logger.exception("Has an improperly setup Texture")
+                self.logger.exception(f"Has an improperly setup Texture")
             else:
                 if emissive_path is not None:
                     self.logger.info("Has Emissivemap")
