@@ -405,7 +405,9 @@ def populate_shader_cache():
     if shader_dir.exists():
         SHADERS = {path.stem: load_shader(path) for path in locate_shaders_in_directory(shader_dir)}
     SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
-    SHADERS_ENUM_ITEMS.extend([(shader[0], shader[0], str(shader[1].path)) for shader in SHADERS.items()])
+    SHADERS_ENUM_ITEMS.extend(
+        [(name, name, str(shader.path)) for name, shader in SHADERS.items() if shader is not None]
+    )
 
 
 @persistent
