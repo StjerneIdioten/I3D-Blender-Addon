@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 BlenderObject = Union[bpy.types.Object, bpy.types.Collection]
 
+
 def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon: float = 0.0000001) -> bool:
     """Compares two vectors elementwise, to see if they are equal
 
