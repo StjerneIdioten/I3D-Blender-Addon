@@ -19,20 +19,10 @@ skinned_mesh_prefix = 'SkinnedMesh_'
 i3d_max = 3.40282e+38
 
 
-class CommentedTreeBuilder(ET.TreeBuilder):
-    """
-    This class is used to enable elemtree to NOT delete comments of parsed trees...
-    """
-    def comment(self, data):
-        self.start(ET.Comment, {})
-        self.data(data)
-        self.end(ET.Comment)
-
-
 def parse(*argv, **kwargs) -> ET.ElementTree:
     tree = None
     try:
-        tree = ET.parse(*argv, **kwargs, parser=ET.XMLParser(target=CommentedTreeBuilder()))
+        tree = ET.parse(*argv, **kwargs, parser=ET.XMLParser())
     except (ET.ParseError, FileNotFoundError) as e:
         print(f"Error while parsing xml file: {e}")
     return tree
