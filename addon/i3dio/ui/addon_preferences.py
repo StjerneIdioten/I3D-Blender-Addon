@@ -84,6 +84,19 @@ class I3D_IO_AddonPreferences(AddonPreferences):
         row = box.row(align=True)
         row.use_property_split = True
         row.prop(self, 'i3d_converter_path', placeholder="Path to i3dConverter.exe")
+        if is_path_valid:
+            row.operator('i3dio.reset_i3d_converter_path', icon='X', text="")
+
+
+class I3D_IO_OT_reset_i3d_converter_path(bpy.types.Operator):
+    bl_idname = "i3dio.reset_i3d_converter_path"
+    bl_label = "Reset I3D Converter Path"
+    bl_description = "Reset the path to the I3D Converter binary"
+    bl_options = {'INTERNAL'}
+
+    def execute(self, context):
+        context.preferences.addons[base_package].preferences.i3d_converter_path = ""
+        return {"FINISHED"}
 
 
 class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
@@ -185,6 +198,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
 
 
 def register():
+    bpy.utils.register_class(I3D_IO_OT_reset_i3d_converter_path)
     bpy.utils.register_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
     bpy.utils.register_class(I3D_IO_OT_download_i3d_converter)
     bpy.utils.register_class(I3D_IO_AddonPreferences)
@@ -194,3 +208,4 @@ def unregister():
     bpy.utils.unregister_class(I3D_IO_AddonPreferences)
     bpy.utils.unregister_class(I3D_IO_OT_download_i3d_converter)
     bpy.utils.unregister_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
+    bpy.utils.unregister_class(I3D_IO_OT_reset_i3d_converter_path)
