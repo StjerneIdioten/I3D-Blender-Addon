@@ -187,7 +187,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     shader: EnumProperty(
         name='Shader',
-        description='The shader',
+        description='The shader to use for this material',
         default=0,
         items=shader_items_update,
         options=set(),
@@ -198,11 +198,18 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     shader_name: StringProperty(name='NO_SHADER')
 
     # Variations
-    def variation_setter(self, new_name):
-        existing_variation = self.get('shader_variation_name', SHADER_NO_VARIATION)
-        if existing_variation != new_name:
-            self['shader_variation_name'] = new_name
-            update_variation(self.id_data, self['shader_name'], new_name)
+    def variation_setter(self, variation):
+        shader_name = self.get('shader_name', SHADER_DEFAULT)
+        if shader_name == SHADER_DEFAULT:  # If no shader is selected, reset variation safely
+            if self.get('shader_variation_name', '') != SHADER_NO_VARIATION:
+                self['shader_variation_name'] = SHADER_NO_VARIATION
+            return
+        if not variation:  # Convert empty variation to default
+            variation = SHADER_NO_VARIATION
+        # Prevent recursion when setting the same variation
+        if self.get('shader_variation_name', SHADER_NO_VARIATION) != variation:
+            self['shader_variation_name'] = variation
+            update_variation(self.id_data, shader_name, variation)
 
     def variation_getter(self):
         if len(self.shader_variations) == 0:
@@ -212,6 +219,8 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     shader_variation_name: StringProperty(
         name="Selected Variation",
+        description="The selected variation for the current shader",
+        default=SHADER_NO_VARIATION,
         get=variation_getter,
         set=variation_setter
     )
