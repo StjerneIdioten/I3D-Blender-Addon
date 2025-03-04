@@ -45,7 +45,7 @@ class ShaderManager:
 
     def clear_shader_data(self, clear_all=False):
         self.attributes.shader_material_parameters.clear()
-        self.attributes.shader_matetrial_textures.clear()
+        self.attributes.shader_material_textures.clear()
         self.attributes.required_vertex_attributes.clear()
         if clear_all:
             self.attributes.shader_variations.clear()
@@ -107,7 +107,7 @@ class ShaderManager:
                 new_param.data_float_4 = data
 
     def add_shader_texture(self, texture):
-        new_texture = self.attributes.shader_matetrial_textures.add()
+        new_texture = self.attributes.shader_material_textures.add()
         new_texture.name = texture['name']
         new_texture.default_source = texture.get('default_file', '')
 
@@ -218,7 +218,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     shader_variations: CollectionProperty(type=I3DShaderVariation)
 
     shader_material_parameters: CollectionProperty(type=I3DShaderParameter)
-    shader_matetrial_textures: CollectionProperty(type=I3DShaderTexture)
+    shader_material_textures: CollectionProperty(type=I3DShaderTexture)
     required_vertex_attributes: CollectionProperty(type=I3DRequiredVertexAttribute)
 
     alpha_blending: BoolProperty(
@@ -283,8 +283,8 @@ class I3D_IO_PT_material_shader(Panel):
 
         if i3d_attributes.shader_material_parameters:
             draw_shader_material_parameters(layout, i3d_attributes)
-        if i3d_attributes.shader_matetrial_textures:
-            draw_shader_matetrial_textures(layout, i3d_attributes)
+        if i3d_attributes.shader_material_textures:
+            draw_shader_material_textures(layout, i3d_attributes)
 
 
 def draw_shader_material_parameters(layout: bpy.types.UILayout, i3d_attributes) -> None:
@@ -306,12 +306,12 @@ def draw_shader_material_parameters(layout: bpy.types.UILayout, i3d_attributes) 
             column.row(align=True).prop(parameter, property_type, text=parameter.name)
 
 
-def draw_shader_matetrial_textures(layout: bpy.types.UILayout, i3d_attributes) -> None:
-    header, panel = layout.panel('shader_matetrial_textures', default_closed=False)
+def draw_shader_material_textures(layout: bpy.types.UILayout, i3d_attributes) -> None:
+    header, panel = layout.panel('shader_material_textures', default_closed=False)
     header.label(text="Shader Textures")
     if panel:
         column = panel.column(align=True)
-        textures = i3d_attributes.shader_matetrial_textures
+        textures = i3d_attributes.shader_material_textures
         for texture in textures:
             placeholder = texture.default_source if texture.default_source else 'Texture not assigned'
             column.row(align=True).prop(texture, 'source', text=texture.name, placeholder=placeholder)
@@ -325,7 +325,7 @@ def parameter_element_as_dict(parameter):
             param_type = ShaderParameterType.FLOAT
         else:
             param_type = ShaderParameterType(param_type)
-        type_length = int(param_type.value[-1]) if param_type.value[-1].isdigit() else 1
+        type_length = int(param_type.name[-1]) if param_type.name[-1].isdigit() else 1
     except ValueError:
         print(f"Shader Parameter type is unknown! {parameter.attrib.get('type', 'UNKNOWN')}")
         return parameter_list
@@ -488,7 +488,7 @@ def handle_old_shader_format(file):
             if old_textures is not None:
                 for old_texture in old_textures:
                     old_name = old_texture.get('name', '')
-                    existing_texture = next((t for t in attr.shader_matetrial_textures if t.name == old_name), None)
+                    existing_texture = next((t for t in attr.shader_material_textures if t.name == old_name), None)
                     if existing_texture is not None:
                         existing_texture.name = old_name
                         print(f"Setting texture source for {old_name}")
