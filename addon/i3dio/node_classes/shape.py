@@ -303,8 +303,6 @@ class IndexedTriangleSet(Node):
                         blend_ids += padding
                         blend_weights += padding
 
-                self.logger.debug(f"Generic value: {generic_value}")
-
                 vertex = Vertex(subset_idx,
                                 blender_vertex.co.xyz,
                                 mesh.loops[loop_index].normal,
@@ -323,10 +321,12 @@ class IndexedTriangleSet(Node):
 
                 self.triangles[-1].append(vertex_index)
             subset.number_of_indices += 3
+
         if zero_weight_vertices:
             self.logger.warning(f"Has {len(zero_weight_vertices)} vertices with 0.0 weight to all bones. "
                                 "This will confuse GE and result in the mesh showing up as just a wireframe. "
                                 "Please correct by assigning some weight to all vertices.")
+
         self.logger.debug(f"Subset {triangle.material_index} with '{len(subset.triangles)}' triangles and {subset}")
         return subset.first_vertex + subset.number_of_vertices, subset.first_index + subset.number_of_indices
 
@@ -479,7 +479,6 @@ class IndexedTriangleSet(Node):
                 vertex_attributes['bi'] = vertex.blend_id_for_xml()
             elif self.is_generic:
                 vertex_attributes['g'] = vertex.generic_value_for_xml()
-                self.logger.debug(f"Generic value2: {vertex.generic_value_for_xml()}")
             elif self.bone_mapping is not None:
                 vertex_attributes['bw'] = vertex.blend_weights_for_xml()
                 vertex_attributes['bi'] = vertex.blend_ids_for_xml()
