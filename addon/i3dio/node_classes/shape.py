@@ -181,7 +181,6 @@ class IndexedTriangleSet(Node):
         self.bind_index = 0
         self.child_index: int = 0
         self.generic_values_by_child_index = {}
-        self.generic_value = 0.0
         self.vertex_group_ids = {}
         self.tangent: bool = False
         self.material_ids: List[int] = []
