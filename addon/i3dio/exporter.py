@@ -182,14 +182,11 @@ def _export_selected_objects(i3d: I3D):
 
 
 def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = True):
-    objects_to_export = objects
-    if sort_alphabetical:
-        objects_to_export = sort_blender_objects_by_outliner_ordering(objects)
+    objects_to_export = sort_blender_objects_by_outliner_ordering(objects) if sort_alphabetical else objects
 
-    new_objects_to_export = [obj for root_obj in objects for obj in traverse_hierarchy(root_obj)]
-    for obj in new_objects_to_export:
-        if obj not in i3d.all_objects_to_export:
-            i3d.all_objects_to_export.append(obj)
+    _all_objects = [obj for root_obj in objects for obj in traverse_hierarchy(root_obj)]
+    existing_objects = set(i3d.all_objects_to_export)
+    i3d.all_objects_to_export.extend([obj for obj in _all_objects if obj not in existing_objects])
 
     for blender_object in objects_to_export:
         _add_object_to_i3d(i3d, blender_object)
@@ -199,76 +196,74 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
 
 
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
-    # Check if object should be excluded from export (including its children)
-    if hasattr(obj, 'i3d_attributes') and obj.i3d_attributes.exclude_from_export:
-        logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
-        return
-
-    _parent = parent
-    # Special handling when the parent is an armature node, as armatures are treated differently
-    # compared to how other programs like Maya handle bones. If the armature is collapsed,
-    # reassign its child to the armature’s original parent to maintain hierarchy.
-    if isinstance(parent, SkinnedMeshRootNode) and parent.is_collapsed:
-        try:
-            _parent = parent.parent
-        except AttributeError:
-            pass
-
     # Collections are checked first since these are always exported in some form
     if isinstance(obj, bpy.types.Collection):
         logger.debug(f"[{obj.name}] is a 'Collection'")
         node = None
         if i3d.settings['keep_collections_as_transformgroups']:
-            node = i3d.add_transformgroup_node(obj, _parent)
+            node = i3d.add_transformgroup_node(obj, parent)
         else:
-            i3d.logger.info(f"[{obj.name}] will be be ignored and its children will be added to nearest parent")
+            i3d.logger.info(f"[{obj.name}] will be ignored and its children will be added to nearest parent")
         _process_collection_objects(i3d, obj, node)
-        return  # Early return because collections are special
-    else:
-        logger.debug(f"[{obj.name}] is of type {obj.type!r}")
-        if obj.type not in i3d.settings['object_types_to_export']:
-            logger.debug(f"[{obj.name}] has type {obj.type!r} which is not a type selected for exporting")
-            return
-        elif obj.type == 'MESH':
+        return  # Collections use a different hierarchy and are handled separately in _process_collection_objects
+
+    # Check if object should be excluded from export (including its children)
+    if obj.i3d_attributes.exclude_from_export:
+        logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
+        return
+
+    if obj.type not in i3d.settings['object_types_to_export']:
+        logger.debug(f"[{obj.name}] has type {obj.type!r} which is not a type selected for exporting")
+        return
+
+    _parent = parent
+    # Special handling for collapsed armatures: Unlike Maya, Blender treats armatures differently, so when an armature
+    # is collapsed, its children should be reassigned to the armature's parent (or scene root) to maintain hierarchy.
+    if isinstance(parent, SkinnedMeshRootNode) and parent.is_collapsed:
+        logger.debug(f"[{obj.name}] is under a collapsed armature. Moving it to the armature's parent.")
+        _parent = parent.parent
+
+    logger.debug(f"[{obj.name}] is of type {obj.type!r}")
+    match obj.type:
+        case 'MESH':
             node = None
-            # Skinned meshes takes precedence over merge groups. They can't co-exist on the same object, for export.
-            if 'SKINNED_MESHES' in i3d.settings['features_to_export'] \
-                    and 'ARMATURE' in i3d.settings['object_types_to_export']:
-                # Armatures need to be exported and skinned meshes enabled to create a skinned mesh node
-                for modifier in obj.modifiers:
-                    # We only need to find one armature to know it should be an armature node
-                    if modifier.type == 'ARMATURE':
-                        if modifier.object is None:
-                            logger.warning(f"Armature modifier '{modifier.name}' on skinned mesh '{obj.name}' "
-                                           "has no armature object assigned. Exporting as a regular shape instead.")
-                            break
-                        elif modifier.object not in i3d.all_objects_to_export:
-                            logger.warning(
-                                f"Skinned mesh '{obj.name}' references armature '{modifier.object.name}', "
-                                "but the armature is not included in the export hierarchy. "
-                                "Exporting as a regular shape instead."
-                            )
-                            break
-                        else:
-                            node = i3d.add_skinned_mesh_node(obj, _parent)
-                            break
-
-            if node is None:
-                if 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group_index != -1:
-                    blender_merge_group = bpy.context.scene.i3dio_merge_groups[obj.i3d_merge_group_index]
-                    if obj.i3d_merge_group_index not in i3d.merge_groups:
-                        i3d.merge_groups[obj.i3d_merge_group_index] = MergeGroup(xml_i3d.merge_group_prefix + blender_merge_group.name)
-                    node = i3d.add_merge_group_node(obj, _parent, blender_merge_group.root is obj)
+            # Skinned meshes take precedence over merge groups and can't co-exist on the same object, for export.
+            export_skinned_mesh = all(('SKINNED_MESHES' in i3d.settings['features_to_export'],
+                                       'ARMATURE' in i3d.settings['object_types_to_export']))
+            if export_skinned_mesh and (armature_mod := next((modifier for modifier in obj.modifiers
+                                                              if modifier.type == 'ARMATURE'), None)):
+                if armature_mod.object is None:
+                    logger.warning(
+                        f"Armature modifier '{armature_mod.name}' on skinned mesh '{obj.name}' "
+                        "has no armature object assigned. Exporting as a regular shape instead."
+                    )
+                elif armature_mod.object not in i3d.all_objects_to_export:
+                    logger.warning(
+                        f"Skinned mesh '{obj.name}' references armature '{armature_mod.object.name}', but the "
+                        "armature is not included in the export hierarchy. Exporting as a regular shape instead."
+                    )
                 else:
-                    # Default to a regular shape node
-                    node = i3d.add_shape_node(obj, _parent)
+                    # Armatures need to be exported and skinned meshes enabled to create a skinned mesh node
+                    # We only need to find one armature to confirm it should be a skinned mesh
+                    node = i3d.add_skinned_mesh_node(obj, _parent)
 
-        elif obj.type == 'ARMATURE':
+            # Handle Merge Groups if no skinned mesh node was assigned
+            if node is None and 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group_index > -1:
+                blender_merge_group = bpy.context.scene.i3dio_merge_groups[obj.i3d_merge_group_index]
+                i3d.merge_groups.setdefault(
+                    obj.i3d_merge_group_index, MergeGroup(xml_i3d.merge_group_prefix + blender_merge_group.name)
+                )
+                node = i3d.add_merge_group_node(obj, _parent, blender_merge_group.root is obj)
+
+            # Default to a regular shape node if no special node was created
+            if node is None:
+                node = i3d.add_shape_node(obj, _parent)
+        case 'ARMATURE':
             node = i3d.add_armature_from_scene(obj, _parent)
-        elif obj.type == 'EMPTY':
+        case 'EMPTY':
             if 'MERGE_CHILDREN' in i3d.settings['features_to_export'] and obj.i3d_merge_children.enabled:
                 logger.debug(f"[{obj.name}] is a 'MergeChildren' object")
-                if obj.children and next((child for child in obj.children if child.type == 'MESH'), None):
+                if obj.children and any(child.type == 'MESH' for child in obj.children):
                     logger.debug(f"Processing MergeChildren for: {obj.name}")
                     node = i3d.add_merge_children_node(obj, _parent)
                     if node is not None:
@@ -284,28 +279,32 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 # collection and be 'instanced' as children of the 'Empty' object directly.
                 _process_collection_objects(i3d, obj.instance_collection, node)
                 return
-        elif obj.type == 'LIGHT':
+        case 'LIGHT':
             node = i3d.add_light_node(obj, _parent)
-        elif obj.type == 'CAMERA':
+        case 'CAMERA':
             node = i3d.add_camera_node(obj, _parent)
-        elif obj.type == 'CURVE':
+        case 'CURVE':
             node = i3d.add_shape_node(obj, _parent)
-        else:
+        case _:
             raise NotImplementedError(f"Object type: {obj.type!r} is not supported yet")
 
-        # Process children of objects (other objects) and children of collections (other collections)
-        # WARNING: Might be slow due to searching through the entire object list in the blend file:
-        # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
-        logger.debug(f"[{obj.name}] processing objects children")
-        for child in sort_blender_objects_by_outliner_ordering(obj.children):
-            _add_object_to_i3d(i3d, child, node)
-        logger.debug(f"[{obj.name}] no more children to process in object")
+    # Process children of objects (other objects) and children of collections (other collections)
+    # WARNING: Might be slow due to searching through the entire object list in the blend file:
+    # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
+    logger.debug(f"[{obj.name}] processing objects children")
+    for child in sort_blender_objects_by_outliner_ordering(obj.children):
+        _add_object_to_i3d(i3d, child, node)
+    logger.debug(f"[{obj.name}] no more children to process in object")
 
 
 def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, parent: SceneGraphNode):
     """Handles adding object children of collections. Since collections stores their objects in a list named 'objects'
     instead of the 'children' list, which only contains child collections. And they need to be iterated slightly
     different"""
+
+    _all_objects = [obj for root_obj in collection.objects for obj in traverse_hierarchy(root_obj)]
+    existing_objects = set(i3d.all_objects_to_export)
+    i3d.all_objects_to_export.extend([obj for obj in _all_objects if obj not in existing_objects])
 
     # Iterate child collections first, since they appear at the top in the blender outliner
     logger.debug(f"[{collection.name}] processing collections children")
@@ -320,7 +319,6 @@ def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, pare
         # a part of the collections objects. Which means that they would be added twice without this check. One for the
         # object itself and one for the collection.
         if child.parent is None:
-            i3d.all_objects_to_export.append(child)
             _add_object_to_i3d(i3d, child, parent)
     logger.debug(f"[{collection.name}] no more objects to process in collection")
 
