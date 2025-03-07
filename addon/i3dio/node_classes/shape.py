@@ -11,6 +11,19 @@ from .. import (debugging, xml_i3d)
 from ..i3d import I3D
 
 
+class MaterialStorage:
+    triangles: List = None
+
+    def __init__(self):
+        self.triangles = []
+
+    def __str__(self):
+        return f"triangles={len(self.triangles)}-{self.triangles}"
+
+    def __repr__(self):
+        return self.__str__()
+
+
 class SubSet:
     def __init__(self):
         self.first_index = 0
@@ -90,13 +103,16 @@ class Vertex:
     def blend_weights_for_xml(self):
         return "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*self._blend_weights)
 
+    def blend_id_for_xml(self):
+        return "{0:d}".format(self._blend_ids)
+
     def generic_value_for_xml(self):
         return "{}".format(self._generic_value)
 
 
 class EvaluatedMesh:
     def __init__(self, i3d: I3D, mesh_object: bpy.types.Object, name: str = None,
-                 reference_frame: mathutils.Matrix = None):
+                 reference_frame: mathutils.Matrix = None, node=None):
         if name is None:
             self.name = mesh_object.data.name
         else:
@@ -107,6 +123,7 @@ class EvaluatedMesh:
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': self.name})
         self.generate_evaluated_mesh(mesh_object, reference_frame)
+        self.node = node
 
     def generate_evaluated_mesh(self, mesh_object: bpy.types.Object, reference_frame: mathutils.Matrix = None) -> None:
         if self.i3d.get_setting('apply_modifiers'):
@@ -162,10 +179,12 @@ class IndexedTriangleSet(Node):
         self.is_generic_from_geometry_nodes = False
         self.bone_mapping: ChainMap = bone_mapping
         self.bind_index = 0
-        self.generic_value = 0.0
+        self.child_index: int = 0
+        self.generic_values_by_child_index = {}
         self.vertex_group_ids = {}
         self.tangent: bool = False
         self.material_ids: List[int] = []
+        self.materials: dict[str, MaterialStorage] = {}
         if shape_name is None:
             self.shape_name = self.evaluated_mesh.name
         else:
@@ -191,23 +210,32 @@ class IndexedTriangleSet(Node):
         self.xml_elements['node'] = value
 
     def process_subsets(self, mesh) -> None:
+        self.triangles = []
+        self.vertices = collections.OrderedDict()
         next_vertex = 0
         next_index = 0
         for idx, subset in enumerate(self.subsets):
             self.logger.debug(f"Subset with index {idx}")
             subset.first_vertex = next_vertex
             subset.first_index = next_index
-            next_vertex, next_index = self.process_subset(mesh, subset)
+            next_vertex, next_index = self.process_subset(mesh, subset, subset_idx=idx)
 
-    def process_subset(self, mesh: bpy.types.Mesh, subset: SubSet, triangle_offset: int = 0) -> tuple[int, int]:
+    def process_subset(self, mesh: bpy.types.Mesh, subset: SubSet, triangle_offset: int = 0, subset_idx: int = 0) -> \
+            tuple[int, int]:
         self.logger.debug(f"Processing subset: {subset}")
 
         zero_weight_vertices = set()
-        for triangle in subset.triangles[triangle_offset:]:
+        for triangle_ in subset.triangles[triangle_offset:]:
+            bind_index = 0
+            if isinstance(triangle_, tuple):
+                triangle = triangle_[0]
+                bind_index = triangle_[1]
+                mesh = triangle_[2]
+            else:
+                triangle = triangle_
 
             # Add a new empty container for the vertex indexes of the triangle
             self.triangles.append(list())
-
             for loop_index in triangle.loops:
                 blender_vertex = mesh.vertices[mesh.loops[loop_index].vertex_index]
 
@@ -236,7 +264,7 @@ class IndexedTriangleSet(Node):
                     generic_vertex_index = mesh.loops[loop_index].vertex_index
                     generic_value = generic_layer.data[generic_vertex_index].value
                 elif self.is_generic:
-                    generic_value = self.generic_value
+                    generic_value = self.generic_values_by_child_index[bind_index]
 
                 # Add uvs
                 uvs = []
@@ -274,12 +302,12 @@ class IndexedTriangleSet(Node):
                         blend_ids += padding
                         blend_weights += padding
 
-                vertex = Vertex(triangle.material_index,
+                vertex = Vertex(subset_idx,
                                 blender_vertex.co.xyz,
                                 mesh.loops[loop_index].normal,
                                 vertex_color,
                                 uvs,
-                                blend_ids,
+                                bind_index if isinstance(triangle_, tuple) else blend_ids,
                                 blend_weights,
                                 generic_value)
 
@@ -303,7 +331,6 @@ class IndexedTriangleSet(Node):
 
     def populate_from_evaluated_mesh(self):
         mesh = self.evaluated_mesh.mesh
-
         # Check if evaluated mesh has "generic" attribute in its attributes
         if "generic" in mesh.attributes:
             self.logger.debug("'generic' was found in mesh attributes, likely from a 'Geometry Nodes' modifer. "
@@ -333,8 +360,13 @@ class IndexedTriangleSet(Node):
                 self.subsets.append(material_to_subset[triangle_material])
                 used_materials.append(triangle_material)
 
-            # Add triangle to subset
-            material_to_subset[triangle_material].add_triangle(triangle)
+            if self.is_merge_group:
+                if triangle_material.name not in self.materials:
+                    self.materials[triangle_material.name] = MaterialStorage()
+                self.materials[triangle_material.name].triangles.append((triangle, self.bind_index, mesh))
+            else:
+                # Add triangle to subset
+                material_to_subset[triangle_material].add_triangle(triangle)
 
         unused_materials = set(mesh.materials) - set(used_materials)
         for material in (m for m in unused_materials if m is not None):
@@ -343,6 +375,21 @@ class IndexedTriangleSet(Node):
         self.material_ids = [self.i3d.add_material(m) for m in used_materials]
         self.tangent = any((self.i3d.materials[m_id].is_normalmapped() for m_id in self.material_ids))
 
+        if self.is_merge_group:
+            ids = list()
+            for mat in self.materials.keys():
+                ids.append(self.i3d.materials[mat].id)
+
+            self.evaluated_mesh.node._write_attribute('materialIds', ' '.join(map(str, ids)))
+
+        if self.is_merge_group:
+            self.subsets.clear()
+            for key, mat in self.materials.items():
+                subset = SubSet()
+                subset.triangles = mat.triangles
+                subset.mat_name = key
+                self.subsets.append(subset)
+
         self.process_subsets(mesh)
 
     def append_from_evaluated_mesh(self, mesh_to_append: EvaluatedMesh, generic_value: float = None):
@@ -350,42 +397,51 @@ class IndexedTriangleSet(Node):
             self.logger.warning("Cannot add a mesh to an IndexedTriangleSet that is neither a merge group nor generic.")
             return
 
-        # Material checks for subset consistency
         mesh = mesh_to_append.mesh
-        if len(mesh.materials) == 0:
-            self.logger.warning(f"Mesh '{mesh.name}' has no materials, skipping.")
-            return
-        elif len(mesh.materials) > 1:
-            self.logger.warning(f"Mesh '{mesh.name}' has multiple materials, skipping.")
-            return
-        elif self.is_merge_group and mesh.materials[0].name != self.evaluated_mesh.mesh.materials[0].name:
-            self.logger.warning(f"Mesh '{mesh.name}' has a different material than the merge group root, not allowed!")
-            return
-
-        self.logger.debug(f"Adding mesh '{mesh.name}' to {'merge group' if self.is_merge_group else 'generic group'}")
-
-        triangle_offset = len(self.subsets[-1].triangles)
-        vertex_offset = self.subsets[-1].number_of_vertices
-
-        # Add triangles to the subset
-        for triangle in mesh.loop_triangles:
-            self.subsets[-1].add_triangle(triangle)
-
         if self.is_generic and generic_value is not None:
             self.logger.debug(f"Added mesh '{mesh.name}' with generic value '{generic_value}'")
-            self.generic_value = generic_value
+
+            prev_child_index = self.child_index
+            self.generic_values_by_child_index[prev_child_index] = generic_value
+
+            for triangle in mesh.loop_triangles:
+                triangle_material = mesh.materials[triangle.material_index]
+                if triangle_material.name not in self.materials:
+                    self.materials[triangle_material.name] = MaterialStorage()
+                self.materials[triangle_material.name].triangles.append((triangle, prev_child_index, mesh))
+            self.child_index += 1
         else:
             self.bind_index += 1
+            for triangle in mesh.loop_triangles:
+                triangle_material = mesh.materials[triangle.material_index]
+                if triangle_material.name not in self.materials:
+                    self.materials[triangle_material.name] = MaterialStorage()
+                self.materials[triangle_material.name].triangles.append((triangle, self.bind_index, mesh))
+                # self.subsets[-1].add_triangle(triangle)
+        [self.i3d.add_material(mat) for mat in mesh.materials]
 
-        # Process the subset and write vertices/triangles
-        self.process_subset(mesh, self.subsets[-1], triangle_offset)
-        self.write_vertices(vertex_offset)
-        self.write_triangles(triangle_offset)
+        ids = list()
+        for mat in self.materials.keys():
+            ids.append(self.i3d.materials[mat].id)
 
-        # Update the subset's generic value
-        subset = list(self.xml_elements['subsets'])[0]
-        for key, value in self.subsets[-1].as_dict().items():
-            subset.set(key, value)
+        self.evaluated_mesh.node._write_attribute('materialIds', ' '.join(map(str, ids)))
+        self.subsets.clear()
+        for key, mat in self.materials.items():
+            subset = SubSet()
+            subset.triangles = mat.triangles
+            subset.mat_name = key
+            self.subsets.append(subset)
+
+        self.process_subsets(mesh)
+        self.xml_elements['vertices'].clear()
+        self.write_vertices()
+        self.xml_elements['triangles'].clear()
+        self.write_triangles()
+
+        self.xml_elements['subsets'].clear()
+        self._write_attribute('count', len(self.subsets), 'subsets')
+        for subset in self.subsets:
+            xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
 
     def write_vertices(self, offset=0):
         # Vertices
@@ -419,9 +475,9 @@ class IndexedTriangleSet(Node):
                 vertex_attributes['c'] = vertex_color
 
             if self.is_merge_group:
-                vertex_attributes['bi'] = str(self.bind_index)
+                vertex_attributes['bi'] = vertex.blend_id_for_xml()
             elif self.is_generic:
-                vertex_attributes['g'] = str(vertex.generic_value_for_xml())
+                vertex_attributes['g'] = vertex.generic_value_for_xml()
             elif self.bone_mapping is not None:
                 vertex_attributes['bw'] = vertex.blend_weights_for_xml()
                 vertex_attributes['bi'] = vertex.blend_ids_for_xml()
