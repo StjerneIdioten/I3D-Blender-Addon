@@ -44,7 +44,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
     # Output info about the addon
     debugging.addon_console_handler.setLevel(logging.INFO)
     logger.info(f"Blender version is: {bpy.app.version_string}")
-    logger.info(f"I3D Exporter version is: {sys.modules['i3dio'].__version__}")
+    logger.info(f"I3D Exporter version is: {sys.modules[__package__].__version__}")
     logger.info(f"Exporting to {filepath}")
 
     if operator.verbose_output:
@@ -97,13 +97,13 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
         if operator.binarize_i3d:
             logger.info(f'Starting binarization of "{filepath}"')
             try:
-                i3d_binarize_path = PurePath(None if (path := bpy.context.preferences.addons['i3dio'].preferences.i3d_converter_path) == "" else path)
+                i3d_binarize_path = PurePath(None if (path := bpy.context.preferences.addons[__package__].preferences.i3d_converter_path) == "" else path)
             except TypeError:
                 logger.error(f"Empty Converter Binary Path")
             else:
                 try:
                     # This is under the assumption that the data folder is always in the gamefolder! (Which is usually the case, but imagine having the data folder on a dev machine just for Blender)
-                    game_path = PurePath(None if (path := bpy.context.preferences.addons['i3dio'].preferences.fs_data_path) == "" else path).parent
+                    game_path = PurePath(None if (path := bpy.context.preferences.addons[__package__].preferences.fs_data_path) == "" else path).parent
                 except TypeError:
                     logger.error(f"Empty Game Path")
                 else:
