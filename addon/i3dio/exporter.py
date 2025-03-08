@@ -226,12 +226,24 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
     logger.debug(f"[{obj.name}] is of type {obj.type!r}")
     match obj.type:
         case 'MESH':
-            node = None
-            # Skinned meshes take precedence over merge groups and can't co-exist on the same object, for export.
-            export_skinned_mesh = all(('SKINNED_MESHES' in i3d.settings['features_to_export'],
-                                       'ARMATURE' in i3d.settings['object_types_to_export']))
-            if export_skinned_mesh and (armature_mod := next((modifier for modifier in obj.modifiers
-                                                              if modifier.type == 'ARMATURE'), None)):
+            # MergeChildren objects take precedence over any other Shape type
+            if 'MERGE_CHILDREN' in i3d.settings['features_to_export'] and obj.i3d_merge_children.enabled:
+                if obj.children and any(child.type == 'MESH' for child in obj.children):
+                    logger.debug(f"Processing MergeChildren for: {obj.name}")
+                    node = i3d.add_merge_children_node(obj, _parent)
+                    return  # Return to prevent children from being processed the "normal" way
+                else:
+                    logger.warning(
+                        f"[{obj.name}] is marked as 'MergeChildren' "
+                        "but has no child meshes. Exporting as regular Shape."
+                    )
+
+            # Process Skinned Meshes if enabled and MergeChildren wasn't applied
+            # flake8: noqa: W503
+            elif ('SKINNED_MESHES' in i3d.settings['features_to_export']
+                  and 'ARMATURE' in i3d.settings['object_types_to_export']
+                  and (armature_mod := next((mod for mod in obj.modifiers if mod.type == 'ARMATURE'), None))
+                  ):
                 if armature_mod.object is None:
                     logger.warning(
                         f"Armature modifier '{armature_mod.name}' on skinned mesh '{obj.name}' "
@@ -247,31 +259,20 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                     # We only need to find one armature to confirm it should be a skinned mesh
                     node = i3d.add_skinned_mesh_node(obj, _parent)
 
-            # Handle Merge Groups if no skinned mesh node was assigned
-            if node is None and 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group_index > -1:
+            # Process Merge Groups if MergeChildren and SkinnedMesh are not used
+            elif 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group_index > -1:
                 blender_merge_group = bpy.context.scene.i3dio_merge_groups[obj.i3d_merge_group_index]
                 i3d.merge_groups.setdefault(
                     obj.i3d_merge_group_index, MergeGroup(xml_i3d.merge_group_prefix + blender_merge_group.name)
                 )
                 node = i3d.add_merge_group_node(obj, _parent, blender_merge_group.root is obj)
 
-            # Default to a regular shape node if no special node was created
+            # Default to a regular Shape if none of the special types applied
             if node is None:
                 node = i3d.add_shape_node(obj, _parent)
         case 'ARMATURE':
             node = i3d.add_armature_from_scene(obj, _parent)
         case 'EMPTY':
-            if 'MERGE_CHILDREN' in i3d.settings['features_to_export'] and obj.i3d_merge_children.enabled:
-                logger.debug(f"[{obj.name}] is a 'MergeChildren' object")
-                if obj.children and any(child.type == 'MESH' for child in obj.children):
-                    logger.debug(f"Processing MergeChildren for: {obj.name}")
-                    node = i3d.add_merge_children_node(obj, _parent)
-                    if node is not None:
-                        return  # Return to prevent children from being processed the "normal" way
-                else:
-                    logger.warning(f"Empty object {obj.name} has no children to merge. "
-                                   "Exporting as a regular TransformGroup instead.")
-
             node = i3d.add_transformgroup_node(obj, _parent)
             if obj.instance_collection is not None:
                 logger.debug(f"[{obj.name}] is a collection instance and will be instanced into the 'Empty' object")

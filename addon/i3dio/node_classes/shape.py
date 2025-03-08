@@ -497,20 +497,9 @@ class IndexedTriangleSet(Node):
     def populate_xml_element(self):
         if len(self.evaluated_mesh.mesh.vertices) == 0 or self.is_generic:
             if self.is_generic:
-                self.logger.debug(f"Setting up generic merge children root: '{self.name}'")
-                self.subsets.append(SubSet())
-                self._write_attribute('count', len(self.subsets), 'subsets')
-
+                # Skip writing mesh data for the root object of merged children.
+                # This ensures no vertices are exported while still allowing the bounding volume to be calculated.
                 self._process_bounding_volume()
-
-                for subset in self.subsets:
-                    xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
-
-                # NOTE: Very hacky way to add material ids to generic/merge children shapes,
-                # because the root generic shape does not contain any data in its mesh we cannot run it with
-                # populate_from_evaluated_mesh need to be revisted, but works for FS22 version
-                for material in self.evaluated_mesh.mesh.materials:
-                    self.material_ids.append(self.i3d.add_material(material))
                 return
 
             self.logger.warning("has no vertices! Export of this mesh is aborted.")
@@ -687,10 +676,9 @@ class NurbsCurve(Node):
 class ShapeNode(SceneGraphNode):
     ELEMENT_TAG = 'Shape'
 
-    def __init__(self, id_: int, shape_object: Optional[bpy.types.Object], i3d: I3D,
-                 parent: Optional[SceneGraphNode] = None, custom_name: Optional[str] = None):
+    def __init__(self, id_: int, shape_object: bpy.types.Object | None, i3d: I3D, parent: SceneGraphNode | None = None):
         self.shape_id = None
-        super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent, custom_name=custom_name)
+        super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent)
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
