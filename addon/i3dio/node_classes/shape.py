@@ -113,10 +113,7 @@ class Vertex:
 class EvaluatedMesh:
     def __init__(self, i3d: I3D, mesh_object: bpy.types.Object, name: str = None,
                  reference_frame: mathutils.Matrix = None, node=None):
-        if name is None:
-            self.name = mesh_object.data.name
-        else:
-            self.name = name
+        self.name = name or mesh_object.data.name
         self.i3d = i3d
         self.object = None
         self.mesh = None
@@ -330,6 +327,7 @@ class IndexedTriangleSet(Node):
         return subset.first_vertex + subset.number_of_vertices, subset.first_index + subset.number_of_indices
 
     def populate_from_evaluated_mesh(self):
+        """Populates mesh data from evaluated mesh."""
         mesh = self.evaluated_mesh.mesh
         # Check if evaluated mesh has "generic" attribute in its attributes
         if "generic" in mesh.attributes:
@@ -338,99 +336,28 @@ class IndexedTriangleSet(Node):
             self.is_generic = True
             self.is_generic_from_geometry_nodes = True
 
-        if len(mesh.materials) == 0:
-            self.logger.info("has no material assigned, assigning default material")
-            mesh.materials.append(self.i3d.get_default_material().blender_material)
-            self.logger.info(f"assigned default material '{mesh.materials[-1].name}'")
-
-        material_to_subset = {}
-        has_warned_for_empty_slot = False
-        used_materials = []
-        for triangle in mesh.loop_triangles:
-            triangle_material = mesh.materials[triangle.material_index]
-
-            if triangle_material is None:
-                if not has_warned_for_empty_slot:
-                    self.logger.warning("triangle(s) found with empty material slot, assigning default material")
-                    has_warned_for_empty_slot = True
-                triangle_material = self.i3d.get_default_material().blender_material
-
-            if triangle_material not in material_to_subset:
-                material_to_subset[triangle_material] = SubSet()
-                self.subsets.append(material_to_subset[triangle_material])
-                used_materials.append(triangle_material)
-
-            if self.is_merge_group:
-                if triangle_material.name not in self.materials:
-                    self.materials[triangle_material.name] = MaterialStorage()
-                self.materials[triangle_material.name].triangles.append((triangle, self.bind_index, mesh))
-            else:
-                # Add triangle to subset
-                material_to_subset[triangle_material].add_triangle(triangle)
-
-        unused_materials = set(mesh.materials) - set(used_materials)
-        for material in (m for m in unused_materials if m is not None):
-            self.logger.warning(f"Material '{material.name}' is not used by any triangle, material will be ignored!")
-
-        self.material_ids = [self.i3d.add_material(m) for m in used_materials]
-        self.tangent = any((self.i3d.materials[m_id].is_normalmapped() for m_id in self.material_ids))
-
-        if self.is_merge_group:
-            ids = list()
-            for mat in self.materials.keys():
-                ids.append(self.i3d.materials[mat].id)
-
-            self.evaluated_mesh.node._write_attribute('materialIds', ' '.join(map(str, ids)))
-
-        if self.is_merge_group:
-            self.subsets.clear()
-            for key, mat in self.materials.items():
-                subset = SubSet()
-                subset.triangles = mat.triangles
-                subset.mat_name = key
-                self.subsets.append(subset)
-
+        self._ensure_materials_exist(mesh)
+        self._process_mesh_triangles(mesh)
         self.process_subsets(mesh)
 
     def append_from_evaluated_mesh(self, mesh_to_append: EvaluatedMesh, generic_value: float = None):
+        """Appends mesh data from another EvaluatedMesh to existing IndexedTriangleSet."""
         if not (self.is_merge_group or self.is_generic):
             self.logger.warning("Cannot add a mesh to an IndexedTriangleSet that is neither a merge group nor generic.")
             return
 
         mesh = mesh_to_append.mesh
+        self._ensure_materials_exist(mesh)
+
         if self.is_generic and generic_value is not None:
             self.logger.debug(f"Added mesh '{mesh.name}' with generic value '{generic_value}'")
-
             prev_child_index = self.child_index
             self.generic_values_by_child_index[prev_child_index] = generic_value
-
-            for triangle in mesh.loop_triangles:
-                triangle_material = mesh.materials[triangle.material_index]
-                if triangle_material.name not in self.materials:
-                    self.materials[triangle_material.name] = MaterialStorage()
-                self.materials[triangle_material.name].triangles.append((triangle, prev_child_index, mesh))
+            self._process_mesh_triangles(mesh, index=prev_child_index, append=True)
             self.child_index += 1
         else:
             self.bind_index += 1
-            for triangle in mesh.loop_triangles:
-                triangle_material = mesh.materials[triangle.material_index]
-                if triangle_material.name not in self.materials:
-                    self.materials[triangle_material.name] = MaterialStorage()
-                self.materials[triangle_material.name].triangles.append((triangle, self.bind_index, mesh))
-                # self.subsets[-1].add_triangle(triangle)
-        [self.i3d.add_material(mat) for mat in mesh.materials]
-
-        ids = list()
-        for mat in self.materials.keys():
-            ids.append(self.i3d.materials[mat].id)
-
-        self.evaluated_mesh.node._write_attribute('materialIds', ' '.join(map(str, ids)))
-        self.subsets.clear()
-        for key, mat in self.materials.items():
-            subset = SubSet()
-            subset.triangles = mat.triangles
-            subset.mat_name = key
-            self.subsets.append(subset)
+            self._process_mesh_triangles(mesh, index=self.bind_index, append=True)
 
         self.process_subsets(mesh)
         self.xml_elements['vertices'].clear()
@@ -442,6 +369,77 @@ class IndexedTriangleSet(Node):
         self._write_attribute('count', len(self.subsets), 'subsets')
         for subset in self.subsets:
             xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
+
+    def _ensure_materials_exist(self, mesh: bpy.types.Mesh) -> None:
+        """Ensure that the mesh has at least one material, and if not, assign the default material."""
+        if not len(mesh.materials):
+            self.logger.warning(f"Mesh '{mesh.name}' has no materials, assigning default material")
+            mesh.materials.append(self.i3d.get_default_material().blender_material)
+            self.logger.info(f"Assigned default material '{mesh.materials[-1].name}'")
+
+    def _process_mesh_triangles(self, mesh: bpy.types.Mesh, index: int = None, append: bool = False) -> None:
+        """
+        Processes triangles of the given mesh and assigns them to materials.
+        - Ensures all triangles have valid materials.
+        - Assigns triangles to `MaterialStorage` for merging or subsets otherwise.
+        - Handles appending when merging multiple meshes.
+        - Updates material IDs and determines if tangents are needed.
+
+        Args:
+            mesh (bpy.types.Mesh): The mesh whose triangles will be processed.
+            index (int, optional): The index used when appending a new mesh.
+            append (bool, optional): If True, appends triangles to an existing set.
+        """
+        has_warned_for_empty_slot = False
+        used_materials = set()
+        material_to_subset = {} if not append else None  # Only used when creating new subsets
+
+        for triangle in mesh.loop_triangles:
+            triangle_material = mesh.materials[triangle.material_index]
+            # Ensure all triangles have valid materials (assign default if missing)
+            if triangle_material is None:
+                if not has_warned_for_empty_slot:
+                    self.logger.warning("triangle(s) found with empty material slot, assigning default material")
+                    has_warned_for_empty_slot = True
+                triangle_material = self.i3d.get_default_material().blender_material
+
+            used_materials.add(triangle_material)
+
+            if append:
+                material_entry = self.materials.setdefault(triangle_material.name, MaterialStorage())
+                material_entry.triangles.append((triangle, index, mesh))
+            else:
+                # If not appending, we need to determine whether to create a new subset
+                if triangle_material not in material_to_subset:
+                    material_to_subset[triangle_material] = SubSet()
+                    self.subsets.append(material_to_subset[triangle_material])
+
+                # Handle merging logic (merge groups store materials separately)
+                if self.is_merge_group:
+                    if triangle_material.name not in self.materials:
+                        self.materials[triangle_material.name] = MaterialStorage()
+                    self.materials[triangle_material.name].triangles.append((triangle, self.bind_index, mesh))
+                else:
+                    # Assign triangle to the appropriate subset
+                    material_to_subset[triangle_material].add_triangle(triangle)
+
+        unused_materials = set(mesh.materials) - set(used_materials)
+        for mat in (m for m in unused_materials if m is not None):
+            self.logger.warning(f"Material '{mat.name}' is not used by any triangle, material will be ignored!")
+
+        self.material_ids = [self.i3d.add_material(m) for m in used_materials]
+        self.tangent = self.tangent or any(self.i3d.materials[m_id].is_normalmapped() for m_id in self.material_ids)
+        # Only clear and rebuild subsets when appending or using merge groups
+        if append or self.is_merge_group:
+            # Since a default processed shape has no node yet, restrict materialIds writing to append or merge groups
+            ids = [self.i3d.materials[m].id for m in self.materials]
+            self.evaluated_mesh.node._write_attribute('materialIds', ' '.join(map(str, ids)))
+            # Rebuild subsets to ensure correct material assignment
+            self.subsets.clear()
+            for _key, mat in self.materials.items():
+                subset = SubSet()
+                subset.triangles = mat.triangles
+                self.subsets.append(subset)
 
     def write_vertices(self, offset=0):
         # Vertices
