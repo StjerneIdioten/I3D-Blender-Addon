@@ -268,7 +268,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 node = i3d.add_merge_group_node(obj, _parent, blender_merge_group.root is obj)
 
             # Default to a regular Shape if none of the special types applied
-            if node is None:
+            else:
                 node = i3d.add_shape_node(obj, _parent)
         case 'ARMATURE':
             node = i3d.add_armature_from_scene(obj, _parent)
