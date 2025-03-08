@@ -239,7 +239,6 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                     )
 
             # Process Skinned Meshes if enabled and MergeChildren wasn't applied
-            # flake8: noqa: W503
             elif ('SKINNED_MESHES' in i3d.settings['features_to_export']
                   and 'ARMATURE' in i3d.settings['object_types_to_export']
                   and (armature_mod := next((mod for mod in obj.modifiers if mod.type == 'ARMATURE'), None))
