@@ -461,29 +461,29 @@ class I3DMergeChildren(bpy.types.PropertyGroup):
     enabled: BoolProperty(
         name="Enable Merge Children",
         description=(
-            "Enable this object to act as the merge root for exporting its child objects. "
-            "During export, all child objects will be combined into a single merged object."
+            "Marks this object as the Merge Children Root, defining the group of child objects to be merged. "
+            "Only the child meshes will be included in the final merged Shape. "
+            "The root object's mesh data (vertices, triangles, materials, etc.) will NOT be exported, "
+            "but its shape attributes (e.g., cast shadows) and object attributes will still be used."
         ),
         default=False
     )
     apply_transforms: bpy.props.BoolProperty(
         name="Apply Transforms",
         description=(
-            "Bake location, rotation, and scale into each child mesh. When enabled, child meshes retain their "
-            "current position and orientation relative to the root (merge root object). "
-            "When disabled, child meshes will be transformed to align directly with the root object, "
-            "removing their individual offsets and placing them at the root's location."
+            "Controls whether child meshes apply their transforms before merging. "
+            "When enabled, each child mesh keeps its relative position, rotation, and scale. "
+            "When disabled, all child meshes are transformed to match the root object's location and orientation, "
+            "removing their individual offsets."
         ),
         default=False
     )
     interpolation_steps: bpy.props.IntProperty(
         name="Interpolation Steps",
         description=(
-            "Number of additional interpolation steps inserted between merged child objects. "
-            "This is useful for creating smoother animations or transitions in shaders "
-            "that utilize array textures (e.g., for motion paths). "
-            "Make sure the corresponding texture accounts for the same number of steps to "
-            "avoid unexpected offsets in the animation or effect."
+            "Sets the number of interpolation steps for smoother transitions in shaders. "
+            "This affects effects like motion paths that use array textures. "
+            "Ensure the corresponding texture supports the same step count to prevent animation misalignment."
         ),
         default=1,
         min=1,
@@ -623,12 +623,12 @@ class I3D_IO_PT_object_attributes(Panel):
 
         if obj.type == 'EMPTY':
             draw_level_of_detail_attributes(layout, obj, i3d_attributes)
-            draw_merge_children_attributes(layout, obj.i3d_merge_children)
             draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_joint_attributes(layout, i3d_attributes)
 
         elif obj.type == 'MESH':
             draw_rigid_body_attributes(layout, i3d_attributes)
+            draw_merge_children_attributes(layout, obj.i3d_merge_children)
             draw_merge_group_attributes(layout, context)
 
         draw_visibility_condition_attributes(layout, i3d_attributes)
@@ -766,6 +766,7 @@ def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.C
     header, panel = layout.panel('i3d_merge_group_panel', default_closed=False)
     header.label(text="Merge Group")
     if panel:
+        panel.enabled = not obj.i3d_merge_children.enabled
         row = panel.row(align=True)
         row.operator('i3dio.choose_merge_group', text="", icon='DOWNARROW_HLT')
 

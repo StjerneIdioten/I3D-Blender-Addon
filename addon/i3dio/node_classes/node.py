@@ -91,14 +91,12 @@ class SceneGraphNode(Node):
                  blender_object: [bpy.types.Object, bpy.types.Collection, None],
                  i3d: I3D,
                  parent: Union[SceneGraphNode, None] = None,
-                 custom_name: str = None,
                  ):
         self.children = []
         self.blender_object = blender_object
         self.xml_elements: Dict[str, Union[xml_i3d.XML_Element, None]] = {'Node': None}
 
-        self._name = custom_name or self.blender_object.name
-
+        self._name = self.blender_object.name
         prefix = i3d.settings.get('object_sorting_prefix', "")
         if prefix and (prefix_index := self._name.find(prefix)) > -1 and prefix_index < len(self._name) - 1:
             self._name = self._name[prefix_index + 1:]
