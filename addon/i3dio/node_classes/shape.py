@@ -12,9 +12,9 @@ from ..i3d import I3D
 
 
 class MaterialStorage:
-    def __init__(self, material_slot_name: str = None):
+    def __init__(self, triangles: list = None, material_slot_name: str = None):
         self.material_slot_name = material_slot_name
-        self.triangle: list = []
+        self.triangles = triangles or []
 
     def __str__(self):
         return f"triangles={len(self.triangles)}-{self.triangles} " \
@@ -382,7 +382,7 @@ class IndexedTriangleSet(Node):
 
     def _get_material_slot_name(self, _material: bpy.types.Material) -> str | None:
         """Returns the material slot name of the given material if set, otherwise None."""
-        if _material.i3d_attributes.use_custom_material_name:
+        if _material.i3d_attributes.use_material_slot_name:
             return _material.i3d_attributes.material_slot_name or _material.name
         return None
 
