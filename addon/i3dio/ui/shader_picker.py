@@ -303,6 +303,18 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         default='1x1'
     )
 
+    use_material_slot_name: BoolProperty(
+        name="Enable Material Slot Name",
+        description="If checked, this material will export a material slot name",
+        default=False
+    )
+
+    material_slot_name: StringProperty(
+        name="Material Slot Name",
+        description="If left empty, the material name will be used instead",
+        default=""
+    )
+
 
 @register
 class I3D_IO_PT_material_shader(Panel):
@@ -323,6 +335,11 @@ class I3D_IO_PT_material_shader(Panel):
 
         layout.prop(material.i3d_attributes, 'shading_rate')
         layout.prop(material.i3d_attributes, 'alpha_blending')
+        box = layout.box()
+        box.prop(material.i3d_attributes, 'use_material_slot_name')
+        row = box.row()
+        row.enabled = material.i3d_attributes.use_material_slot_name
+        row.prop(material.i3d_attributes, 'material_slot_name', text="Custom Name:", placeholder=material.name)
 
         layout.use_property_split = False
         layout.prop(material.i3d_attributes, 'source')

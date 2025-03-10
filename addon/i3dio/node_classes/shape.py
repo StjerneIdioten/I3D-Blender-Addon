@@ -12,13 +12,13 @@ from ..i3d import I3D
 
 
 class MaterialStorage:
-    triangles: List = None
-
-    def __init__(self):
-        self.triangles = []
+    def __init__(self, material_slot_name: str = None):
+        self.material_slot_name = material_slot_name
+        self.triangle: list = []
 
     def __str__(self):
-        return f"triangles={len(self.triangles)}-{self.triangles}"
+        return f"triangles={len(self.triangles)}-{self.triangles} " \
+               f"material_slot_name={self.material_slot_name}"
 
     def __repr__(self):
         return self.__str__()
@@ -31,12 +31,15 @@ class SubSet:
         self.number_of_indices = 0
         self.number_of_vertices = 0
         self.triangles = []
+        self.material_slot_name = None
 
     def as_dict(self):
         subset_attributes = {'firstIndex': f"{self.first_index}",
                              'firstVertex': f"{self.first_vertex}",
                              'numIndices': f"{self.number_of_indices}",
                              'numVertices': f"{self.number_of_vertices}"}
+        if self.material_slot_name is not None:
+            subset_attributes['materialSlotName'] = self.material_slot_name
         return subset_attributes
 
     def __str__(self):
@@ -377,6 +380,12 @@ class IndexedTriangleSet(Node):
             mesh.materials.append(self.i3d.get_default_material().blender_material)
             self.logger.info(f"Assigned default material '{mesh.materials[-1].name}'")
 
+    def _get_material_slot_name(self, _material: bpy.types.Material) -> str | None:
+        """Returns the material slot name of the given material if set, otherwise None."""
+        if _material.i3d_attributes.use_custom_material_name:
+            return _material.i3d_attributes.material_slot_name or _material.name
+        return None
+
     def _process_mesh_triangles(self, mesh: bpy.types.Mesh, index: int = None, append: bool = False) -> None:
         """
         Processes triangles of the given mesh and assigns them to materials.
@@ -406,18 +415,26 @@ class IndexedTriangleSet(Node):
             used_materials.add(triangle_material)
 
             if append:
-                material_entry = self.materials.setdefault(triangle_material.name, MaterialStorage())
+                material_entry = self.materials.setdefault(
+                    triangle_material.name,
+                    MaterialStorage(material_slot_name=self._get_material_slot_name(triangle_material))
+                )
                 material_entry.triangles.append((triangle, index, mesh))
             else:
                 # If not appending, we need to determine whether to create a new subset
                 if triangle_material not in material_to_subset:
                     material_to_subset[triangle_material] = SubSet()
                     self.subsets.append(material_to_subset[triangle_material])
+                    material_to_subset[triangle_material].material_slot_name = (
+                        self._get_material_slot_name(triangle_material)
+                    )
 
                 # Handle merging logic (merge groups store materials separately)
                 if self.is_merge_group:
                     if triangle_material.name not in self.materials:
-                        self.materials[triangle_material.name] = MaterialStorage()
+                        self.materials[triangle_material.name] = MaterialStorage(
+                            material_slot_name=self._get_material_slot_name(triangle_material)
+                        )
                     self.materials[triangle_material.name].triangles.append((triangle, self.bind_index, mesh))
                 else:
                     # Assign triangle to the appropriate subset
@@ -438,6 +455,7 @@ class IndexedTriangleSet(Node):
             self.subsets.clear()
             for _key, mat in self.materials.items():
                 subset = SubSet()
+                subset.material_slot_name = mat.material_slot_name
                 subset.triangles = mat.triangles
                 self.subsets.append(subset)
 
