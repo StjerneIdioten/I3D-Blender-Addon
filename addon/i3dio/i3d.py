@@ -53,6 +53,7 @@ class I3D:
         self.depsgraph = depsgraph
 
         self.all_objects_to_export: List[bpy.types.Object] = []
+        self.animations: dict[int, Animation] = {}
 
     # Private Methods ##################################################################################################
     def _next_available_id(self, id_type: str) -> int:
@@ -180,6 +181,17 @@ class I3D:
             attrib = {'name': attribute.name, 'type': attribute.type.replace('data_', '')}
             attribute_element = xml_i3d.SubElement(node_attribute_element, 'Attribute', attrib=attrib)
             xml_i3d.write_attribute(attribute_element, 'value', getattr(attribute, attribute.type))
+
+    def add_animation(self, node: SceneGraphNode) -> None:
+        """Add an animation for the given SceneGraphNode if it has keyframes."""
+        if not (node.blender_object.animation_data and node.blender_object.animation_data.action):
+            return  # No animation, skip
+        action = node.blender_object.animation_data.action
+        self.logger.info(f"Adding animation '{action.name}' for node '{node.name}' (ID {node.id})")
+        # Use the existing nodeId for the animation
+        animation = Animation(node.id, self, node.blender_object)
+        # Store it in the animations dictionary
+        self.animations[node.id] = animation
 
     def add_material(self, blender_material: bpy.types.Material) -> int:
         name = blender_material.name
@@ -334,3 +346,4 @@ from i3dio.node_classes.merge_children import *
 from i3dio.node_classes.skinned_mesh import *
 from i3dio.node_classes.material import *
 from i3dio.node_classes.file import *
+from i3dio.node_classes.animation import *

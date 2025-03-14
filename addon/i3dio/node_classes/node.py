@@ -110,6 +110,9 @@ class SceneGraphNode(Node):
         except AttributeError:
             pass
 
+        # Check and process animation
+        self.i3d.add_animation(self)
+
         self.add_i3d_mapping_to_xml()
 
         self.logger.debug(f"Initialized as a '{self.__class__.__name__}'")

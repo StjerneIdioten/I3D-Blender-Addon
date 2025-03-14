@@ -137,10 +137,11 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                                                  "the armature and bone structure will still be exported, "
                                                  "but the meshes wont be bound to it"),
             ('MERGE_CHILDREN', "Merge Children", "Merge the child objects of empties with Merge Children enabled "
-                                                 "into a single exported mesh")
+                                                 "into a single exported mesh"),
+            ('ANIMATIONS', "Animations", "Export animations"),
         ),
         options={'ENUM_FLAG'},
-        default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN'},
+        default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN', 'ANIMATIONS'},
     )
 
     copy_files: BoolProperty(
