@@ -184,12 +184,10 @@ class I3D:
 
     def add_animation(self, node: SceneGraphNode) -> None:
         """Add an animation for the given SceneGraphNode if it has keyframes."""
-        if not (node.blender_object.animation_data and node.blender_object.animation_data.action):
+        if not (animation_data := node.blender_object.animation_data) or not animation_data.action:
             return  # No animation, skip
-        action = node.blender_object.animation_data.action
-        self.logger.info(f"Adding animation '{action.name}' for node '{node.name}' (ID {node.id})")
         # Use the existing nodeId for the animation
-        animation = Animation(node.id, self, node.blender_object)
+        animation = Animation(node.id, self, node.blender_object, node.parent)
         # Store it in the animations dictionary
         self.animations[node.id] = animation
 
