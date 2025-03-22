@@ -5,6 +5,7 @@ from bpy_extras import anim_utils
 import mathutils
 
 from .node import SceneGraphNode
+from .skinned_mesh import SkinnedMeshBoneNode
 from .. import xml_i3d, debugging
 from ..i3d import I3D
 
@@ -12,7 +13,9 @@ from ..i3d import I3D
 
 
 class Keyframe:
-    def __init__(self, i3d: I3D, node: SceneGraphNode, parent_matrix: mathutils.Matrix,
+    def __init__(self,
+                 i3d: I3D, node: SceneGraphNode | SkinnedMeshBoneNode,
+                 parent_matrix: mathutils.Matrix,
                  fcurves, frame: float, time_ms: float):
         self.i3d = i3d
         self.node = node
@@ -20,6 +23,7 @@ class Keyframe:
         self.fcurves = fcurves
         self.frame = frame
         self.time_ms = time_ms
+        self.is_bone = isinstance(node, SkinnedMeshBoneNode)
         paths = [fcurve.data_path for fcurve in self.fcurves]
         self.export_translation = any("location" in path for path in paths)
         self.export_rotation = any("rotation_euler" in path for path in paths)
@@ -56,11 +60,17 @@ class Keyframe:
         rotation_matrix = rotation_euler.to_matrix().to_4x4() if rotation_euler else mathutils.Matrix.Identity(4)
 
         transform_matrix = self.parent_matrix @ translation_matrix @ rotation_matrix @ scale_matrix
-        conversion_matrix = self.i3d.conversion_matrix @ transform_matrix @ self.i3d.conversion_matrix.inverted()
+        if self.is_bone:
+            self.i3d.logger.debug(f"translation: {translation_vec} on frame {self.frame}")
+            bone_matrix = self.i3d.conversion_matrix @ self.node.blender_object.matrix_local
+            conversion_matrix = bone_matrix @ transform_matrix
+        else:
+            conversion_matrix = self.i3d.conversion_matrix @ transform_matrix @ self.i3d.conversion_matrix.inverted()
 
         final_translation, final_rotation, final_scale = conversion_matrix.decompose()
         if self.export_translation:
             self.xml_element.set("translation", "{0:.6g} {1:.6g} {2:.6g}".format(*final_translation))
+            self.i3d.logger.debug(f"translation: {final_translation} on frame {self.frame}")
         if self.export_rotation:
             self.xml_element.set("rotation", "{0:.6g} {1:.6g} {2:.6g}".format(*[math.degrees(angle)
                                                                                 for angle in final_rotation]))
@@ -71,20 +81,34 @@ class Keyframe:
 
 
 class Keyframes:
-    def __init__(self, i3d: I3D, fps: float, node: SceneGraphNode, channelbag: bpy.types.ActionChannelbag):
+    def __init__(self,
+                 i3d: I3D,
+                 fps: float,
+                 node: SceneGraphNode | SkinnedMeshBoneNode,
+                 channelbag: bpy.types.ActionChannelbag):
         self.i3d = i3d
         self.fps = fps
         self.node = node
         self.channelbag = channelbag
+        self.is_bone = isinstance(node, SkinnedMeshBoneNode)
 
         self.max_frame = 0
         self.has_data = False
         self.xml_element = xml_i3d.Element("Keyframes", {"nodeId": str(node.id)})
+        self.fcurves = self.channelbag.fcurves
 
         self._generate_keyframes()
 
     def _generate_keyframes(self):
-        keyframe_list = sorted({kp.co.x for fc in self.channelbag.fcurves for kp in fc.keyframe_points})
+        if self.is_bone:
+            bone_name = self.node.blender_object.name
+            filtered_fcurves = [fc for fc in self.fcurves if f'pose.bones["{bone_name}"]' in fc.data_path]
+            if not filtered_fcurves:
+                return
+            self.fcurves = filtered_fcurves
+
+        keyframe_list = sorted({kp.co.x for fc in self.fcurves for kp in fc.keyframe_points})
+
         if not keyframe_list:
             return
 
@@ -94,10 +118,12 @@ class Keyframes:
 
         parent = self.node.parent
         parent_matrix = parent.blender_object.matrix_world.inverted() if parent else mathutils.Matrix.Identity(4)
+        if self.is_bone:
+            parent_matrix = self.node.root_node.blender_object.matrix_local.inverted() @ parent_matrix
 
         for frame in keyframe_list:
             time_ms = ((frame - first_frame) / self.fps) * 1000
-            keyframe = Keyframe(self.i3d, self.node, parent_matrix, self.channelbag.fcurves, frame, time_ms)
+            keyframe = Keyframe(self.i3d, self.node, parent_matrix, self.fcurves, frame, time_ms)
             self.xml_element.append(keyframe.xml_element)
 
 
@@ -124,6 +150,28 @@ class Clip:
         for node, slot in self.node_slot_pairs:
             if not (channelbag := anim_utils.action_get_channelbag_for_slot(self.action, slot)):
                 continue
+
+            self.i3d.logger.debug(f"Processing node1 {node.name}")
+
+            do_not_process_node = False
+            if node.blender_object.type == 'ARMATURE':
+                self.i3d.logger.warning(f"Node is an armature, limited support currently {node.name}")
+                if node.blender_object.i3d_attributes.collapse_armature:
+                    self.i3d.logger.debug("Armature is collapsed and is not included in export")
+                    do_not_process_node = True
+                for bone in node.blender_object.data.bones:
+                    if (bone_node := self.i3d.processed_objects.get(bone)):
+                        self.i3d.logger.debug(f"Processing bone {bone.name}, parent: {bone_node.parent}")
+                        keyframes = Keyframes(self.i3d, self.fps, bone_node, channelbag)
+                        if keyframes.has_data:
+                            self.xml_element.append(keyframes.xml_element)
+                            max_frame = max(max_frame, keyframes.max_frame)
+                            keyframes_written += 1
+
+            if do_not_process_node:
+                continue
+
+            self.i3d.logger.debug(f"Processing node2 {node.name}")
 
             keyframes = Keyframes(self.i3d, self.fps, node, channelbag)
             if keyframes.has_data:
