@@ -53,7 +53,7 @@ class I3D:
         self.depsgraph = depsgraph
 
         self.all_objects_to_export: List[bpy.types.Object] = []
-        self.animations: dict[int, Animation] = {}
+        self.anim_links: dict[bpy.types.Action, list[tuple[SceneGraphNode, bpy.types.ActionSlot]]] = {}
 
     # Private Methods ##################################################################################################
     def _next_available_id(self, id_type: str) -> int:
@@ -182,14 +182,13 @@ class I3D:
             attribute_element = xml_i3d.SubElement(node_attribute_element, 'Attribute', attrib=attrib)
             xml_i3d.write_attribute(attribute_element, 'value', getattr(attribute, attribute.type))
 
-    def add_animation(self, node: SceneGraphNode) -> None:
-        """Add an animation for the given SceneGraphNode if it has keyframes."""
+    def collect_animation_link(self, node: SceneGraphNode) -> None:
         if not (animation_data := node.blender_object.animation_data) or not animation_data.action:
-            return  # No animation, skip
-        # Use the existing nodeId for the animation
-        animation = Animation(node.id, self, node.blender_object, node.parent)
-        # Store it in the animations dictionary
-        self.animations[node.id] = animation
+            return
+        self.anim_links.setdefault(animation_data.action, []).append((node, animation_data.action_slot))
+
+    def add_animations(self) -> None:
+        Animation(self)
 
     def add_material(self, blender_material: bpy.types.Material) -> int:
         name = blender_material.name

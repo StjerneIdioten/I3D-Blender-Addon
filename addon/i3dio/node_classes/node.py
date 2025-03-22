@@ -110,8 +110,8 @@ class SceneGraphNode(Node):
         except AttributeError:
             pass
 
-        # Check and process animation
-        self.i3d.add_animation(self)
+        if "ANIMATIONS" in i3d.settings['features_to_export'] and isinstance(self.blender_object, bpy.types.Object):
+            self.i3d.collect_animation_link(self)
 
         self.add_i3d_mapping_to_xml()
 

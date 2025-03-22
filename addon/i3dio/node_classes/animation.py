@@ -11,127 +11,167 @@ from ..i3d import I3D
 # https://developer.blender.org/docs/release_notes/4.4/python_api/#slotted-actions
 
 
-class Animation:
-    def __init__(self, id_: int, i3d: I3D, animated_object: bpy.types.Object, parent: SceneGraphNode | None = None):
-        self.id = id_
+class Keyframe:
+    def __init__(self, i3d: I3D, node: SceneGraphNode, parent_matrix: mathutils.Matrix,
+                 fcurves, frame: float, time_ms: float):
         self.i3d = i3d
-        self.animated_object = animated_object
-        self.parent = parent
-        self.name = animated_object.name
+        self.node = node
+        self.parent_matrix = parent_matrix
+        self.fcurves = fcurves
+        self.frame = frame
+        self.time_ms = time_ms
+        paths = [fcurve.data_path for fcurve in self.fcurves]
+        self.export_translation = any("location" in path for path in paths)
+        self.export_rotation = any("rotation_euler" in path for path in paths)
+        self.export_scale = any("scale" in path for path in paths)
+        self.export_visibility = any("hide_viewport" in path for path in paths)
+        self._generate_keyframe()
+
+    def _generate_keyframe(self):
+        # Evaluate fcurves and bake transform
+        self.xml_element = xml_i3d.Element("Keyframe", {"time": f"{self.time_ms:.6g}"})
+        translation = [0, 0, 0]
+        rotation = [0, 0, 0] if self.export_rotation else None
+        scale = [1, 1, 1]
+        visibility = True
+
+        for fcurve in self.fcurves:
+            value = fcurve.evaluate(self.frame)
+            path = fcurve.data_path
+            if "location" in path:
+                translation[fcurve.array_index] = value
+            elif "rotation_euler" in path:
+                rotation[fcurve.array_index] = value
+            elif "scale" in path:
+                scale[fcurve.array_index] = value
+            elif "hide_viewport" in path:
+                visibility = value == 0.0
+
+        translation_vec = mathutils.Vector(translation)
+        rotation_euler = mathutils.Euler(rotation, 'XYZ') if rotation else None
+        scale_vec = mathutils.Vector(scale)
+
+        translation_matrix = mathutils.Matrix.Translation(translation_vec)
+        scale_matrix = mathutils.Matrix.Diagonal(scale_vec).to_4x4()
+        rotation_matrix = rotation_euler.to_matrix().to_4x4() if rotation_euler else mathutils.Matrix.Identity(4)
+
+        transform_matrix = self.parent_matrix @ translation_matrix @ rotation_matrix @ scale_matrix
+        conversion_matrix = self.i3d.conversion_matrix @ transform_matrix @ self.i3d.conversion_matrix.inverted()
+
+        final_translation, final_rotation, final_scale = conversion_matrix.decompose()
+        if self.export_translation:
+            self.xml_element.set("translation", "{0:.6g} {1:.6g} {2:.6g}".format(*final_translation))
+        if self.export_rotation:
+            self.xml_element.set("rotation", "{0:.6g} {1:.6g} {2:.6g}".format(*[math.degrees(angle)
+                                                                                for angle in final_rotation]))
+        if self.export_scale:
+            self.xml_element.set("scale", "{0:.6g} {1:.6g} {2:.6g}".format(*final_scale))
+        if self.export_visibility:
+            self.xml_element.set("visibility", str(visibility).lower())
+
+
+class Keyframes:
+    def __init__(self, i3d: I3D, fps: float, node: SceneGraphNode, channelbag: bpy.types.ActionChannelbag):
+        self.i3d = i3d
+        self.fps = fps
+        self.node = node
+        self.channelbag = channelbag
+
+        self.max_frame = 0
+        self.has_data = False
+        self.xml_element = xml_i3d.Element("Keyframes", {"nodeId": str(node.id)})
+
+        self._generate_keyframes()
+
+    def _generate_keyframes(self):
+        keyframe_list = sorted({kp.co.x for fc in self.channelbag.fcurves for kp in fc.keyframe_points})
+        if not keyframe_list:
+            return
+
+        self.has_data = True
+        self.max_frame = keyframe_list[-1]
+        first_frame = keyframe_list[0]
+
+        parent = self.node.parent
+        parent_matrix = parent.blender_object.matrix_world.inverted() if parent else mathutils.Matrix.Identity(4)
+
+        for frame in keyframe_list:
+            time_ms = ((frame - first_frame) / self.fps) * 1000
+            keyframe = Keyframe(self.i3d, self.node, parent_matrix, self.channelbag.fcurves, frame, time_ms)
+            self.xml_element.append(keyframe.xml_element)
+
+
+class Clip:
+    def __init__(self,
+                 i3d: I3D,
+                 fps: float,
+                 layer: bpy.types.ActionLayer,
+                 node_slot_pairs: list[tuple[SceneGraphNode, bpy.types.ActionSlot]],
+                 action: bpy.types.Action):
+        self.i3d = i3d
+        self.fps = fps
+        self.layer = layer
+        self.action = action
+        self.node_slot_pairs = node_slot_pairs
+        self.xml_element = xml_i3d.Element("Clip", {"name": layer.name})
+
+        self._generate_keyframes()
+
+    def _generate_keyframes(self):
+        max_frame = 0
+        keyframes_written = 0
+
+        for node, slot in self.node_slot_pairs:
+            if not (channelbag := anim_utils.action_get_channelbag_for_slot(self.action, slot)):
+                continue
+
+            keyframes = Keyframes(self.i3d, self.fps, node, channelbag)
+            if keyframes.has_data:
+                self.xml_element.append(keyframes.xml_element)
+                max_frame = max(max_frame, keyframes.max_frame)
+                keyframes_written += 1
+
+        duration_ms = (max_frame / self.fps) * 1000
+        self.xml_element.set("duration", f"{duration_ms:.6g}")
+        self.xml_element.set("count", str(keyframes_written))
+
+
+class AnimationSet:
+    def __init__(self,
+                 i3d: I3D,
+                 fps: float,
+                 action: bpy.types.Action,
+                 node_slot_pairs: list[tuple[SceneGraphNode, bpy.types.ActionSlot]]):
+        self.i3d = i3d
+        self.fps = fps
+        self.action = action
+        self.node_slot_pairs = node_slot_pairs
+
+        self.xml_element = xml_i3d.Element("AnimationSet", {"name": action.name})
+        self.clips: list[Clip] = []
+        self._generate_clips()
+
+    def _generate_clips(self):
+        # NOTE: Blender 4.4 action can only have one layer
+        layer = self.action.layers[0]
+        clip = Clip(self.i3d, self.fps, layer, self.node_slot_pairs, self.action)
+        self.clips.append(clip)
+        self.xml_element.append(clip.xml_element)
+        self.xml_element.set("clipCount", str(len(self.clips)))
+
+
+class Animation:
+    def __init__(self, i3d: I3D):
+        self.i3d = i3d
         self.fps = i3d.depsgraph.scene.render.fps
-
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                                  {'object_name': self.name})
+                                                  {'object_name': 'AnimationExport'})
+        self.logger.debug("Initialized animation export")
+        self.animation_sets_element = xml_i3d.SubElement(self.i3d.xml_elements['Animation'], "AnimationSets")
+        self._export()
 
-        self.logger.debug("Initialized animation")
-
-        action = self.animated_object.animation_data.action
-        action_slot = self.animated_object.animation_data.action_slot
-        channelbag = anim_utils.action_get_channelbag_for_slot(action, action_slot)
-
-        if not channelbag:
-            self.logger.warning(f"No action found for '{self.animated_object.name}', skipping keyframes.")
-            return
-
-        self.animation_root = i3d.xml_elements['Animation']
-        self.animation_sets = i3d.xml_elements.get('AnimationSets')
-
-        if self.animation_sets is None:
-            self.animation_sets = xml_i3d.SubElement(self.animation_root, "AnimationSets")
-            i3d.xml_elements['AnimationSets'] = self.animation_sets
-
-        self.animation_set = next((anim_set for anim_set in self.animation_sets.findall('AnimationSet')
-                                   if anim_set.get('name') == self.name), None)
-        if self.animation_set is None:
-            self.animation_set = xml_i3d.SubElement(self.animation_sets, 'AnimationSet', {"name": self.name})
-
-        fcurves = channelbag.fcurves
-        # Compute animation duration (last frame converted to milliseconds)
-        duration = max((kp.co.x for fcurve in fcurves for kp in fcurve.keyframe_points), default=0)
-        duration = (duration / self.fps) * 1000  # i3d expects time in milliseconds
-
-        # Create Clip element inside AnimationSet
-        self.clip = xml_i3d.SubElement(self.animation_set, "Clip", {"name": action_slot.name_display,
-                                                                    "duration": f"{duration:.6f}"})
-        keyframes_element = xml_i3d.SubElement(self.clip, "Keyframes", {"nodeId": str(self.id)})
-
-        self._extract_keyframes(fcurves, keyframes_element)
-
-    def _extract_keyframes(self,
-                           fcurves: bpy.types.ActionChannelbagFCurves,
-                           keyframes_element: xml_i3d.Element) -> None:
-        """Extracts keyframes"""
-
-        keyframes = {keyframe.co.x for fcurve in fcurves for keyframe in fcurve.keyframe_points}
-        if not keyframes:
-            return
-
-        keyframe_data = {}
-
-        # No need to write keyframes if they are empty
-        export_translation = any("location" in fcurve.data_path for fcurve in fcurves)
-        export_rotation = any("rotation_euler" in fcurve.data_path for fcurve in fcurves)
-        export_scale = any("scale" in fcurve.data_path for fcurve in fcurves)
-        export_visibility = any("hide_viewport" in fcurve.data_path for fcurve in fcurves)
-
-        parent_matrix = (self.parent.blender_object.matrix_world.inverted()
-                         if self.parent else mathutils.Matrix.Identity(4))
-
-        for frame in sorted(list(keyframes)):
-            time_ms = (frame / self.fps) * 1000  # i3d expects time in milliseconds
-
-            translation = [0, 0, 0]
-            rotation = [0, 0, 0] if export_rotation else None
-            scale = [1, 1, 1]
-            visibility = True
-
-            for fcurve in fcurves:
-                value = fcurve.evaluate(frame)
-                path = fcurve.data_path
-                if "location" in path:
-                    translation[fcurve.array_index] = value
-                elif "rotation_euler" in path:
-                    rotation[fcurve.array_index] = value
-                elif "scale" in path:
-                    scale[fcurve.array_index] = value
-                elif "hide_viewport" in path:
-                    # `hide_viewport` has invert_checkbox enabled in Blender's UI.
-                    # API/fcurve stores 0.0 when visible and 1.0 when hidden.
-                    visibility = fcurve.evaluate(frame) == 0.0
-
-            translation_vec = mathutils.Vector(translation)
-            rotation_euler = mathutils.Euler(rotation, 'XYZ') if rotation else None
-            scale_vec = mathutils.Vector(scale)
-
-            translation_matrix = mathutils.Matrix.Translation(translation_vec)
-            scale_matrix = mathutils.Matrix.Diagonal(scale_vec).to_4x4()
-
-            if export_rotation:
-                rotation_euler = mathutils.Euler(rotation, 'XYZ')
-                rotation_matrix = rotation_euler.to_matrix().to_4x4()
-            else:
-                rotation_matrix = mathutils.Matrix.Identity(4)
-
-            # Relative to parent
-            transform_matrix = parent_matrix @ translation_matrix @ rotation_matrix @ scale_matrix
-            conversion_matrix = self.i3d.conversion_matrix @ transform_matrix @ self.i3d.conversion_matrix.inverted()
-
-            final_translation, final_rotation, final_scale = conversion_matrix.decompose()
-            if export_rotation:
-                final_rotation = final_rotation.to_euler('XYZ')
-
-            keyframe_attribs = {"time": str(time_ms)}
-            if export_translation:
-                keyframe_attribs["translation"] = "{0:.6g} {1:.6g} {2:.6g}".format(*final_translation)
-            if export_rotation:
-                keyframe_attribs["rotation"] = "{0:.6g} {1:.6g} {2:.6g}".format(*[math.degrees(angle)
-                                                                                  for angle in final_rotation])
-            if export_scale:
-                keyframe_attribs["scale"] = "{0:.6g} {1:.6g} {2:.6g}".format(*final_scale)
-
-            if export_visibility:
-                keyframe_attribs["visibility"] = str(visibility).lower()
-
-            xml_i3d.SubElement(keyframes_element, "Keyframe", keyframe_attribs)
-
-        self.logger.debug(f"Extracted {len(keyframe_data)} keyframes for '{self.animated_object.name}'")
+    def _export(self):
+        for action, node_slot_pairs in self.i3d.anim_links.items():
+            anim_set = AnimationSet(self.i3d, self.fps, action, node_slot_pairs)
+            self.animation_sets_element.append(anim_set.xml_element)
+        self.animation_sets_element.set("count", str(len(self.i3d.anim_links)))
