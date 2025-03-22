@@ -398,9 +398,8 @@ class IndexedTriangleSet(Node):
         material_to_subset = {} if not append else None  # Only used when creating new subsets
 
         for triangle in mesh.loop_triangles:
-            # Rare case: a triangle's material index may be invalid (out of range).
-            # This can happen after certain operations (e.g., applying a Boolean modifier),
-            # which may leave behind a 'material_index' attribute on the mesh without syncing it to the material list.
+            # A triangle's material index may be invalid (out of range) if the mesh contains
+            # corrupted or mismatched 'material_index' data. If detected, we assign a fallback material.
             if triangle.material_index >= len(mesh.materials) or triangle.material_index < 0:
                 if not has_warned_for_invalid_index:
                     self.logger.warning("triangle(s) found with invalid material index, assigning fallback material")
