@@ -409,8 +409,8 @@ class IndexedTriangleSet(Node):
                 triangle_material = fallback_material or self.i3d.get_default_material().blender_material
             else:
                 triangle_material = mesh.materials[triangle.material_index]
-                # In Blender, it's possible to add material slots without assigning actual materials.
-                # These show up as None in the list and must be replaced before export.
+                # In Blender, it's possible to assign triangles to material slots that have no material. These show up
+                # as `None` in the material list. If used, they are replaced with a fallback material during export.
                 if triangle_material is None:
                     if not has_warned_for_empty_slot:
                         self.logger.warning("triangle(s) found with empty material slot, assigning fallback material")
