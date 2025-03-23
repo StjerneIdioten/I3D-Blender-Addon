@@ -26,7 +26,8 @@ class Keyframe:
         self.is_bone = isinstance(node, SkinnedMeshBoneNode)
         paths = [fcurve.data_path for fcurve in self.fcurves]
         self.export_translation = any("location" in path for path in paths)
-        self.export_rotation = any("rotation_euler" in path for path in paths)
+        self.export_rotation = any("rotation_euler" in path for path in paths) or any("rotation_quaternion"
+                                                                                      in path for path in paths)
         self.export_scale = any("scale" in path for path in paths)
         self.export_visibility = any("hide_viewport" in path for path in paths)
         self._generate_keyframe()
@@ -35,7 +36,8 @@ class Keyframe:
         # Evaluate fcurves and bake transform
         self.xml_element = xml_i3d.Element("Keyframe", {"time": f"{self.time_ms:.6g}"})
         translation = [0, 0, 0]
-        rotation = [0, 0, 0] if self.export_rotation else None
+        rotation = [0, 0, 0, 0] if self.export_rotation else None
+        used_quaternion = False
         scale = [1, 1, 1]
         visibility = True
 
@@ -46,10 +48,24 @@ class Keyframe:
                 translation[fcurve.array_index] = value
             elif "rotation_euler" in path:
                 rotation[fcurve.array_index] = value
+            elif "rotation_quaternion" in path:
+                rotation[fcurve.array_index] = value
+                used_quaternion = True
             elif "scale" in path:
                 scale[fcurve.array_index] = value
             elif "hide_viewport" in path:
                 visibility = value == 0.0
+
+        if rotation:
+            if used_quaternion:
+                # convert quaternion to euler
+                quat = mathutils.Quaternion(rotation)
+                rotation = quat.to_euler('XYZ')
+                self.i3d.logger.debug(f"rotation in degrees bone: {[math.degrees(angle) for angle in rotation]}")
+            else:
+                rotation = rotation[:3]
+                # debug for rotation in degrees
+                self.i3d.logger.debug(f"rotation in degrees: {[math.degrees(angle) for angle in rotation]}")
 
         translation_vec = mathutils.Vector(translation)
         rotation_euler = mathutils.Euler(rotation, 'XYZ') if rotation else None
@@ -61,17 +77,20 @@ class Keyframe:
 
         transform_matrix = self.parent_matrix @ translation_matrix @ rotation_matrix @ scale_matrix
         if self.is_bone:
-            self.i3d.logger.debug(f"translation: {translation_vec} on frame {self.frame}")
             bone_matrix = self.i3d.conversion_matrix @ self.node.blender_object.matrix_local
             conversion_matrix = bone_matrix @ transform_matrix
         else:
             conversion_matrix = self.i3d.conversion_matrix @ transform_matrix @ self.i3d.conversion_matrix.inverted()
 
         final_translation, final_rotation, final_scale = conversion_matrix.decompose()
+        final_rotation = final_rotation.to_euler('XYZ')
         if self.export_translation:
             self.xml_element.set("translation", "{0:.6g} {1:.6g} {2:.6g}".format(*final_translation))
             self.i3d.logger.debug(f"translation: {final_translation} on frame {self.frame}")
         if self.export_rotation:
+            # check what type the rotation is
+            self.i3d.logger.debug(f"rotation type: {type(final_rotation)}")
+            self.i3d.logger.debug(f"final rotation in degrees: {[math.degrees(angle) for angle in final_rotation]}")
             self.xml_element.set("rotation", "{0:.6g} {1:.6g} {2:.6g}".format(*[math.degrees(angle)
                                                                                 for angle in final_rotation]))
         if self.export_scale:
