@@ -269,7 +269,12 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         else:
             settings = self.as_keywords(ignore=("filepath", "filter_glob"))
 
+        original_frame = context.scene.frame_current
+        context.scene.frame_set(0)
+
         status = exporter.export_blend_to_i3d(self, self.filepath, self.axis_forward, self.axis_up, settings)
+
+        context.scene.frame_set(original_frame)
 
         if status['success']:
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
