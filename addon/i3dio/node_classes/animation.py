@@ -16,18 +16,19 @@ class Keyframe:
     def __init__(self,
                  i3d: I3D, node: SceneGraphNode | SkinnedMeshBoneNode,
                  parent_matrix: mathutils.Matrix,
+                 parent_is_bone: bool,
                  fcurves, frame: float, time_ms: float):
         self.i3d = i3d
         self.node = node
         self.parent_matrix = parent_matrix
+        self.parent_is_bone = parent_is_bone
         self.fcurves = fcurves
         self.frame = frame
         self.time_ms = time_ms
         self.is_bone = isinstance(node, SkinnedMeshBoneNode)
         paths = [fcurve.data_path for fcurve in self.fcurves]
         self.export_translation = any("location" in path for path in paths)
-        self.export_rotation = any("rotation_euler" in path for path in paths) or any("rotation_quaternion"
-                                                                                      in path for path in paths)
+        self.export_rotation = any("rotation_euler" in path or "rotation_quaternion" in path for path in paths)
         self.export_scale = any("scale" in path for path in paths)
         self.export_visibility = any("hide_viewport" in path for path in paths)
         self._generate_keyframe()
@@ -54,6 +55,7 @@ class Keyframe:
             elif "scale" in path:
                 scale[fcurve.array_index] = value
             elif "hide_viewport" in path:
+                # visibility property in UI is inverted
                 visibility = value == 0.0
 
         if rotation:
@@ -76,7 +78,10 @@ class Keyframe:
         rotation_matrix = rotation_euler.to_matrix().to_4x4() if rotation_euler else mathutils.Matrix.Identity(4)
 
         transform_matrix = self.parent_matrix @ translation_matrix @ rotation_matrix @ scale_matrix
-        if self.is_bone:
+        if self.is_bone and self.parent_is_bone:
+            self.i3d.logger.debug("bone is parented to another bone")
+            conversion_matrix = transform_matrix
+        elif self.is_bone:
             bone_matrix = self.i3d.conversion_matrix @ self.node.blender_object.matrix_local
             conversion_matrix = bone_matrix @ transform_matrix
         else:
@@ -89,7 +94,6 @@ class Keyframe:
             self.i3d.logger.debug(f"translation: {final_translation} on frame {self.frame}")
         if self.export_rotation:
             # check what type the rotation is
-            self.i3d.logger.debug(f"rotation type: {type(final_rotation)}")
             self.i3d.logger.debug(f"final rotation in degrees: {[math.degrees(angle) for angle in final_rotation]}")
             self.xml_element.set("rotation", "{0:.6g} {1:.6g} {2:.6g}".format(*[math.degrees(angle)
                                                                                 for angle in final_rotation]))
@@ -110,6 +114,7 @@ class Keyframes:
         self.node = node
         self.channelbag = channelbag
         self.is_bone = isinstance(node, SkinnedMeshBoneNode)
+        self.parent_is_bone = isinstance(node.parent, SkinnedMeshBoneNode)
 
         self.max_frame = 0
         self.has_data = False
@@ -136,13 +141,19 @@ class Keyframes:
         first_frame = keyframe_list[0]
 
         parent = self.node.parent
-        parent_matrix = parent.blender_object.matrix_world.inverted() if parent else mathutils.Matrix.Identity(4)
-        if self.is_bone:
+        if self.is_bone and self.parent_is_bone:
+            # Bone is parented to another bone. Its local transform is already correct.
+            parent_matrix = parent.blender_object.matrix_local.inverted()
+        elif self.is_bone:
+            parent_matrix = parent.blender_object.matrix_world.inverted() if parent else mathutils.Matrix.Identity(4)
+            # Include armatre matrix if bone is root bone
             parent_matrix = self.node.root_node.blender_object.matrix_local.inverted() @ parent_matrix
+        else:
+            parent_matrix = parent.blender_object.matrix_world.inverted() if parent else mathutils.Matrix.Identity(4)
 
         for frame in keyframe_list:
             time_ms = ((frame - first_frame) / self.fps) * 1000
-            keyframe = Keyframe(self.i3d, self.node, parent_matrix, self.fcurves, frame, time_ms)
+            keyframe = Keyframe(self.i3d, self.node, parent_matrix, self.parent_is_bone, self.fcurves, frame, time_ms)
             self.xml_element.append(keyframe.xml_element)
 
 
