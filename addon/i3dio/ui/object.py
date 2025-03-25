@@ -907,7 +907,7 @@ class I3D_IO_OT_select_merge_group_root(bpy.types.Operator):
     bl_idname = "i3dio.select_merge_group_root"
     bl_label = "Select Merge Group Root"
     bl_description = "When greyed out it means that the current object is the merge group root"
-    bl_options = {'INTERNAL'}
+    bl_options = {'INTERNAL', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
@@ -923,7 +923,7 @@ class I3D_IO_OT_select_mg_objects(bpy.types.Operator):
     bl_idname = "i3dio.select_mg_objects"
     bl_label = "Select Objects in MG"
     bl_description = "Select all objects in the same merge group"
-    bl_options = {'UNDO'}
+    bl_options = {'INTERNAL', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
