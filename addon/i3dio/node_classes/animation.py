@@ -37,7 +37,7 @@ class Keyframe:
         # Evaluate fcurves and bake transform
         self.xml_element = xml_i3d.Element("Keyframe", {"time": f"{self.time_ms:.6g}"})
         translation = [0, 0, 0]
-        rotation = [0, 0, 0, 0] if self.export_rotation else None
+        rotation = None
         used_quaternion = False
         scale = [1, 1, 1]
         visibility = True
@@ -48,8 +48,12 @@ class Keyframe:
             if "location" in path:
                 translation[fcurve.array_index] = value
             elif "rotation_euler" in path:
+                if rotation is None:
+                    rotation = [0, 0, 0]
                 rotation[fcurve.array_index] = value
             elif "rotation_quaternion" in path:
+                if rotation is None:
+                    rotation = [0, 0, 0, 0]
                 rotation[fcurve.array_index] = value
                 used_quaternion = True
             elif "scale" in path:
@@ -61,13 +65,9 @@ class Keyframe:
         if rotation:
             if used_quaternion:
                 # convert quaternion to euler
-                quat = mathutils.Quaternion(rotation)
-                rotation = quat.to_euler('XYZ')
-                self.i3d.logger.debug(f"rotation in degrees bone: {[math.degrees(angle) for angle in rotation]}")
+                rotation = mathutils.Quaternion(rotation).to_euler('XYZ')
             else:
                 rotation = rotation[:3]
-                # debug for rotation in degrees
-                self.i3d.logger.debug(f"rotation in degrees: {[math.degrees(angle) for angle in rotation]}")
 
         translation_vec = mathutils.Vector(translation)
         rotation_euler = mathutils.Euler(rotation, 'XYZ') if rotation else None
@@ -79,7 +79,6 @@ class Keyframe:
 
         transform_matrix = self.parent_matrix @ translation_matrix @ rotation_matrix @ scale_matrix
         if self.is_bone and self.parent_is_bone:
-            self.i3d.logger.debug("bone is parented to another bone")
             conversion_matrix = transform_matrix
         elif self.is_bone:
             bone_matrix = self.i3d.conversion_matrix @ self.node.blender_object.matrix_local
@@ -91,10 +90,7 @@ class Keyframe:
         final_rotation = final_rotation.to_euler('XYZ')
         if self.export_translation:
             self.xml_element.set("translation", "{0:.6g} {1:.6g} {2:.6g}".format(*final_translation))
-            self.i3d.logger.debug(f"translation: {final_translation} on frame {self.frame}")
         if self.export_rotation:
-            # check what type the rotation is
-            self.i3d.logger.debug(f"final rotation in degrees: {[math.degrees(angle) for angle in final_rotation]}")
             self.xml_element.set("rotation", "{0:.6g} {1:.6g} {2:.6g}".format(*[math.degrees(angle)
                                                                                 for angle in final_rotation]))
         if self.export_scale:
@@ -114,7 +110,7 @@ class Keyframes:
         self.node = node
         self.channelbag = channelbag
         self.is_bone = isinstance(node, SkinnedMeshBoneNode)
-        self.parent_is_bone = isinstance(node.parent, SkinnedMeshBoneNode)
+        self.is_parent_bone = isinstance(node.parent, SkinnedMeshBoneNode)
 
         self.max_frame = 0
         self.has_data = False
@@ -141,15 +137,17 @@ class Keyframes:
         first_frame = keyframe_list[0]
 
         parent = self.node.parent
-        if self.is_bone and self.parent_is_bone:
-            # Bone is parented to another bone. Its local transform is already correct.
-            parent_matrix = parent.blender_object.matrix_local.inverted()
+        if self.is_bone and self.is_parent_bone:
+            # To calculate the correct transform, we must include the bone's edit bone matrix.
+            # This is because the pose bone's transform is relative to the edit bone's transform.
+            parent_matrix = parent.blender_object.matrix_local.inverted() @ self.node.blender_object.matrix_local
         elif self.is_bone:
-            parent_matrix = parent.blender_object.matrix_world.inverted() if parent else mathutils.Matrix.Identity(4)
-            # Include armatre matrix if bone is root bone
-            parent_matrix = self.node.root_node.blender_object.matrix_local.inverted() @ parent_matrix
+            parent_matrix = parent.blender_object.matrix_local.inverted() if parent else mathutils.Matrix.Identity(4)
+            # Include armatre matrix if bone is root bone and armature is collapsed
+            if self.node.root_node.is_collapsed:
+                parent_matrix = self.node.root_node.blender_object.matrix_local.inverted() @ parent_matrix
         else:
-            parent_matrix = parent.blender_object.matrix_world.inverted() if parent else mathutils.Matrix.Identity(4)
+            parent_matrix = parent.blender_object.matrix_local.inverted() if parent else mathutils.Matrix.Identity(4)
 
         for frame in keyframe_list:
             time_ms = ((frame - first_frame) / self.fps) * 1000
@@ -181,27 +179,19 @@ class Clip:
             if not (channelbag := anim_utils.action_get_channelbag_for_slot(self.action, slot)):
                 continue
 
-            self.i3d.logger.debug(f"Processing node1 {node.name}")
+            self.i3d.logger.debug(f"[{node.name}] Processing started")
 
-            do_not_process_node = False
             if node.blender_object.type == 'ARMATURE':
-                self.i3d.logger.warning(f"Node is an armature, limited support currently {node.name}")
-                if node.blender_object.i3d_attributes.collapse_armature:
-                    self.i3d.logger.debug("Armature is collapsed and is not included in export")
-                    do_not_process_node = True
                 for bone in node.blender_object.data.bones:
                     if (bone_node := self.i3d.processed_objects.get(bone)):
-                        self.i3d.logger.debug(f"Processing bone {bone.name}, parent: {bone_node.parent}")
                         keyframes = Keyframes(self.i3d, self.fps, bone_node, channelbag)
                         if keyframes.has_data:
                             self.xml_element.append(keyframes.xml_element)
                             max_frame = max(max_frame, keyframes.max_frame)
                             keyframes_written += 1
+                continue  # skip processing the armature object itself
 
-            if do_not_process_node:
-                continue
-
-            self.i3d.logger.debug(f"Processing node2 {node.name}")
+            self.i3d.logger.debug(f"[{node.name}] Processing completed")
 
             keyframes = Keyframes(self.i3d, self.fps, node, channelbag)
             if keyframes.has_data:
