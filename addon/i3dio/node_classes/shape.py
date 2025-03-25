@@ -390,18 +390,31 @@ class IndexedTriangleSet(Node):
             index (int, optional): The index used when appending a new mesh.
             append (bool, optional): If True, appends triangles to an existing set.
         """
+        unique_mats = {mat for mat in mesh.materials if mat is not None}  # Ignore empty material slots
+        fallback_material = next(iter(unique_mats), None) if len(unique_mats) == 1 else None
+        has_warned_for_invalid_index = False
         has_warned_for_empty_slot = False
         used_materials = set()
         material_to_subset = {} if not append else None  # Only used when creating new subsets
 
         for triangle in mesh.loop_triangles:
-            triangle_material = mesh.materials[triangle.material_index]
-            # Ensure all triangles have valid materials (assign default if missing)
-            if triangle_material is None:
-                if not has_warned_for_empty_slot:
-                    self.logger.warning("triangle(s) found with empty material slot, assigning default material")
-                    has_warned_for_empty_slot = True
-                triangle_material = self.i3d.get_default_material().blender_material
+            # A triangle's material index may be invalid (out of range) if the mesh contains
+            # corrupted or mismatched 'material_index' data. If detected, we assign a fallback material.
+            if triangle.material_index >= len(mesh.materials) or triangle.material_index < 0:
+                if not has_warned_for_invalid_index:
+                    self.logger.warning("triangle(s) found with invalid material index, assigning fallback material")
+                    has_warned_for_invalid_index = True
+                # If the mesh has exactly one valid material, use it as fallback. Otherwise, use the default material.
+                triangle_material = fallback_material or self.i3d.get_default_material().blender_material
+            else:
+                triangle_material = mesh.materials[triangle.material_index]
+                # In Blender, it's possible to assign triangles to material slots that have no material. These show up
+                # as `None` in the material list. If used, they are replaced with a fallback material during export.
+                if triangle_material is None:
+                    if not has_warned_for_empty_slot:
+                        self.logger.warning("triangle(s) found with empty material slot, assigning fallback material")
+                        has_warned_for_empty_slot = True
+                    triangle_material = fallback_material or self.i3d.get_default_material().blender_material
 
             used_materials.add(triangle_material)
 
