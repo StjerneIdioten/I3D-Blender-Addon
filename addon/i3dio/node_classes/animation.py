@@ -12,7 +12,31 @@ from ..i3d import I3D
 # https://developer.blender.org/docs/release_notes/4.4/python_api/#slotted-actions
 
 
-class Keyframe:
+class BaseAnimationExport:
+    def __init__(self, i3d: I3D, fps: float):
+        self.i3d = i3d
+        self.fps = fps
+        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
+                                                  {'object_name': type(self).__name__})
+
+
+class BaseAnimationNode(BaseAnimationExport):
+    def __init__(self, i3d: I3D, fps: float, node: SceneGraphNode | SkinnedMeshBoneNode):
+        super().__init__(i3d, fps)
+        self.node = node
+        self.is_bone = isinstance(node, SkinnedMeshBoneNode)
+        self.parent_is_bone = isinstance(node.parent, SkinnedMeshBoneNode)
+        self.fcurves: list[bpy.types.FCurve] = []
+        self.should_bake: bool = False
+
+    def _filter_fcurves(self, channelbag: bpy.types.ActionChannelbag) -> list[bpy.types.FCurve]:
+        if self.is_bone:
+            bone_name = self.node.blender_object.name
+            return [fc for fc in channelbag.fcurves if f'pose.bones["{bone_name}"]' in fc.data_path]
+        return channelbag.fcurves
+
+
+class Keyframe(BaseAnimationExport):
     def __init__(self,
                  i3d: I3D,
                  node: SceneGraphNode | SkinnedMeshBoneNode,
@@ -31,16 +55,31 @@ class Keyframe:
         self.frame = frame
         self.time_ms = time_ms
         paths = [fcurve.data_path for fcurve in self.fcurves]
+        self.should_bake = self.needs_baking()
+
+        i3d.logger.debug(f"[{node.name}] should_sample: {self.should_bake}")
 
         # Determine which properties to export based on the fcurve paths
         self.export_translation = any("location" in path for path in paths)
         self.export_rotation = any("rotation_euler" in path or "rotation_quaternion" in path for path in paths)
         self.export_scale = any("scale" in path for path in paths)
         self.export_visibility = any("hide_viewport" in path for path in paths)
+
         self._generate_keyframe()
+
+    @staticmethod
+    def needs_baking(fcurves: list[bpy.types.FCurve]) -> bool:
+        """Check if any fcurve requires baking."""
+        return any(not fc.data_path.endswith((
+            "location", "rotation_euler", "rotation_quaternion", "scale", "hide_viewport")) for fc in fcurves
+        )
 
     def _generate_keyframe(self):
         """Generates and returns the XML representation of the keyframe at a specific frame."""
+        if self.should_bake:
+            # If baking is needed, we need to sample the keyframe at the current frame
+            self.time_ms = ((self.frame - self.i3d.start_frame) / self.i3d.fps) * 1000
+
         self.xml_element = xml_i3d.Element("Keyframe", {"time": f"{self.time_ms:.6g}"})
         translation = [0, 0, 0]
         rotation = None
@@ -101,30 +140,19 @@ class Keyframe:
             self.xml_element.set("visibility", str(visibility).lower())
 
 
-class Keyframes:
+class Keyframes(BaseAnimationNode):
     def __init__(self,
                  i3d: I3D,
                  fps: float,
                  node: SceneGraphNode | SkinnedMeshBoneNode,
                  channelbag: bpy.types.ActionChannelbag,
                  start_frame: int):
-        self.i3d = i3d
-        self.fps = fps
-        self.node = node
+        super().__init__(i3d, fps, node)
         self.channelbag = channelbag
         self.start_frame = start_frame
-        self.is_bone = isinstance(node, SkinnedMeshBoneNode)
-        self.parent_is_bone = isinstance(node.parent, SkinnedMeshBoneNode)
         self.fcurves = self._filter_fcurves()
 
         self.xml_element = self._generate_keyframes()
-
-    def _filter_fcurves(self) -> list[bpy.types.FCurve]:
-        """Filter fcurves based on the node type."""
-        if self.is_bone:
-            bone_name = self.node.blender_object.name
-            return [fc for fc in self.channelbag.fcurves if f'pose.bones["{bone_name}"]' in fc.data_path]
-        return self.channelbag.fcurves
 
     def _get_parent_matrix(self) -> mathutils.Matrix:
         """Get the matrix of the node's parent, accounting for bones and collapsed armatures."""
@@ -156,6 +184,7 @@ class Keyframes:
         parent_matrix = self._get_parent_matrix()
 
         for frame in keyframe_list:
+            # Convert frame to time in milliseconds and ensure time always starts with 0ms
             time_ms = ((frame - self.start_frame) / self.fps) * 1000
             keyframe = Keyframe(
                 self.i3d, self.node, self.is_bone, parent_matrix, self.parent_is_bone, self.fcurves, frame, time_ms
@@ -164,23 +193,24 @@ class Keyframes:
         return xml_element
 
 
-class Clip:
+class Clip(BaseAnimationExport):
     def __init__(self,
                  i3d: I3D,
                  fps: float,
                  layer: bpy.types.ActionLayer,
                  node_slot_pairs: list[tuple[SceneGraphNode, bpy.types.ActionSlot]],
                  action: bpy.types.Action):
-        self.i3d = i3d
-        self.fps = fps
+        super().__init__(i3d, fps)
         self.layer = layer
         self.action = action
         self.node_slot_pairs = node_slot_pairs
         self.xml_element = xml_i3d.Element("Clip", {"name": layer.name})
 
-        self._generate_keyframes()
+        # Add check to see if anything in related hiearchy have animated constraints etc.
 
-    def _generate_keyframes(self):
+        self._generate_clip()
+
+    def _generate_clip(self):
         start_frame, end_frame = map(int, self.action.frame_range)
         duration_ms = ((end_frame - start_frame) / self.fps) * 1000
 
@@ -208,19 +238,18 @@ class Clip:
         self.xml_element.set("count", str(len(self.xml_element)))
 
 
-class AnimationSet:
+class AnimationSet(BaseAnimationExport):
     def __init__(self,
                  i3d: I3D,
                  fps: float,
                  action: bpy.types.Action,
                  node_slot_pairs: list[tuple[SceneGraphNode, bpy.types.ActionSlot]]):
-        self.i3d = i3d
-        self.fps = fps
+        super().__init__(i3d, fps)
         self.action = action
         self.node_slot_pairs = node_slot_pairs
+        self.clips: list[Clip] = []
 
         self.xml_element = xml_i3d.Element("AnimationSet", {"name": action.name})
-        self.clips: list[Clip] = []
         self._generate_clips()
 
     def _generate_clips(self):
@@ -232,14 +261,11 @@ class AnimationSet:
         self.xml_element.set("clipCount", str(len(self.clips)))
 
 
-class Animation:
+class Animation(BaseAnimationExport):
     def __init__(self, i3d: I3D):
-        self.i3d = i3d
-        self.fps = i3d.depsgraph.scene.render.fps
-        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                                  {'object_name': 'AnimationExport'})
-        self.logger.debug("Initialized animation export")
+        super().__init__(i3d, i3d.depsgraph.scene.render.fps)
         self.animation_sets_element = xml_i3d.SubElement(self.i3d.xml_elements['Animation'], "AnimationSets")
+        self.logger.debug("Initialized animation export")
         self._export()
 
     def _export(self):
