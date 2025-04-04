@@ -705,7 +705,8 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
     # layout.use_property_split = False
     header, panel = layout.panel('i3d_visibility_condition_panel', default_closed=True)
     header.use_property_split = False
-    header.prop(i3d_attributes, 'use_parent', text="Visibility Condition")
+    header.prop(i3d_attributes, 'use_parent', text="")
+    header.label(text="Visibility Condition")
     if panel:
         panel.use_property_split = True
         for prop in PROPS:
@@ -731,7 +732,8 @@ def draw_joint_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.types.
 
     header, panel = layout.panel('i3d_joint_panel', default_closed=True)
     header.use_property_split = False
-    header.prop(i3d_attributes, 'joint')
+    header.prop(i3d_attributes, 'joint', text="")
+    header.label(text="Joint")
     if panel:
         panel.enabled = i3d_attributes.joint
         for prop in PROPS:
@@ -790,7 +792,8 @@ def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.C
 def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_children: bpy.types.PropertyGroup) -> None:
     header, panel = layout.panel('i3d_merge_children_panel', default_closed=True)
     header.use_property_split = False
-    header.prop(i3d_merge_children, 'enabled', text="Merge Children")
+    header.prop(i3d_merge_children, 'enabled', text="")
+    header.label(text="Merge Children")
     if panel:
         panel.enabled = i3d_merge_children.enabled
         panel.prop(i3d_merge_children, 'apply_transforms')
