@@ -55,7 +55,7 @@ class Keyframe(BaseAnimationExport):
         self.frame = frame
         self.time_ms = time_ms
         paths = [fcurve.data_path for fcurve in self.fcurves]
-        self.should_bake = self.needs_baking()
+        self.should_bake = self.needs_baking(self.fcurves)
 
         i3d.logger.debug(f"[{node.name}] should_sample: {self.should_bake}")
 
@@ -63,7 +63,6 @@ class Keyframe(BaseAnimationExport):
         self.export_translation = any("location" in path for path in paths)
         self.export_rotation = any("rotation_euler" in path or "rotation_quaternion" in path for path in paths)
         self.export_scale = any("scale" in path for path in paths)
-        self.export_visibility = any("hide_viewport" in path for path in paths)
 
         self._generate_keyframe()
 
@@ -71,7 +70,7 @@ class Keyframe(BaseAnimationExport):
     def needs_baking(fcurves: list[bpy.types.FCurve]) -> bool:
         """Check if any fcurve requires baking. E.g. if it has animated constraints etc."""
         return any(not fc.data_path.endswith((
-            "location", "rotation_euler", "rotation_quaternion", "scale", "hide_viewport")) for fc in fcurves
+            "location", "rotation_euler", "rotation_quaternion", "scale")) for fc in fcurves
         )
 
     def _generate_keyframe(self):
@@ -85,7 +84,6 @@ class Keyframe(BaseAnimationExport):
         rotation = None
         used_quaternion = False
         scale = [1, 1, 1]
-        visibility = True
 
         for fcurve in self.fcurves:
             value = fcurve.evaluate(self.frame)
@@ -103,8 +101,6 @@ class Keyframe(BaseAnimationExport):
                 used_quaternion = True
             elif "scale" in path:
                 scale[fcurve.array_index] = value
-            elif "hide_viewport" in path:
-                visibility = value == 0.0  # Visibility property is inverted in UI
 
         if rotation:
             rotation = mathutils.Quaternion(rotation).to_euler('XYZ') if used_quaternion else rotation[:3]
@@ -136,8 +132,6 @@ class Keyframe(BaseAnimationExport):
                                                                                 for angle in final_rotation]))
         if self.export_scale:
             self.xml_element.set("scale", "{0:.6g} {1:.6g} {2:.6g}".format(*final_scale))
-        if self.export_visibility:
-            self.xml_element.set("visibility", str(visibility).lower())
 
 
 class Keyframes(BaseAnimationNode):
@@ -150,7 +144,7 @@ class Keyframes(BaseAnimationNode):
         super().__init__(i3d, fps, node)
         self.channelbag = channelbag
         self.start_frame = start_frame
-        self.fcurves = self._filter_fcurves()
+        self.fcurves = self._filter_fcurves(channelbag)
 
         self.xml_element = self._generate_keyframes()
 
