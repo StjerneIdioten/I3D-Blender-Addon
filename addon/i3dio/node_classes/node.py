@@ -88,9 +88,9 @@ class SceneGraphNode(Node):
     ID_FIELD_NAME = 'nodeId'
 
     def __init__(self, id_: int,
-                 blender_object: [bpy.types.Object, bpy.types.Collection, None],
+                 blender_object: bpy.types.Object | bpy.types.Collection | None,
                  i3d: I3D,
-                 parent: Union[SceneGraphNode, None] = None,
+                 parent: SceneGraphNode | None = None,
                  ):
         self.children = []
         self.blender_object = blender_object

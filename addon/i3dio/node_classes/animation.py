@@ -69,7 +69,7 @@ class Keyframe(BaseAnimationExport):
 
     @staticmethod
     def needs_baking(fcurves: list[bpy.types.FCurve]) -> bool:
-        """Check if any fcurve requires baking."""
+        """Check if any fcurve requires baking. E.g. if it has animated constraints etc."""
         return any(not fc.data_path.endswith((
             "location", "rotation_euler", "rotation_quaternion", "scale", "hide_viewport")) for fc in fcurves
         )
