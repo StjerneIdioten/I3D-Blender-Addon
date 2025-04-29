@@ -2,7 +2,7 @@ import logging
 import math
 import bpy
 from bpy_extras import anim_utils
-import mathutils
+from dataclasses import dataclass
 
 from .node import SceneGraphNode
 from .skinned_mesh import SkinnedMeshBoneNode
@@ -36,101 +36,59 @@ class BaseAnimationNode(BaseAnimationExport):
         return channelbag.fcurves
 
 
+@dataclass
+class KeyframeContext:
+    node: SceneGraphNode | SkinnedMeshBoneNode
+    is_bone: bool
+    frame: float
+    time_ms: float
+    export_translation: bool
+    export_rotation: bool
+    export_scale: bool
+    should_bake: bool = False
+
+
 class Keyframe(BaseAnimationExport):
-    def __init__(self,
-                 i3d: I3D,
-                 node: SceneGraphNode | SkinnedMeshBoneNode,
-                 is_bone: bool,
-                 parent_matrix: mathutils.Matrix,
-                 parent_is_bone: bool,
-                 fcurves: list[bpy.types.FCurve],
-                 frame: float,
-                 time_ms: float):
-        self.i3d = i3d
-        self.node = node
-        self.is_bone = is_bone
-        self.parent_matrix = parent_matrix
-        self.parent_is_bone = parent_is_bone
-        self.fcurves = fcurves
-        self.frame = frame
-        self.time_ms = time_ms
-        paths = [fcurve.data_path for fcurve in self.fcurves]
-        self.should_bake = self.needs_baking(self.fcurves)
-
-        i3d.logger.debug(f"[{node.name}] should_sample: {self.should_bake}")
-
-        # Determine which properties to export based on the fcurve paths
-        self.export_translation = any("location" in path for path in paths)
-        self.export_rotation = any("rotation_euler" in path or "rotation_quaternion" in path for path in paths)
-        self.export_scale = any("scale" in path for path in paths)
-
+    def __init__(self, i3d: I3D, context: KeyframeContext):
+        super().__init__(i3d, i3d.depsgraph.scene.render.fps)
+        self.ctx = context
         self._generate_keyframe()
-
-    @staticmethod
-    def needs_baking(fcurves: list[bpy.types.FCurve]) -> bool:
-        """Check if any fcurve requires baking. E.g. if it has animated constraints etc."""
-        return any(not fc.data_path.endswith((
-            "location", "rotation_euler", "rotation_quaternion", "scale")) for fc in fcurves
-        )
 
     def _generate_keyframe(self):
         """Generates and returns the XML representation of the keyframe at a specific frame."""
-        if self.should_bake:
+        """ if self.should_bake:
             # If baking is needed, we need to sample the keyframe at the current frame
-            self.time_ms = ((self.frame - self.i3d.start_frame) / self.i3d.fps) * 1000
+            self.time_ms = ((self.frame - self.i3d.start_frame) / self.i3d.fps) * 1000 """
 
-        self.xml_element = xml_i3d.Element("Keyframe", {"time": f"{self.time_ms:.6g}"})
-        translation = [0, 0, 0]
-        rotation = None
-        used_quaternion = False
-        scale = [1, 1, 1]
+        self.i3d.depsgraph.scene.frame_set(int(self.ctx.frame))
 
-        for fcurve in self.fcurves:
-            value = fcurve.evaluate(self.frame)
-            path = fcurve.data_path
-            if "location" in path:
-                translation[fcurve.array_index] = value
-            elif "rotation_euler" in path:
-                if rotation is None:
-                    rotation = [0, 0, 0]
-                rotation[fcurve.array_index] = value
-            elif "rotation_quaternion" in path:
-                if rotation is None:
-                    rotation = [0, 0, 0, 0]
-                rotation[fcurve.array_index] = value
-                used_quaternion = True
-            elif "scale" in path:
-                scale[fcurve.array_index] = value
+        node = self.ctx.node
 
-        if rotation:
-            rotation = mathutils.Quaternion(rotation).to_euler('XYZ') if used_quaternion else rotation[:3]
-
-        translation_vec = mathutils.Vector(translation)
-        rotation_euler = mathutils.Euler(rotation, 'XYZ') if rotation else None
-        scale_vec = mathutils.Vector(scale)
-
-        translation_matrix = mathutils.Matrix.Translation(translation_vec)
-        scale_matrix = mathutils.Matrix.Diagonal(scale_vec).to_4x4()
-        rotation_matrix = rotation_euler.to_matrix().to_4x4() if rotation_euler else mathutils.Matrix.Identity(4)
-
-        transform_matrix = self.parent_matrix @ translation_matrix @ rotation_matrix @ scale_matrix
-        if self.is_bone:
-            if self.parent_is_bone:
-                conv_matrix = transform_matrix
-            else:
-                bone_matrix = self.i3d.conversion_matrix @ self.node.blender_object.matrix_local
-                conv_matrix = bone_matrix @ transform_matrix
+        if self.ctx.is_bone:
+            if pose_bone := node.root_node.blender_object.pose.bones.get(node.blender_object.name):
+                local_matrix = pose_bone.matrix.copy()
         else:
-            conv_matrix = self.i3d.conversion_matrix @ transform_matrix @ self.i3d.conversion_matrix.inverted_safe()
+            local_matrix = node.blender_object.matrix_local.copy()
+
+        if self.ctx.is_bone:
+            if isinstance(node.parent, SkinnedMeshBoneNode):
+                # Bone with bone parent — use raw matrix
+                if parent_pose_bone := node.root_node.blender_object.pose.bones.get(node.parent.blender_object.name):
+                    local_matrix = parent_pose_bone.matrix.inverted_safe() @ local_matrix
+                conv_matrix = local_matrix
+            else:
+                conv_matrix = self.i3d.conversion_matrix @ local_matrix
+        else:
+            conv_matrix = self.i3d.conversion_matrix @ local_matrix @ self.i3d.conversion_matrix.inverted_safe()
 
         final_translation, final_rotation, final_scale = conv_matrix.decompose()
         final_rotation = final_rotation.to_euler('XYZ')
-        if self.export_translation:
+        self.xml_element = xml_i3d.Element("Keyframe", {"time": f"{self.ctx.time_ms:.6g}"})
+        if self.ctx.export_translation:
             self.xml_element.set("translation", "{0:.6g} {1:.6g} {2:.6g}".format(*final_translation))
-        if self.export_rotation:
-            self.xml_element.set("rotation", "{0:.6g} {1:.6g} {2:.6g}".format(*[math.degrees(angle)
-                                                                                for angle in final_rotation]))
-        if self.export_scale:
+        if self.ctx.export_rotation:
+            self.xml_element.set("rotation", " ".join(f"{math.degrees(a):.6g}" for a in final_rotation))
+        if self.ctx.export_scale:
             self.xml_element.set("scale", "{0:.6g} {1:.6g} {2:.6g}".format(*final_scale))
 
 
@@ -145,24 +103,19 @@ class Keyframes(BaseAnimationNode):
         self.channelbag = channelbag
         self.start_frame = start_frame
         self.fcurves = self._filter_fcurves(channelbag)
+        self.has_translation = any(fc.data_path.endswith("location") for fc in self.fcurves)
+        self.has_rotation = any(fc.data_path.endswith("rotation_euler") for fc in self.fcurves)
+        self.has_scale = any(fc.data_path.endswith("scale") for fc in self.fcurves)
+        self.should_bake = self.needs_baking(self.fcurves)
 
         self.xml_element = self._generate_keyframes()
 
-    def _get_parent_matrix(self) -> mathutils.Matrix:
-        """Get the matrix of the node's parent, accounting for bones and collapsed armatures."""
-        parent = self.node.parent
-        parent_matrix = parent.blender_object.matrix_local.inverted_safe() if parent else mathutils.Matrix.Identity(4)
-        if self.is_bone:
-            if self.parent_is_bone:
-                # For child bones, the transform is relative to the parent's local space
-                return parent_matrix @ self.node.blender_object.matrix_local
-            matrix = parent_matrix
-            if self.node.root_node.is_collapsed:
-                # Include armature's transform if the armature object is collapsed
-                armature_inv_matrix = self.node.root_node.blender_object.matrix_local.inverted()
-                matrix = armature_inv_matrix @ matrix
-            return matrix
-        return parent_matrix  # Non-bone nodes use inverted parent matrix directly
+    @staticmethod
+    def needs_baking(fcurves: list[bpy.types.FCurve]) -> bool:
+        """Check if any fcurve requires baking. E.g. if it has animated constraints etc."""
+        return any(not fc.data_path.endswith((
+            "location", "rotation_euler", "rotation_quaternion", "scale")) for fc in fcurves
+        )
 
     @property
     def is_empty(self) -> bool:
@@ -175,14 +128,20 @@ class Keyframes(BaseAnimationNode):
         if not keyframe_list:
             return xml_element
 
-        parent_matrix = self._get_parent_matrix()
-
         for frame in keyframe_list:
             # Convert frame to time in milliseconds and ensure time always starts with 0ms
             time_ms = ((frame - self.start_frame) / self.fps) * 1000
-            keyframe = Keyframe(
-                self.i3d, self.node, self.is_bone, parent_matrix, self.parent_is_bone, self.fcurves, frame, time_ms
+            context = KeyframeContext(
+                node=self.node,
+                is_bone=self.is_bone,
+                frame=frame,
+                time_ms=time_ms,
+                export_translation=self.has_translation,
+                export_rotation=self.has_rotation,
+                export_scale=self.has_scale,
+                should_bake=self.should_bake,
             )
+            keyframe = Keyframe(self.i3d, context)
             xml_element.append(keyframe.xml_element)
         return xml_element
 
