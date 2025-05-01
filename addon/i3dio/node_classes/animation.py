@@ -111,7 +111,7 @@ class Keyframes(BaseAnimationExport):
             self.logger.debug(f"[{self.node.name}] Found {len(keyframe_list)} keyframes")
 
         if not keyframe_list:
-            self.logger.debug(f"[{self.node.name}] No keyframes found")
+            self.logger.warning(f"[{self.node.name}] No keyframes found")
             return xml_element
 
         for frame in keyframe_list:
