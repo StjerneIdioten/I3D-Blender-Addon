@@ -74,9 +74,11 @@ class Keyframes(BaseAnimationExport):
         self.start_frame = start_frame
         self.end_frame = end_frame
         self.fcurves = self._filter_fcurves(channelbag)
-        self.has_translation = any(fc.data_path.endswith("location") for fc in self.fcurves)
-        self.has_rotation = any(fc.data_path.endswith("rotation_euler") for fc in self.fcurves)
-        self.has_scale = any(fc.data_path.endswith("scale") for fc in self.fcurves)
+        self.needs_baking = self._needs_baking(self.fcurves)
+        self.has_translation = any(fc.data_path.endswith("location") for fc in self.fcurves) or self.needs_baking
+        self.has_rotation = any(fc.data_path.endswith(("rotation_euler", "rotation_quaternion"))
+                                for fc in self.fcurves) or self.needs_baking
+        self.has_scale = any(fc.data_path.endswith("scale") for fc in self.fcurves) or self.needs_baking
 
         self.xml_element = self._generate_keyframes()
 
@@ -88,9 +90,9 @@ class Keyframes(BaseAnimationExport):
 
     @staticmethod
     def _needs_baking(fcurves: list[bpy.types.FCurve]) -> bool:
-        """Returns True if *any* FCurve animates a non-transform property."""
+        """Returns True if any FCurve is not a basic transform path (location, rotation, scale)."""
         valid_paths = ("location", "rotation_euler", "rotation_quaternion", "scale")
-        return any(not fc.data_path.endswith(path) for fc in fcurves for path in valid_paths if fc.data_path)
+        return any(not any(fc.data_path.endswith(valid) for valid in valid_paths) for fc in fcurves if fc.data_path)
 
     @property
     def is_empty(self) -> bool:
@@ -99,19 +101,17 @@ class Keyframes(BaseAnimationExport):
     def _generate_keyframes(self) -> xml_i3d.Element:
         xml_element = xml_i3d.Element("Keyframes", {"nodeId": str(self.node.id)})
 
-        if self._needs_baking(self.fcurves):
+        if self.needs_baking:
             # When baking, we need to use the start and end frame of the action
             # and we will get object transforms for each frame between them.
             keyframe_list = list(range(self.start_frame, self.end_frame + 1))
-            self.i3d.logger.debug(f"[{self.node.name}] Baking keyframes from {self.start_frame} to {self.end_frame}")
-            self.has_translation = True
-            self.has_rotation = True
-            self.has_scale = True
+            self.logger.debug(f"[{self.node.name}] Baking keyframes from {self.start_frame} to {self.end_frame}")
         else:
             keyframe_list = sorted({kp.co.x for fc in self.fcurves for kp in fc.keyframe_points})
+            self.logger.debug(f"[{self.node.name}] Found {len(keyframe_list)} keyframes")
 
         if not keyframe_list:
-            self.i3d.logger.debug(f"[{self.node.name}] No keyframes found")
+            self.logger.debug(f"[{self.node.name}] No keyframes found")
             return xml_element
 
         for frame in keyframe_list:
@@ -121,7 +121,7 @@ class Keyframes(BaseAnimationExport):
                 self.i3d,
                 self.node,
                 self.is_bone,
-                frame,
+                int(frame),
                 time_ms,
                 export_translation=self.has_translation,
                 export_rotation=self.has_rotation,
@@ -144,8 +144,6 @@ class Clip(BaseAnimationExport):
         self.node_slot_pairs = node_slot_pairs
         self.xml_element = xml_i3d.Element("Clip", {"name": layer.name})
 
-        # Add check to see if anything in related hiearchy have animated constraints etc.
-
         self._generate_clip()
 
     def _generate_clip(self):
@@ -154,9 +152,8 @@ class Clip(BaseAnimationExport):
 
         for node, slot in self.node_slot_pairs:
             if not (channelbag := anim_utils.action_get_channelbag_for_slot(self.action, slot)):
+                self.logger.debug(f"[{node.name}] Skipped — no channelbag found for slot")
                 continue
-
-            self.i3d.logger.debug(f"[{node.name}] Processing started")
 
             if node.blender_object.type == 'ARMATURE':
                 for bone in node.blender_object.data.bones:
@@ -166,11 +163,8 @@ class Clip(BaseAnimationExport):
                             self.xml_element.append(keyframes.xml_element)
                 continue  # skip processing the armature object itself
 
-            self.i3d.logger.debug(f"[{node.name}] Processing completed")
-
             keyframes = Keyframes(self.i3d, self.fps, node, channelbag, start_frame, end_frame)
             if not keyframes.is_empty:
-                self.i3d.logger.debug(f"[{node.name}] Keyframes found")
                 self.xml_element.append(keyframes.xml_element)
 
         self.xml_element.set("duration", f"{duration_ms:.6g}")
@@ -192,8 +186,7 @@ class AnimationSet(BaseAnimationExport):
         self._generate_clips()
 
     def _generate_clips(self):
-        # NOTE: Blender 4.4 action can only have one layer
-        layer = self.action.layers[0]
+        layer = self.action.layers[0]  # NOTE: Blender 4.4 action can only have one layer
         clip = Clip(self.i3d, self.fps, layer, self.node_slot_pairs, self.action)
         self.clips.append(clip)
         self.xml_element.append(clip.xml_element)
@@ -212,3 +205,4 @@ class Animation(BaseAnimationExport):
             anim_set = AnimationSet(self.i3d, self.fps, action, node_slot_pairs)
             self.animation_sets_element.append(anim_set.xml_element)
         self.animation_sets_element.set("count", str(len(self.i3d.anim_links)))
+        self.logger.info(f"Exported {len(self.i3d.anim_links)} animation sets")
