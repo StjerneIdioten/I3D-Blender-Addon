@@ -2,6 +2,7 @@ import logging
 import math
 import bpy
 from bpy_extras import anim_utils
+import contextlib
 
 from .node import SceneGraphNode
 from .skinned_mesh import SkinnedMeshBoneNode
@@ -17,46 +18,6 @@ class BaseAnimationExport:
         self.fps = fps
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': type(self).__name__})
-
-
-class Keyframe:
-    @staticmethod
-    def generate_keyframe(i3d: I3D,
-                          node: SceneGraphNode | SkinnedMeshBoneNode,
-                          is_bone: bool,
-                          frame: int,
-                          time_ms: float,
-                          export_translation: bool,
-                          export_rotation: bool,
-                          export_scale: bool) -> xml_i3d.Element:
-
-        i3d.depsgraph.scene.frame_set(frame)
-
-        local_matrix = node.blender_object.matrix_local.copy()
-        if is_bone:
-            if pose_bone := node.root_node.blender_object.pose.bones.get(node.blender_object.name):
-                local_matrix = pose_bone.matrix.copy()
-            if isinstance(node.parent, SkinnedMeshBoneNode):
-                # Bone with bone parent — use raw matrix
-                if parent_pose_bone := node.root_node.blender_object.pose.bones.get(node.parent.blender_object.name):
-                    local_matrix = parent_pose_bone.matrix.inverted_safe() @ local_matrix
-                conv_matrix = local_matrix
-            else:
-                conv_matrix = i3d.conversion_matrix @ local_matrix
-        else:
-            conv_matrix = i3d.conversion_matrix @ local_matrix @ i3d.conversion_matrix.inverted_safe()
-
-        translation, rotation, scale = conv_matrix.decompose()
-        rotation = rotation.to_euler('XYZ')
-        keyframe_element = xml_i3d.Element("Keyframe", {"time": f"{time_ms:.6g}"})
-        if export_translation:
-            keyframe_element.set("translation", "{0:.6g} {1:.6g} {2:.6g}".format(*translation))
-        if export_rotation:
-            keyframe_element.set("rotation", " ".join(f"{math.degrees(a):.6g}" for a in rotation))
-        if export_scale:
-            keyframe_element.set("scale", "{0:.6g} {1:.6g} {2:.6g}".format(*scale))
-
-        return keyframe_element
 
 
 class Keyframes(BaseAnimationExport):
@@ -117,18 +78,38 @@ class Keyframes(BaseAnimationExport):
         for frame in keyframe_list:
             # Convert frame to time in milliseconds and ensure time always starts with 0ms
             time_ms = ((frame - self.start_frame) / self.fps) * 1000
-            keyframe_element = Keyframe.generate_keyframe(
-                self.i3d,
-                self.node,
-                self.is_bone,
-                int(frame),
-                time_ms,
-                export_translation=self.has_translation,
-                export_rotation=self.has_rotation,
-                export_scale=self.has_scale
-            )
+            keyframe_element = self._generate_keyframe(int(frame), time_ms)
             xml_element.append(keyframe_element)
         return xml_element
+
+    def _generate_keyframe(self, frame: int, time_ms: float) -> xml_i3d.Element:
+
+        self.i3d.depsgraph.scene.frame_set(frame)
+
+        local_matrix = self.node.blender_object.matrix_local.copy()
+        if self.is_bone:
+            if pose_bone := self.node.root_node.blender_object.pose.bones.get(self.node.blender_object.name):
+                local_matrix = pose_bone.matrix.copy()
+            if isinstance(self.node.parent, SkinnedMeshBoneNode):  # Bone is parented to another bone
+                if parent := self.node.root_node.blender_object.pose.bones.get(self.node.parent.blender_object.name):
+                    local_matrix = parent.matrix.inverted_safe() @ local_matrix
+                conv_matrix = local_matrix
+            else:
+                conv_matrix = self.i3d.conversion_matrix @ local_matrix
+        else:
+            conv_matrix = self.i3d.conversion_matrix @ local_matrix @ self.i3d.conversion_matrix_inv
+
+        translation, rotation, scale = conv_matrix.decompose()
+        rotation = rotation.to_euler('XYZ')
+        keyframe_element = xml_i3d.Element("Keyframe", {"time": f"{time_ms:.6g}"})
+        if self.has_translation:
+            keyframe_element.set("translation", "{0:.6g} {1:.6g} {2:.6g}".format(*translation))
+        if self.has_rotation:
+            keyframe_element.set("rotation", " ".join(f"{math.degrees(a):.6g}" for a in rotation))
+        if self.has_scale:
+            keyframe_element.set("scale", "{0:.6g} {1:.6g} {2:.6g}".format(*scale))
+
+        return keyframe_element
 
 
 class Clip(BaseAnimationExport):
@@ -198,7 +179,28 @@ class Animation(BaseAnimationExport):
         super().__init__(i3d, i3d.depsgraph.scene.render.fps)
         self.animation_sets_element = xml_i3d.SubElement(self.i3d.xml_elements['Animation'], "AnimationSets")
         self.logger.debug("Initialized animation export")
-        self._export()
+
+        with self._temporary_unhide_objects():
+            self._export()
+
+    @contextlib.contextmanager
+    def _temporary_unhide_objects(self):
+        # Temporarily unhides all animated objects during export.
+        # Objects hidden in the viewport won't update transforms when the frame changes, which can break baking.
+        affected_objects = {
+            node.blender_object for node_slot_pairs in self.i3d.anim_links.values()
+            for node, _ in node_slot_pairs if isinstance(node.blender_object, bpy.types.Object)
+        }
+
+        original_hide_state = {obj: obj.hide_viewport for obj in affected_objects}
+
+        for obj in affected_objects:
+            obj.hide_viewport = False
+        try:
+            yield
+        finally:
+            for obj, state in original_hide_state.items():
+                obj.hide_viewport = state
 
     def _export(self):
         for action, node_slot_pairs in self.i3d.anim_links.items():

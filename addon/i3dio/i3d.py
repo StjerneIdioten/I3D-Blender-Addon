@@ -39,6 +39,7 @@ class I3D:
         self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
         self.deferred_constraints: list[tuple[SkinnedMeshBoneNode, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
+        self.conversion_matrix_inv = conversion_matrix.inverted_safe()
 
         self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
         self.materials: Dict[Union[str, int], Material] = {}
