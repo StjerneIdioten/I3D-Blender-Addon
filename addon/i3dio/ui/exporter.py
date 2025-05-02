@@ -141,7 +141,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             ('ANIMATIONS', "Animations", "Export animations"),
         ),
         options={'ENUM_FLAG'},
-        default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN', 'ANIMATIONS'},
+        default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN'},
     )
 
     copy_files: BoolProperty(
