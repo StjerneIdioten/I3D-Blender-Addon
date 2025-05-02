@@ -9,8 +9,6 @@ from .skinned_mesh import SkinnedMeshBoneNode
 from .. import xml_i3d, debugging
 from ..i3d import I3D
 
-# https://developer.blender.org/docs/release_notes/4.4/python_api/#slotted-actions
-
 
 class BaseAnimationExport:
     def __init__(self, i3d: I3D, fps: float):
