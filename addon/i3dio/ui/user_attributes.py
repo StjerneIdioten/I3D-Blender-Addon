@@ -90,36 +90,33 @@ class I3D_IO_UL_user_attributes(bpy.types.UIList):
 @register
 class I3D_IO_OT_new_user_attribute(Operator):
     """Add a new user attribute to the list"""
-
     bl_idname = 'i3dio_user_attribute_list.new_item'
     bl_label = "Add a new user attribute"
+    bl_options = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        item = context.active_object.i3d_user_attributes.attribute_list.add()
-
-        item.name = attribute_default_name
+        attrs = context.object.i3d_user_attributes
+        attrs.attribute_list.add().name = attribute_default_name
+        attrs.active_attribute = len(attrs.attribute_list) - 1
         return {'FINISHED'}
 
 
 @register
 class I3D_IO_OT_delete_user_attribute(Operator):
     """Delete the selected user attribute"""
-
     bl_idname = "i3dio_user_attribute_list.delete_item"
     bl_label = "Delete selected user attribute"
+    bl_options = {'INTERNAL', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
-        return context.active_object.i3d_user_attributes.attribute_list
+        return context.object.i3d_user_attributes.attribute_list
 
     def execute(self, context):
-        attribute_list = context.active_object.i3d_user_attributes.attribute_list
-        index = context.active_object.i3d_user_attributes.active_attribute
-
-        attribute_list.remove(index)
-        context.active_object.i3d_user_attributes.active_attribute = min(max(0, index - 1), len(attribute_list) - 1)
-
-        return{'FINISHED'}
+        attrs = context.object.i3d_user_attributes
+        attrs.attribute_list.remove(attrs.active_attribute)
+        attrs.active_attribute = max(0, attrs.active_attribute - 1)
+        return {'FINISHED'}
 
 
 @register
@@ -136,24 +133,21 @@ class I3D_IO_PT_user_attributes(Panel):
 
     def draw(self, context):
         layout = self.layout
-        obj = context.active_object
+        attrs = context.object.i3d_user_attributes
 
         row = layout.row()
-        row.template_list("I3D_IO_UL_user_attributes", "The_List", obj.i3d_user_attributes, "attribute_list", obj.i3d_user_attributes, 'active_attribute')
+        row.template_list("I3D_IO_UL_user_attributes", "The_List", attrs, "attribute_list", attrs, 'active_attribute')
 
         column = row.column(align=True)
         column.operator('i3dio_user_attribute_list.new_item', text='', icon='ADD')
         column.operator('i3dio_user_attribute_list.delete_item', text='', icon='REMOVE')
 
-        user_attributes = obj.i3d_user_attributes.attribute_list
-        active_index = obj.i3d_user_attributes.active_attribute
-
-        if active_index >= 0 and user_attributes:
-            active_attribute = user_attributes[active_index]
+        if 0 <= attrs.active_attribute < len(attrs.attribute_list):
+            attr = attrs.attribute_list[attrs.active_attribute]
             row = layout.row()
             row.alignment = 'RIGHT'
-            row.prop(active_attribute, 'type')
-            row.prop(active_attribute, active_attribute.type, text='')
+            row.prop(attr, 'type')
+            row.prop(attr, attr.type, text='')
 
 
 def register():
