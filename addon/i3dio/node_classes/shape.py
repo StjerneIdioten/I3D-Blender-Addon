@@ -115,6 +115,7 @@ class EvaluatedMesh:
                  reference_frame: mathutils.Matrix = None, node=None):
         self.name = name or mesh_object.data.name
         self.i3d = i3d
+        self.source_object = mesh_object
         self.object = None
         self.mesh = None
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
@@ -533,7 +534,7 @@ class IndexedTriangleSet(Node):
             xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
 
     def _process_bounding_volume(self):
-        bounding_volume_object = self.evaluated_mesh.mesh.i3d_attributes.bounding_volume_object
+        bounding_volume_object = self.evaluated_mesh.source_object.data.i3d_attributes.bounding_volume_object
         if bounding_volume_object is not None:
             # Calculate the bounding volume center from the corners of the bounding box
             bv_center = mathutils.Vector([sum(x) for x in zip(*bounding_volume_object.bound_box)]) * 0.125
