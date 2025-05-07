@@ -59,7 +59,7 @@ class I3DUserAttributeItem(bpy.types.PropertyGroup):
                        default='data_boolean')
 
     data_boolean: BoolProperty(default=False)
-    data_integer: IntProperty(default=0, min=-199, max=200)
+    data_integer: IntProperty(default=0, min=-200, max=200)
     data_float: FloatProperty(default=0, min=-200, max=200)
     data_string: StringProperty(default='')
     data_scriptCallback: StringProperty(default='')
