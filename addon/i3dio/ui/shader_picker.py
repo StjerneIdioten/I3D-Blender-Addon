@@ -301,19 +301,25 @@ def draw_shader_material_parameters(layout: bpy.types.UILayout, i3d_attributes) 
     header, panel = layout.panel('shader_material_parameters', default_closed=False)
     header.label(text="Shader Parameters")
     if panel:
-        column = panel.column(align=True)
+        column = panel.column(align=False)
         parameters = i3d_attributes.shader_material_parameters
         for parameter in parameters:
+            row = column.row(align=True)
+            row.label(text=parameter.name)
             match parameter.type:
                 case 'float':
-                    property_type = 'data_float_1'
+                    row.prop(parameter, 'data_float_1', text="")
+                    for _ in range(3):
+                        row.label(text="")
                 case 'float2':
-                    property_type = 'data_float_2'
+                    row.prop(parameter, 'data_float_2', text="")
+                    for _ in range(2):
+                        row.label(text="")
                 case 'float3':
-                    property_type = 'data_float_3'
+                    row.prop(parameter, 'data_float_3', text="")
+                    row.label(text="")
                 case _:
-                    property_type = 'data_float_4'
-            column.row(align=True).prop(parameter, property_type, text=parameter.name)
+                    row.prop(parameter, 'data_float_4', text="")
 
 
 def draw_shader_material_textures(layout: bpy.types.UILayout, i3d_attributes) -> None:
