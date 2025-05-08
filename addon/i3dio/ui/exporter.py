@@ -3,6 +3,7 @@ import bpy
 from bpy.props import (
     StringProperty,
     BoolProperty,
+    IntProperty,
     EnumProperty,
     PointerProperty,
     CollectionProperty
@@ -35,11 +36,17 @@ def register(cls):
 
 
 @register
-class I3DShaderSearchPath(bpy.types.PropertyGroup):
+class I3DShaderFolderEntry(bpy.types.PropertyGroup):
+    name: StringProperty(
+        name="Name",
+        description="Optional name to help identify this search path",
+        default="Custom Shader Folder"
+    )
+
     path: StringProperty(
-        name="Search Path",
-        description="Folder to search for shaders",
-        subtype='FILE_PATH',
+        name="Shader Folder",
+        description="Directory containing custom shader XML files",
+        subtype='DIR_PATH',
         default=''
     )
 
@@ -55,12 +62,12 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=''
     )
 
-    shader_extra_paths: CollectionProperty(
-        type=I3DShaderSearchPath,
+    shader_folders: CollectionProperty(
+        type=I3DShaderFolderEntry,
         name="Extra Shader Search Paths",
-        description=("A list of extra paths for the exporter to search for valid shader files. "
-                     "The paths will be stored relative to the .blend file in an attempt to keep them portable.")
+        description="Directories containing additional shader XML files"
     )
+    shader_extra_paths_index: IntProperty(default=0)
 
 
 @register
@@ -370,10 +377,45 @@ class IO_FH_i3d(bpy.types.FileHandler):
 
 
 @register
-class I3D_IO_PT_i3d_mapping_attributes(Panel):
+class I3D_IO_OT_AddShaderFolder(Operator):
+    bl_idname = "i3dio.add_shader_folder"
+    bl_label = "Add Shader Folder"
+    bl_description = "Add a new folder to search for custom shader files"
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    def execute(self, context):
+        scene_props = context.scene.i3dio
+        new_item = scene_props.shader_folders.add()
+        new_item.name = "New Shader Search Path"
+        scene_props.shader_extra_paths_index = len(scene_props.shader_folders) - 1
+        return {'FINISHED'}
+
+
+@register
+class I3D_IO_OT_RemoveShaderFolder(Operator):
+    bl_idname = "i3dio.remove_shader_folder"
+    bl_label = "Remove Shader Folder"
+    bl_description = "Remove the selected shader folder"
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return len(context.scene.i3dio.shader_folders)
+
+    def execute(self, context):
+        scene_props = context.scene.i3dio
+        index = scene_props.shader_extra_paths_index
+        if 0 <= index < len(scene_props.shader_folders):
+            scene_props.shader_folders.remove(index)
+            scene_props.shader_extra_paths_index = max(0, index - 1)
+        return {'FINISHED'}
+
+
+@register
+class I3D_IO_PT_i3d_scene(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
-    bl_label = "I3D Mapping Options"
+    bl_label = "I3D Scene Properties"
     bl_context = 'scene'
 
     @classmethod
@@ -382,7 +424,30 @@ class I3D_IO_PT_i3d_mapping_attributes(Panel):
 
     def draw(self, context):
         layout = self.layout
-        layout.prop(context.scene.i3dio, 'i3d_mapping_file_path')
+        scene_props = context.scene.i3dio
+
+        header, body = layout.panel("i3d_mapping_options", default_closed=False)
+        header.label(text="I3D Mapping Options")
+        if body:
+            body.prop(scene_props, 'i3d_mapping_file_path')
+
+        header, body = layout.panel("i3d_custom_shader_paths", default_closed=False)
+        header.label(text="Custom Shader Folders")
+        if body:
+            row = body.row()
+            row.template_list(
+                "UI_UL_list", "i3d_shader_folders",
+                scene_props, "shader_folders",
+                scene_props, "shader_extra_paths_index",
+                rows=2
+            )
+            col = row.column(align=True)
+            col.operator("i3dio.add_shader_folder", icon='ADD', text="")
+            col.operator("i3dio.remove_shader_folder", icon='REMOVE', text="")
+
+            if 0 <= scene_props.shader_extra_paths_index < len(scene_props.shader_folders):
+                active_path = scene_props.shader_folders[scene_props.shader_extra_paths_index]
+                body.prop(active_path, "path", text="Folder", placeholder="Path to shader folder")
 
 
 # File -> Export item
