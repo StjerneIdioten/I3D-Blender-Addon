@@ -195,6 +195,8 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         get=shader_getter,
         set=shader_setter,
     )
+
+    # Just for easy access to the shader name
     shader_name: StringProperty(name='NO_SHADER')
 
     # Variations
@@ -212,9 +214,8 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
             update_variation(self.id_data, shader_name, variation)
 
     def variation_getter(self):
-        if len(self.shader_variations) == 0:
-            # Populate with default variation if collection is empty. e.g. when a new material is created
-            self.shader_variations.add().name = SHADER_NO_VARIATION
+        if not len(self.shader_variations):
+            return ""  # No variations available, return empty string to avoid red field in prop search
         return self.get('shader_variation_name', SHADER_NO_VARIATION)
 
     shader_variation_name: StringProperty(
