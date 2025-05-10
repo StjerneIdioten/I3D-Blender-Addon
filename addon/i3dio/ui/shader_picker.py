@@ -41,18 +41,40 @@ class ShaderParameterType(Enum):
     FLOAT4 = 'float4'
 
 
+def clone_shader_parameter(param):
+    return {
+        'name': param.name,
+        'type': param.type,
+        'data_float_1': param.data_float_1,
+        'data_float_2': tuple(param.data_float_2),
+        'data_float_3': tuple(param.data_float_3),
+        'data_float_4': tuple(param.data_float_4),
+    }
+
+def clone_shader_texture(tex):
+    return {
+        'name': tex.name,
+        'source': tex.source,
+        'default_source': tex.default_source,
+    }
+
+
 class ShaderManager:
-    def __init__(self, material):
+    def __init__(self, material: bpy.types.Material) -> None:
         self.attributes = material.i3d_attributes
 
-    def clear_shader_data(self, clear_all=False):
+        # Cache old values immediately so we don't lose them during clearing
+        self.cached_params = {p.name: clone_shader_parameter(p) for p in self.attributes.shader_material_parameters}
+        self.cached_textures = {t.name: clone_shader_texture(t) for t in self.attributes.shader_material_textures}
+
+    def clear_shader_data(self, clear_all: bool = False) -> None:
         self.attributes.shader_material_parameters.clear()
         self.attributes.shader_material_textures.clear()
         self.attributes.required_vertex_attributes.clear()
         if clear_all:
             self.attributes.shader_variations.clear()
 
-    def update_shader(self, shader_name):
+    def update_shader(self, shader_name: str) -> None:
         self.clear_shader_data(clear_all=True)
         self.attributes.shader_name = shader_name
         self.attributes.shader_variations.add().name = SHADER_NO_VARIATION
@@ -63,7 +85,7 @@ class ShaderManager:
 
         shader_dict = SHADERS_CUSTOM if self.attributes.use_custom_shaders else SHADERS_GAME
         if not (shader := shader_dict.get(shader_name)):
-            return
+            return  # Shader not found, do nothing
 
         # Add all variations
         for variation in shader.variations:
@@ -74,14 +96,15 @@ class ShaderManager:
         for texture in shader.textures.get('base', []):
             self.add_shader_texture(texture)
 
-    def update_variation(self, shader_name, shader_variation_name):
-        self.clear_shader_data()
+    def update_variation(self, shader_name: str, shader_variation_name: str) -> None:
         if shader_name == SHADER_DEFAULT:
             return
 
         shader_dict = SHADERS_CUSTOM if self.attributes.use_custom_shaders else SHADERS_GAME
         if not (shader := shader_dict.get(shader_name)):
             return
+
+        self.clear_shader_data()
 
         # Add base parameters and textures when no variation is selected
         if shader_variation_name == SHADER_NO_VARIATION or shader_variation_name == '':
@@ -101,27 +124,37 @@ class ShaderManager:
                 self.add_shader_texture(texture)
         self.set_vertex_attributes(shader, groups=variation)
 
-    def add_shader_parameter(self, parameter):
+    def add_shader_parameter(self, parameter: dict) -> None:
         new_param = self.attributes.shader_material_parameters.add()
         new_param.name = parameter['name']
         new_param.type = parameter['type']
-        data = tuple(map(float, parameter['default_value']))
-        match parameter['type']:
-            case ShaderParameterType.FLOAT.value:
-                new_param.data_float_1 = data[0]
-            case ShaderParameterType.FLOAT2.value:
-                new_param.data_float_2 = data
-            case ShaderParameterType.FLOAT3.value:
-                new_param.data_float_3 = data
-            case ShaderParameterType.FLOAT4.value:
-                new_param.data_float_4 = data
+        cached = self.cached_params.get(new_param.name)
+        if cached:
+            new_param.data_float_1 = cached['data_float_1']
+            new_param.data_float_2 = cached['data_float_2']
+            new_param.data_float_3 = cached['data_float_3']
+            new_param.data_float_4 = cached['data_float_4']
+        else:
+            data = tuple(map(float, parameter['default_value']))
+            match parameter['type']:
+                case ShaderParameterType.FLOAT.value:
+                    new_param.data_float_1 = data[0]
+                case ShaderParameterType.FLOAT2.value:
+                    new_param.data_float_2 = data
+                case ShaderParameterType.FLOAT3.value:
+                    new_param.data_float_3 = data
+                case ShaderParameterType.FLOAT4.value:
+                    new_param.data_float_4 = data
 
-    def add_shader_texture(self, texture):
+    def add_shader_texture(self, texture: dict) -> None:
         new_texture = self.attributes.shader_material_textures.add()
         new_texture.name = texture['name']
         new_texture.default_source = texture.get('default_file', '')
+        cached = self.cached_textures.get(new_texture.name)
+        if cached and cached['source'] != new_texture.default_source:
+            new_texture.source = cached['source']
 
-    def set_vertex_attributes(self, shader, groups):
+    def set_vertex_attributes(self, shader: ShaderMetadata, groups: list[str]) -> None:
         required_attributes = {name for name, group in shader.vertex_attributes.items() if group in groups}
         self.attributes.required_vertex_attributes.clear()
         for name in required_attributes:
@@ -166,13 +199,13 @@ class I3DShaderVariation(bpy.types.PropertyGroup):
     name: StringProperty(default=SHADER_NO_VARIATION)
 
 
-def update_shader(material, shader_name):
+def update_shader(material: bpy.types.Material, shader_name: str) -> None:
     if material is None:
         raise ValueError("Material must be provided")
     ShaderManager(material).update_shader(shader_name)
 
 
-def update_variation(material, shader_name, shader_variation_name):
+def update_variation(material: bpy.types.Material, shader_name: str, shader_variation_name: str) -> None:
     if material is None:
         raise ValueError("Material must be provided")
     ShaderManager(material).update_variation(shader_name, shader_variation_name)
