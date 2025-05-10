@@ -43,11 +43,16 @@ class I3DShaderFolderEntry(bpy.types.PropertyGroup):
         default="Custom Shader Folder"
     )
 
+    def update_path(self, _context):
+        from .shader_picker import populate_custom_shaders
+        populate_custom_shaders()
+
     path: StringProperty(
         name="Shader Folder",
         description="Directory containing custom shader XML files",
         subtype='DIR_PATH',
-        default=''
+        default='',
+        update=update_path
     )
 
 

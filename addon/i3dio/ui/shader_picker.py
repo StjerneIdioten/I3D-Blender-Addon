@@ -25,9 +25,11 @@ SHADER_NO_VARIATION = 'None'
 SHADER_PARAMETER_MAX_DECIMALS = 3  # 0-6 per blender properties documentation
 SHADER_DEFAULT = 'NO_SHADER'
 
-SHADERS = {}
+SHADERS_GAME = {}
+SHADERS_CUSTOM = {}
 SHADER_ENUM_ITEMS_DEFAULT = (f'{SHADER_DEFAULT}', 'No Shader', 'No Shader Selected')
-SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
+SHADER_ENUMS_GAME = [SHADER_ENUM_ITEMS_DEFAULT]
+SHADER_ENUMS_CUSTOM = [SHADER_ENUM_ITEMS_DEFAULT]
 
 ShaderMetadata = namedtuple('Shader', ['path', 'parameters', 'textures', 'vertex_attributes', 'variations'])
 
@@ -55,23 +57,31 @@ class ShaderManager:
         self.attributes.shader_name = shader_name
         self.attributes.shader_variations.add().name = SHADER_NO_VARIATION
         self.attributes.shader_variation_name = SHADER_NO_VARIATION
-        if shader_name != SHADER_DEFAULT:
-            # Add all variations
-            for variation in SHADERS[shader_name].variations:
-                self.attributes.shader_variations.add().name = variation
 
-            # Add base parameters and textures
-            for param in SHADERS[shader_name].parameters.get('base', []):
-                self.add_shader_parameter(param)
-            for texture in SHADERS[shader_name].textures.get('base', []):
-                self.add_shader_texture(texture)
+        if shader_name == SHADER_DEFAULT:
+            return
+
+        shader_dict = SHADERS_CUSTOM if self.attributes.use_custom_shaders else SHADERS_GAME
+        if not (shader := shader_dict.get(shader_name)):
+            return
+
+        # Add all variations
+        for variation in shader.variations:
+            self.attributes.shader_variations.add().name = variation
+        # Add base parameters and textures
+        for param in shader.parameters.get('base', []):
+            self.add_shader_parameter(param)
+        for texture in shader.textures.get('base', []):
+            self.add_shader_texture(texture)
 
     def update_variation(self, shader_name, shader_variation_name):
         self.clear_shader_data()
         if shader_name == SHADER_DEFAULT:
             return
 
-        shader = SHADERS[shader_name]
+        shader_dict = SHADERS_CUSTOM if self.attributes.use_custom_shaders else SHADERS_GAME
+        if not (shader := shader_dict.get(shader_name)):
+            return
 
         # Add base parameters and textures when no variation is selected
         if shader_variation_name == SHADER_NO_VARIATION or shader_variation_name == '':
@@ -159,27 +169,26 @@ class I3DShaderVariation(bpy.types.PropertyGroup):
 def update_shader(material, shader_name):
     if material is None:
         raise ValueError("Material must be provided")
-    manager = ShaderManager(material)
-    manager.update_shader(shader_name)
+    ShaderManager(material).update_shader(shader_name)
 
 
 def update_variation(material, shader_name, shader_variation_name):
     if material is None:
         raise ValueError("Material must be provided")
-    manager = ShaderManager(material)
-    manager.update_variation(shader_name, shader_variation_name)
+    ShaderManager(material).update_variation(shader_name, shader_variation_name)
 
 
 @register
 class I3DMaterialShader(bpy.types.PropertyGroup):
     def shader_items_update(self, _context):
-        return SHADERS_ENUM_ITEMS
+        return SHADER_ENUMS_CUSTOM if self.use_custom_shaders else SHADER_ENUMS_GAME
 
     def shader_setter(self, selected_index):
         existing_shader = self.get('shader', 0)
         if existing_shader != selected_index:
             self['shader'] = selected_index
-            shader_name = SHADERS_ENUM_ITEMS[selected_index][0]
+            shader_enums = SHADER_ENUMS_CUSTOM if self.use_custom_shaders else SHADER_ENUMS_GAME
+            shader_name = shader_enums[selected_index][0]
             update_shader(self.id_data, shader_name)
 
     def shader_getter(self):
@@ -197,7 +206,19 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     )
 
     # Just for easy access to the shader name
-    shader_name: StringProperty(name='NO_SHADER')
+    shader_name: StringProperty(name=SHADER_DEFAULT)
+
+    def custom_shaders_update(self, _context):
+        self['shader'] = 0
+        self.shader_name = SHADER_DEFAULT
+        update_shader(self.id_data, SHADER_DEFAULT)
+
+    use_custom_shaders: BoolProperty(
+        name='Use Custom Shaders',
+        description='Use a custom shaders instead of the game shaders',
+        default=False,
+        update=custom_shaders_update
+    )
 
     # Variations
     def variation_setter(self, variation):
@@ -280,6 +301,7 @@ class I3D_IO_PT_material_shader(Panel):
 
         row = layout.row(align=True)
         col = row.column(align=False)
+        col.prop(i3d_attributes, 'use_custom_shaders')
         col.prop(i3d_attributes, 'shader', text="Shader")
         col.prop_search(i3d_attributes, 'shader_variation_name', i3d_attributes, 'shader_variations', text="Variation")
 
@@ -385,25 +407,25 @@ def load_shader(path: Path):
         return None
     shader = ShaderMetadata(path, {}, {}, {}, {})
     root = tree.getroot()
-    parameters = root.find('Parameters')
-    if parameters is not None:
+
+    if (parameters := root.find('Parameters')) is not None:
         for p in parameters:
             if p.tag == 'Parameter':
                 group = p.attrib.get('group', 'base')  # Default to "base" if no group is specified
                 shader.parameters.setdefault(group, []).extend(parameter_element_as_dict(p))
-    textures = root.find('Textures')
-    if textures is not None:
+
+    if (textures := root.find('Textures')) is not None:
         for t in textures:
             if t.tag == 'Texture' and t.attrib.get('defaultColorProfile') is not None:
                 group = t.attrib.get('group', 'base')  # Default to "base" if no group is specified
                 shader.textures.setdefault(group, []).append(texture_element_as_dict(t))
-    vertex_attributes = root.find('VertexAttributes')
-    if vertex_attributes is not None:
+
+    if (vertex_attributes := root.find('VertexAttributes')) is not None:
         for attr in vertex_attributes:
             if attr.tag == 'VertexAttribute':
                 shader.vertex_attributes[attr.attrib['name']] = attr.attrib.get('group', 'base')
-    variations = root.find('Variations')
-    if variations is not None:
+
+    if (variations := root.find('Variations')) is not None:
         for v in variations:
             if v.tag == 'Variation':
                 # Some variations don't have a group defined, but should still use the 'base' group regardless
@@ -411,19 +433,57 @@ def load_shader(path: Path):
     return shader
 
 
-def locate_shaders_in_directory(dir: Path):
+def locate_shaders_in_directory(dir: Path) -> list[Path]:
+    """Scans a directory for .xml shader files and returns a list of paths"""
     return (shader_path for shader_path in dir.glob('*.xml'))
 
 
-def populate_shader_cache():
-    global SHADERS, SHADERS_ENUM_ITEMS
+def load_shaders_from_directory(directory: Path) -> dict:
+    """Scans a directory for .xml shader files and returns a dict of shader_name -> ShaderMetadata"""
+    loaded = {}
+    for path in locate_shaders_in_directory(directory):
+        shader = load_shader(path)
+        if shader:
+            loaded[path.stem] = shader
+    return loaded
+
+
+def populate_game_shaders() -> None:
+    global SHADERS_GAME, SHADER_ENUMS_GAME
+    SHADERS_GAME.clear()
+
     shader_dir = Path(bpy.context.preferences.addons[base_package].preferences.fs_data_path) / 'shaders'
     if shader_dir.exists():
-        SHADERS = {path.stem: load_shader(path) for path in locate_shaders_in_directory(shader_dir)}
-    SHADERS_ENUM_ITEMS = [SHADER_ENUM_ITEMS_DEFAULT]
-    SHADERS_ENUM_ITEMS.extend(
-        [(name, name, str(shader.path)) for name, shader in SHADERS.items() if shader is not None]
-    )
+        SHADERS_GAME.update(load_shaders_from_directory(shader_dir))
+
+    SHADER_ENUMS_GAME = [SHADER_ENUM_ITEMS_DEFAULT]
+    SHADER_ENUMS_GAME.extend([(name, name, str(shader.path)) for name, shader in SHADERS_GAME.items()])
+    print(f"Loaded {len(SHADERS_GAME)} game shaders")
+
+
+def populate_custom_shaders() -> None:
+    global SHADERS_CUSTOM, SHADER_ENUMS_CUSTOM
+    SHADERS_CUSTOM.clear()
+
+    try:
+        scene_props = bpy.context.scene.i3dio
+        for entry in scene_props.shader_folders:
+            path = Path(bpy.path.abspath(entry.path))
+            if path.exists():
+                SHADERS_CUSTOM.update(load_shaders_from_directory(path))
+            else:
+                print(f"[Custom Shader] Folder does not exist: {entry.path}")
+    except Exception as e:
+        print("Error reading custom shader folders:", e)
+
+    SHADER_ENUMS_CUSTOM = [SHADER_ENUM_ITEMS_DEFAULT]
+    SHADER_ENUMS_CUSTOM.extend([(name, name, str(shader.path)) for name, shader in SHADERS_CUSTOM.items()])
+    print(f"Loaded {len(SHADERS_CUSTOM)} custom shaders")
+
+
+def populate_shader_cache():
+    populate_game_shaders()
+    populate_custom_shaders()
 
 
 @persistent
@@ -450,10 +510,10 @@ def handle_old_shader_format(file):
 
             print(f"Shader is: {old_shader_path}")
 
-            if old_shader_path in (s.path for s in SHADERS.values()):
+            if old_shader_path in (s.path for s in SHADERS_GAME.values()):
                 print(f"Setting shader, {old_shader_path.stem}")
                 attr.shader = old_shader_path.stem
-            elif old_shader_path.stem in SHADERS:
+            elif old_shader_path.stem in SHADERS_GAME:
                 # If path doesn't match, try to match by name,
                 # could be a path from earlier game version or changed game path
                 print(f"Setting shader from elif, {old_shader_path.stem}")
