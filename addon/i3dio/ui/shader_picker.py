@@ -487,6 +487,11 @@ def populate_shader_cache():
 
 
 @persistent
+def populate_shader_cache_handler(_dummy) -> None:
+    populate_shader_cache()
+
+
+@persistent
 def handle_old_shader_format(file):
     print("Handling old shader format", file)
     # Old -> new property names:
@@ -584,10 +589,11 @@ def register():
         bpy.utils.register_class(cls)
     bpy.types.Material.i3d_attributes = PointerProperty(type=I3DMaterialShader)
     load_post.append(handle_old_shader_format)
-    populate_shader_cache()
+    load_post.append(populate_shader_cache_handler)
 
 
 def unregister():
+    load_post.remove(populate_shader_cache_handler)
     load_post.remove(handle_old_shader_format)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
