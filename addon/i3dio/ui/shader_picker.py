@@ -466,13 +466,13 @@ def populate_custom_shaders() -> None:
     SHADERS_CUSTOM.clear()
 
     try:
-        scene_props = bpy.context.scene.i3dio
-        for entry in scene_props.shader_folders:
-            path = Path(bpy.path.abspath(entry.path))
-            if path.exists():
-                SHADERS_CUSTOM.update(load_shaders_from_directory(path))
-            else:
-                print(f"[Custom Shader] Folder does not exist: {entry.path}")
+        for scene in bpy.data.scenes:
+            for entry in scene.i3dio.shader_folders:
+                path = Path(bpy.path.abspath(entry.path))
+                if path.exists():
+                    SHADERS_CUSTOM.update(load_shaders_from_directory(path))
+                else:
+                    print(f"[Custom Shader] Folder does not exist: {entry.path}")
     except Exception as e:
         print("Error reading custom shader folders:", e)
 
@@ -493,42 +493,51 @@ def populate_shader_cache_handler(_dummy) -> None:
 
 @persistent
 def handle_old_shader_format(file):
-    print("Handling old shader format", file)
+    print(f"[ShaderUpgrade] Handling old shader format for: {file}")
     # Old -> new property names:
     # shader -> shader
     # variation -> shader_variation_name
     # shader_parameters -> shader_material_parameters
     # shader_textures -> shader_material_textures
-    if not file:
+    if not file or not bpy.context.preferences.addons[base_package].preferences.fs_data_path:
         return
 
     for mat in bpy.data.materials:
-        print("\n")
-        print(f"Material: {mat.name}, {mat.i3d_attributes.get('source')}")
         if (old_source := mat.i3d_attributes.get('source')) is not None:
-            old_parameters = mat.i3d_attributes.get('shader_parameters')
-            old_variation = mat.i3d_attributes.get('variation')  # Old variation index (enum)
-            old_variations = mat.i3d_attributes.get('variations')  # All variations from old selected shader
-            old_textures = mat.i3d_attributes.get('shader_textures')
+            print("\n")
+            print(f"Material: {mat.name}, has old source: {old_source}")
             attr = mat.i3d_attributes
-            old_shader_path = Path(old_source)
+            old_shader_path = Path(bpy.path.abspath(old_source))
 
             print(f"Shader is: {old_shader_path}")
 
-            if old_shader_path in (s.path for s in SHADERS_GAME.values()):
-                print(f"Setting shader, {old_shader_path.stem}")
-                attr.shader = old_shader_path.stem
+            shader_stem = old_shader_path.stem
+            shader_paths = (s.path for s in SHADERS_GAME.values())
+            if old_shader_path in shader_paths:
+                print(f"Setting shader, {shader_stem}")
+                attr.shader = shader_stem
             elif old_shader_path.stem in SHADERS_GAME:
                 # If path doesn't match, try to match by name,
                 # could be a path from earlier game version or changed game path
-                print(f"Setting shader from elif, {old_shader_path.stem}")
+                print(f"Setting shader from elif, {shader_stem}")
+                attr.shader = shader_stem
+            elif old_shader_path.exists():
+                # Could be a custom shader, try to load it
+                print(f"Loading custom shader from {old_shader_path}")
+                path_dir = old_shader_path.parent
+                scene_props = bpy.context.scene.i3dio
+                new_item = scene_props.shader_folders.add()
+                new_item.name = path_dir.stem
+                new_item.path = str(path_dir)
+                attr.use_custom_shaders = True
                 attr.shader = old_shader_path.stem
             else:
                 print(f"Shader not found: {old_shader_path.stem}")
                 attr.shader = SHADER_DEFAULT
                 continue  # Shader is not found, no reason to run through variations etc when no shader is set
 
-            if old_variations is not None and old_variation is not None:
+            if (old_variation := attr.get('variation')) is not None and \
+                    (old_variations := attr.get('variations')) is not None:
                 if 0 <= old_variation < len(old_variations):
                     # Old variation was enum, we need to use the index to get the name through its stored variations
                     old_variation_name = old_variations[old_variation].get('name', SHADER_NO_VARIATION)
@@ -541,9 +550,9 @@ def handle_old_shader_format(file):
                 print(f"No variations found for {mat.name}, falling back to default.")
                 attr.shader_variation_name = SHADER_NO_VARIATION
 
-            if old_parameters is not None:
+            if (old_parameters := attr.get('shader_parameters')) is not None:
                 for old_param in old_parameters:
-                    old_name = old_param.get('name' '')
+                    old_name = old_param.get('name', '')
 
                     existing_param = next((p for p in attr.shader_material_parameters if p.name == old_name), None)
 
@@ -566,7 +575,7 @@ def handle_old_shader_format(file):
                         else:
                             print(f"Unhandled data type for parameter: {old_name}")
 
-            if old_textures is not None:
+            if (old_textures := attr.get('shader_textures')) is not None:
                 for old_texture in old_textures:
                     old_name = old_texture.get('name', '')
                     existing_texture = next((t for t in attr.shader_material_textures if t.name == old_name), None)
@@ -575,7 +584,7 @@ def handle_old_shader_format(file):
                         print(f"Setting texture source for {old_name}")
                         old_texture_source = old_texture.get('source', '')
                         print(f"Old source: {old_texture_source}")
-                        # If the texture source is different from the default_source, set it to the source
+                        # Only override if the texture source differs from the default
                         if old_texture_source != existing_texture.default_source:
                             existing_texture.source = old_texture_source
 
