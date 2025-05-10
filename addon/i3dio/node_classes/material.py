@@ -179,7 +179,8 @@ class Material(Node):
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes
         if shader_settings.shader != shader_picker.SHADER_DEFAULT:
-            shader_path = str(shader_picker.SHADERS[shader_settings.shader].path)
+            shaders = shader_picker.SHADERS_CUSTOM if shader_settings.use_custom_shaders else shader_picker.SHADERS_GAME
+            shader_path = str(shaders[shader_settings.shader].path)
             shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
 
