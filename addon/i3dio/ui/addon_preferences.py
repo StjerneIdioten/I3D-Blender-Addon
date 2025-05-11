@@ -19,8 +19,13 @@ def show_popup(title: str, message: str, icon: str = 'ERROR', units: int = 10):
     wm.popover(draw_popup, ui_units_x=units)
 
 
-def update_fs_data_path(self, _context):
-    if not (path := pathlib.Path(self.fs_data_path).resolve()).exists():
+def update_fs_data_path(self, context: bpy.types.Context) -> None:
+    wm = context.window_manager
+    last_path = getattr(wm, "fs_last_data_path", "")
+    path = pathlib.Path(self.fs_data_path).resolve()
+    wm.fs_last_data_path = self.fs_data_path
+
+    if not path.exists():
         show_popup("Invalid Path", "The provided path does not exist", units=9)
         return
     if path.name.lower() != "data":  # Try to append "data" folder if not already present
@@ -30,7 +35,7 @@ def update_fs_data_path(self, _context):
             return
         path = data_path  # Append "data" if valid
     corrected_path = str(path) + ('\\' if path.drive else '/')
-    if corrected_path != self.fs_data_path:  # Prevent infinite recursion by only updating if different
+    if corrected_path != last_path:  # Prevent infinite recursion by only updating if different
         self.fs_data_path = corrected_path
         populate_game_shaders()
 
@@ -227,6 +232,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
 
 
 def register():
+    bpy.types.WindowManager.fs_last_data_path = StringProperty()
     bpy.utils.register_class(I3D_IO_OT_reset_i3d_converter_path)
     bpy.utils.register_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
     bpy.utils.register_class(I3D_IO_OT_download_i3d_converter)
@@ -238,3 +244,4 @@ def unregister():
     bpy.utils.unregister_class(I3D_IO_OT_download_i3d_converter)
     bpy.utils.unregister_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
     bpy.utils.unregister_class(I3D_IO_OT_reset_i3d_converter_path)
+    del bpy.types.WindowManager.fs_last_data_path
