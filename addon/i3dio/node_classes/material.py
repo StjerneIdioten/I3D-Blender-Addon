@@ -209,17 +209,13 @@ class Material(Node):
                         default_value = parameter.data_float_4_default
                     case _:
                         value = []
-                valid = False
+
                 if isinstance(value, float):
-                    if not math.isclose(value, default_value, abs_tol=0.0001):
-                        self.logger.debug(f"float check passed, value: {value}, default: {default_value}")
+                    if not math.isclose(value, default_value, abs_tol=0.0000001):
                         parameter_dict['value'] = '{0:.6f}'.format(value)
-                        valid = True
-                elif not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default_value), 0.000001):
-                    self.logger.debug(f"value: {value}, default: {default_value}")
+                        xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
+                elif not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default_value)):
                     parameter_dict['value'] = ' '.join(map('{0:.6f}'.format, value))
-                    valid = True
-                if valid:
                     xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
 
             for texture in shader_settings.shader_material_textures:
