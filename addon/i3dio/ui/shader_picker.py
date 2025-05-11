@@ -34,6 +34,10 @@ SHADER_ENUMS_CUSTOM = [SHADER_ENUM_ITEMS_DEFAULT]
 ShaderMetadata = namedtuple('Shader', ['path', 'parameters', 'textures', 'vertex_attributes', 'variations'])
 
 
+def get_shader_dict(use_custom: bool) -> dict:
+    return SHADERS_CUSTOM if use_custom else SHADERS_GAME
+
+
 class ShaderParameterType(Enum):
     FLOAT = 'float'
     FLOAT2 = 'float2'
@@ -41,7 +45,7 @@ class ShaderParameterType(Enum):
     FLOAT4 = 'float4'
 
 
-def clone_shader_parameter(param):
+def _clone_shader_parameter(param):
     return {
         'name': param.name,
         'type': param.type,
@@ -51,7 +55,8 @@ def clone_shader_parameter(param):
         'data_float_4': tuple(param.data_float_4),
     }
 
-def clone_shader_texture(tex):
+
+def _clone_shader_texture(tex):
     return {
         'name': tex.name,
         'source': tex.source,
@@ -64,8 +69,8 @@ class ShaderManager:
         self.attributes = material.i3d_attributes
 
         # Cache old values immediately so we don't lose them during clearing
-        self.cached_params = {p.name: clone_shader_parameter(p) for p in self.attributes.shader_material_parameters}
-        self.cached_textures = {t.name: clone_shader_texture(t) for t in self.attributes.shader_material_textures}
+        self.cached_params = {p.name: _clone_shader_parameter(p) for p in self.attributes.shader_material_parameters}
+        self.cached_textures = {t.name: _clone_shader_texture(t) for t in self.attributes.shader_material_textures}
 
     def clear_shader_data(self, clear_all: bool = False) -> None:
         self.attributes.shader_material_parameters.clear()
@@ -83,7 +88,7 @@ class ShaderManager:
         if shader_name == SHADER_DEFAULT:
             return
 
-        shader_dict = SHADERS_CUSTOM if self.attributes.use_custom_shaders else SHADERS_GAME
+        shader_dict = get_shader_dict(self.attributes.use_custom_shaders)
         if not (shader := shader_dict.get(shader_name)):
             return  # Shader not found, do nothing
 
@@ -100,14 +105,14 @@ class ShaderManager:
         if shader_name == SHADER_DEFAULT:
             return
 
-        shader_dict = SHADERS_CUSTOM if self.attributes.use_custom_shaders else SHADERS_GAME
+        shader_dict = get_shader_dict(self.attributes.use_custom_shaders)
         if not (shader := shader_dict.get(shader_name)):
             return
 
         self.clear_shader_data()
 
         # Add base parameters and textures when no variation is selected
-        if shader_variation_name == SHADER_NO_VARIATION or shader_variation_name == '':
+        if not shader_variation_name or shader_variation_name == SHADER_NO_VARIATION:
             for param in shader.parameters.get('base', []):
                 self.add_shader_parameter(param)
             for texture in shader.textures.get('base', []):
@@ -129,22 +134,20 @@ class ShaderManager:
         new_param.name = parameter['name']
         new_param.type = parameter['type']
         cached = self.cached_params.get(new_param.name)
-        if cached:
-            new_param.data_float_1 = cached['data_float_1']
-            new_param.data_float_2 = cached['data_float_2']
-            new_param.data_float_3 = cached['data_float_3']
-            new_param.data_float_4 = cached['data_float_4']
-        else:
-            data = tuple(map(float, parameter['default_value']))
-            match parameter['type']:
-                case ShaderParameterType.FLOAT.value:
-                    new_param.data_float_1 = data[0]
-                case ShaderParameterType.FLOAT2.value:
-                    new_param.data_float_2 = data
-                case ShaderParameterType.FLOAT3.value:
-                    new_param.data_float_3 = data
-                case ShaderParameterType.FLOAT4.value:
-                    new_param.data_float_4 = data
+        data = tuple(map(float, parameter['default_value']))
+        match parameter['type']:
+            case ShaderParameterType.FLOAT.value:
+                new_param.data_float_1 = cached['data_float_1'] if cached else data[0]
+                new_param.data_float_1_default = data[0]
+            case ShaderParameterType.FLOAT2.value:
+                new_param.data_float_2 = cached['data_float_2'] if cached else data
+                new_param.data_float_2_default = data
+            case ShaderParameterType.FLOAT3.value:
+                new_param.data_float_3 = cached['data_float_3'] if cached else data
+                new_param.data_float_3_default = data
+            case ShaderParameterType.FLOAT4.value:
+                new_param.data_float_4 = cached['data_float_4'] if cached else data
+                new_param.data_float_4_default = data
 
     def add_shader_texture(self, texture: dict) -> None:
         new_texture = self.attributes.shader_material_textures.add()
@@ -177,9 +180,13 @@ class I3DShaderParameter(bpy.types.PropertyGroup):
     name: StringProperty(default='Unnamed Attribute')
     type: EnumProperty(items=[('float', '', ''), ('float2', '', ''), ('float3', '', ''), ('float4', '', '')])
     data_float_1: FloatProperty(precision=SHADER_PARAMETER_MAX_DECIMALS)
+    data_float_1_default: FloatProperty(precision=SHADER_PARAMETER_MAX_DECIMALS)
     data_float_2: FloatVectorProperty(size=2, precision=SHADER_PARAMETER_MAX_DECIMALS)
+    data_float_2_default: FloatVectorProperty(size=2, precision=SHADER_PARAMETER_MAX_DECIMALS)
     data_float_3: FloatVectorProperty(size=3, precision=SHADER_PARAMETER_MAX_DECIMALS)
+    data_float_3_default: FloatVectorProperty(size=3, precision=SHADER_PARAMETER_MAX_DECIMALS)
     data_float_4: FloatVectorProperty(size=4, precision=SHADER_PARAMETER_MAX_DECIMALS)
+    data_float_4_default: FloatVectorProperty(size=4, precision=SHADER_PARAMETER_MAX_DECIMALS)
 
 
 @register
@@ -401,7 +408,7 @@ def parameter_element_as_dict(parameter):
         print(f"Shader Parameter type is unknown! {parameter.attrib.get('type', 'UNKNOWN')}")
         return parameter_list
 
-    def parse_default(default):
+    def _parse_default(default):
         default_parsed = []
         if default is not None:
             default_parsed = default.split()
@@ -417,13 +424,13 @@ def parameter_element_as_dict(parameter):
             parameter_list.append({
                 'name': f"{parameter.attrib['name']}{child.attrib['index']}",
                 'type': param_type.value,
-                'default_value': parse_default(child.text)
+                'default_value': _parse_default(child.text)
             })
     else:
         parameter_list.append({
             'name': parameter.attrib['name'],
             'type': param_type.value,
-            'default_value': parse_default(parameter.attrib.get('defaultValue'))
+            'default_value': _parse_default(parameter.attrib.get('defaultValue'))
         })
 
     return parameter_list
@@ -466,17 +473,11 @@ def load_shader(path: Path):
     return shader
 
 
-def locate_shaders_in_directory(dir: Path) -> list[Path]:
-    """Scans a directory for .xml shader files and returns a list of paths"""
-    return (shader_path for shader_path in dir.glob('*.xml'))
-
-
 def load_shaders_from_directory(directory: Path) -> dict:
     """Scans a directory for .xml shader files and returns a dict of shader_name -> ShaderMetadata"""
     loaded = {}
-    for path in locate_shaders_in_directory(directory):
-        shader = load_shader(path)
-        if shader:
+    for path in (shader_path for shader_path in directory.glob('*.xml')):
+        if shader := load_shader(path):
             loaded[path.stem] = shader
     return loaded
 
@@ -514,18 +515,39 @@ def populate_custom_shaders() -> None:
     print(f"Loaded {len(SHADERS_CUSTOM)} custom shaders")
 
 
-def populate_shader_cache():
+@persistent
+def populate_shader_cache_handler(_dummy) -> None:
     populate_game_shaders()
     populate_custom_shaders()
 
 
-@persistent
-def populate_shader_cache_handler(_dummy) -> None:
-    populate_shader_cache()
+def _migrate_shader_source(attr, old_shader_path: Path) -> bool:
+    old_shader_stem = old_shader_path.stem
+    success = False
+
+    # Check if the shader path matches any of the game shaders
+    if any(old_shader_path == s.path for s in SHADERS_GAME.values()):
+        attr.shader = old_shader_stem
+        success = True
+    elif old_shader_stem in SHADERS_GAME:
+        attr.shader = old_shader_stem
+        success = True
+    elif old_shader_path.exists():  # We have to assume this is a custom shader
+        if old_shader_stem not in SHADERS_CUSTOM:
+            new_item = bpy.context.scene.i3dio.shader_folders.add()
+            new_item.name = old_shader_path.parent.stem
+            new_item.path = str(old_shader_path.parent)  # Add folder where the shader is located
+        attr.use_custom_shaders = True
+        attr.shader = old_shader_stem
+        success = True
+    else:  # No shader found, set to default
+        attr.shader = SHADER_DEFAULT
+    del attr['source']  # Remove old source
+    return success
 
 
 @persistent
-def handle_old_shader_format(file):
+def handle_old_shader_format(file) -> None:
     print(f"[ShaderUpgrade] Handling old shader format for: {file}")
     # Old -> new property names:
     # shader -> shader
@@ -536,94 +558,67 @@ def handle_old_shader_format(file):
         return
 
     for mat in bpy.data.materials:
-        if (old_source := mat.i3d_attributes.get('source')) is not None:
-            print("\n")
-            print(f"Material: {mat.name}, has old source: {old_source}")
-            attr = mat.i3d_attributes
-            old_shader_path = Path(bpy.path.abspath(old_source))
+        attr = mat.i3d_attributes
+        if not (old_source := attr.get('source')) or not old_source.endswith('.xml'):
+            continue  # No old source, nothing to do
 
-            print(f"Shader is: {old_shader_path}")
+        print(f"\nMaterial: {mat.name}, has old source: {old_source}")
+        old_shader_path = Path(bpy.path.abspath(old_source))
+        if not _migrate_shader_source(attr, old_shader_path):
+            continue  # Shader not found, skip this material
 
-            shader_stem = old_shader_path.stem
-            shader_paths = (s.path for s in SHADERS_GAME.values())
-            if old_shader_path in shader_paths:
-                print(f"Setting shader, {shader_stem}")
-                attr.shader = shader_stem
-            elif old_shader_path.stem in SHADERS_GAME:
-                # If path doesn't match, try to match by name,
-                # could be a path from earlier game version or changed game path
-                print(f"Setting shader from elif, {shader_stem}")
-                attr.shader = shader_stem
-            elif old_shader_path.exists():
-                # Could be a custom shader, try to load it
-                print(f"Loading custom shader from {old_shader_path}")
-                path_dir = old_shader_path.parent
-                scene_props = bpy.context.scene.i3dio
-                new_item = scene_props.shader_folders.add()
-                new_item.name = path_dir.stem
-                new_item.path = str(path_dir)
-                attr.use_custom_shaders = True
-                attr.shader = old_shader_path.stem
+        if (old_variation := attr.get('variation')) is not None and \
+                (old_variations := attr.get('variations')) is not None:
+            if 0 <= old_variation < len(old_variations):
+                # Old variation was enum, we need to use the index to get the name through its stored variations
+                old_variation_name = old_variations[old_variation].get('name', SHADER_NO_VARIATION)
+                print(f"Setting variation to, {old_variation_name}")
+                attr.shader_variation_name = old_variation_name
             else:
-                print(f"Shader not found: {old_shader_path.stem}")
-                attr.shader = SHADER_DEFAULT
-                continue  # Shader is not found, no reason to run through variations etc when no shader is set
-
-            if (old_variation := attr.get('variation')) is not None and \
-                    (old_variations := attr.get('variations')) is not None:
-                if 0 <= old_variation < len(old_variations):
-                    # Old variation was enum, we need to use the index to get the name through its stored variations
-                    old_variation_name = old_variations[old_variation].get('name', SHADER_NO_VARIATION)
-                    print(f"Setting variation to, {old_variation_name}")
-                    attr.shader_variation_name = old_variation_name
-                else:
-                    print(f"Invalid old variation index: {old_variation}, falling back to default.")
-                    attr.shader_variation_name = SHADER_NO_VARIATION
-            else:
-                print(f"No variations found for {mat.name}, falling back to default.")
+                print(f"Invalid old variation index: {old_variation}, falling back to default.")
                 attr.shader_variation_name = SHADER_NO_VARIATION
+            del attr['variations']
+            del attr['variation']
 
-            if (old_parameters := attr.get('shader_parameters')) is not None:
-                for old_param in old_parameters:
-                    old_name = old_param.get('name', '')
+        if (old_parameters := attr.get('shader_parameters')) is not None:
+            for old_param in old_parameters:
+                old_name = old_param.get('name', '')
 
-                    existing_param = next((p for p in attr.shader_material_parameters if p.name == old_name), None)
+                existing_param = next((p for p in attr.shader_material_parameters if p.name == old_name), None)
 
-                    if existing_param is not None:
-                        existing_param.name = old_name
+                if existing_param is not None:
+                    existing_param.name = old_name
 
-                        # Old type is stored as index because it was a enum. Ensure it's within bounds
-                        old_type_index = min(old_param.get('type', 0), 3)
-                        old_type = list(ShaderParameterType)[old_type_index].value
-                        existing_param.type = old_type
+                    # Old type is stored as index because it was a enum. Ensure it's within bounds
+                    old_type_index = min(old_param.get('type', 0), 3)
+                    old_type = list(ShaderParameterType)[old_type_index].value
+                    existing_param.type = old_type
 
-                        if 'data_float_1' in old_param:
-                            existing_param.data_float_1 = old_param['data_float_1']
-                        elif 'data_float_2' in old_param:
-                            existing_param.data_float_2 = old_param['data_float_2']
-                        elif 'data_float_3' in old_param:
-                            existing_param.data_float_3 = old_param['data_float_3']
-                        elif 'data_float_4' in old_param:
-                            existing_param.data_float_4 = old_param['data_float_4']
-                        else:
-                            print(f"Unhandled data type for parameter: {old_name}")
+                    if 'data_float_1' in old_param:
+                        existing_param.data_float_1 = old_param['data_float_1']
+                    elif 'data_float_2' in old_param:
+                        existing_param.data_float_2 = old_param['data_float_2']
+                    elif 'data_float_3' in old_param:
+                        existing_param.data_float_3 = old_param['data_float_3']
+                    elif 'data_float_4' in old_param:
+                        existing_param.data_float_4 = old_param['data_float_4']
+                    else:
+                        print(f"Unhandled data type for parameter: {old_name}")
+            del attr['shader_parameters']
 
-            if (old_textures := attr.get('shader_textures')) is not None:
-                for old_texture in old_textures:
-                    old_name = old_texture.get('name', '')
-                    existing_texture = next((t for t in attr.shader_material_textures if t.name == old_name), None)
-                    if existing_texture is not None:
-                        existing_texture.name = old_name
-                        print(f"Setting texture source for {old_name}")
-                        old_texture_source = old_texture.get('source', '')
-                        print(f"Old source: {old_texture_source}")
-                        # Only override if the texture source differs from the default
-                        if old_texture_source != existing_texture.default_source:
-                            existing_texture.source = old_texture_source
-
-        else:
-            print("Has no source")
-    return
+        if (old_textures := attr.get('shader_textures')) is not None:
+            for old_texture in old_textures:
+                old_name = old_texture.get('name', '')
+                existing_texture = next((t for t in attr.shader_material_textures if t.name == old_name), None)
+                if existing_texture is not None:
+                    existing_texture.name = old_name
+                    print(f"Setting texture source for {old_name}")
+                    old_texture_source = old_texture.get('source', '')
+                    print(f"Old source: {old_texture_source}")
+                    # Only override if the texture source differs from the default
+                    if old_texture_source != existing_texture.default_source:
+                        existing_texture.source = old_texture_source
+            del attr['shader_textures']
 
 
 def register():

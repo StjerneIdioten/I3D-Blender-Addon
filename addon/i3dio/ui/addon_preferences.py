@@ -3,9 +3,9 @@ import pathlib
 
 import bpy
 from bpy.types import AddonPreferences
-from bpy.props import (StringProperty, EnumProperty, BoolProperty)
+from bpy.props import (StringProperty, EnumProperty)
 from .. import __package__ as base_package
-from .shader_picker import populate_shader_cache
+from .shader_picker import populate_game_shaders
 
 
 def show_popup(title: str, message: str, icon: str = 'ERROR', units: int = 10):
@@ -32,7 +32,7 @@ def update_fs_data_path(self, _context):
     corrected_path = str(path) + ('\\' if path.drive else '/')
     if corrected_path != self.fs_data_path:  # Prevent infinite recursion by only updating if different
         self.fs_data_path = corrected_path
-        populate_shader_cache()
+        populate_game_shaders()
 
 
 class I3D_IO_AddonPreferences(AddonPreferences):

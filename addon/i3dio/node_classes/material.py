@@ -1,4 +1,6 @@
 import bpy
+import math
+import mathutils
 from dataclasses import dataclass
 from .. import utility, xml_i3d
 from ..i3d import I3D
@@ -179,7 +181,7 @@ class Material(Node):
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes
         if shader_settings.shader != shader_picker.SHADER_DEFAULT:
-            shaders = shader_picker.SHADERS_CUSTOM if shader_settings.use_custom_shaders else shader_picker.SHADERS_GAME
+            shaders = shader_picker.get_shader_dict(shader_settings.use_custom_shaders)
             shader_path = str(shaders[shader_settings.shader].path)
             shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
@@ -194,22 +196,33 @@ class Material(Node):
                 parameter_dict = {'name': parameter.name}
                 match parameter.type:
                     case shader_picker.ShaderParameterType.FLOAT.value:
-                        value = [parameter.data_float_1]
+                        value = parameter.data_float_1
+                        default_value = parameter.data_float_1_default
                     case shader_picker.ShaderParameterType.FLOAT2.value:
                         value = parameter.data_float_2
+                        default_value = parameter.data_float_2_default
                     case shader_picker.ShaderParameterType.FLOAT3.value:
                         value = parameter.data_float_3
+                        default_value = parameter.data_float_3_default
                     case shader_picker.ShaderParameterType.FLOAT4.value:
                         value = parameter.data_float_4
+                        default_value = parameter.data_float_4_default
                     case _:
                         value = []
+                valid = False
+                if isinstance(value, float):
+                    if not math.isclose(value, default_value, abs_tol=0.0001):
+                        self.logger.debug(f"float check passed, value: {value}, default: {default_value}")
+                        parameter_dict['value'] = '{0:.6f}'.format(value)
+                        valid = True
+                elif not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default_value), 0.000001):
+                    self.logger.debug(f"value: {value}, default: {default_value}")
+                    parameter_dict['value'] = ' '.join(map('{0:.6f}'.format, value))
+                    valid = True
+                if valid:
+                    xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
 
-                value = ' '.join(map('{0:.6f}'.format, value))
-                parameter_dict['value'] = value
-
-                xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
-
-            for texture in shader_settings.shader_matetrial_textures:
+            for texture in shader_settings.shader_material_textures:
                 self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")
                 if '' != texture.source != texture.default_source:
                     texture_dict = {'name': texture.name}
