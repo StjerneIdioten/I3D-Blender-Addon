@@ -398,8 +398,7 @@ def draw_shader_material_parameters(layout: bpy.types.UILayout, i3d_attributes) 
         for parameter in parameters:
             row = column.row(align=True)
             row.label(text=parameter.name)
-            row.operator('i3dio.reset_parameters', text='',
-                         icon='FILE_REFRESH', depress=True).parameter = parameter.name
+            row.operator('i3dio.reset_parameters', text='', icon='FILE_REFRESH').parameter = parameter.name
             match parameter.type:
                 case 'float':
                     row.prop(parameter, 'data_float_1', text="")
