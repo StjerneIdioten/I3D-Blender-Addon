@@ -476,8 +476,10 @@ def load_shader(path: Path):
     tree = xml_i3d.parse(path)
     if tree is None:
         return None
-    shader = ShaderMetadata(path, {}, {}, {}, {})
     root = tree.getroot()
+    if root.tag != 'CustomShader':
+        return None
+    shader = ShaderMetadata(path, {}, {}, {}, {})
 
     if (parameters := root.find('Parameters')) is not None:
         for p in parameters:
