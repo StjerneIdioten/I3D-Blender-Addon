@@ -195,16 +195,16 @@ class Material(Node):
             for parameter in shader_settings.shader_material_parameters:
                 parameter_dict = {'name': parameter.name}
                 match parameter.type:
-                    case shader_picker.ShaderParameterType.FLOAT.value:
+                    case shader_picker.ShaderParameter.Type.FLOAT.value:
                         value = parameter.data_float_1
                         default_value = parameter.data_float_1_default
-                    case shader_picker.ShaderParameterType.FLOAT2.value:
+                    case shader_picker.ShaderParameter.Type.FLOAT2.value:
                         value = parameter.data_float_2
                         default_value = parameter.data_float_2_default
-                    case shader_picker.ShaderParameterType.FLOAT3.value:
+                    case shader_picker.ShaderParameter.Type.FLOAT3.value:
                         value = parameter.data_float_3
                         default_value = parameter.data_float_3_default
-                    case shader_picker.ShaderParameterType.FLOAT4.value:
+                    case shader_picker.ShaderParameter.Type.FLOAT4.value:
                         value = parameter.data_float_4
                         default_value = parameter.data_float_4_default
                     case _:
