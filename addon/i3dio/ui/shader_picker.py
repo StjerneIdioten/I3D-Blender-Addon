@@ -315,6 +315,35 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
 
 @register
+class I3DIO_OT_reset_parameters(bpy.types.Operator):
+    bl_idname = "i3dio.reset_parameters"
+    bl_label = "Reset Shader Parameters"
+    bl_description = "Reset shader parameters to their default values"
+    bl_options = {'INTERNAL', 'UNDO'}
+    parameter: StringProperty()
+
+    @classmethod
+    def poll(cls, context):
+        return context.material and context.material.i3d_attributes.shader_material_parameters
+
+    @staticmethod
+    def _set_shader_parameter_defaults(param):
+        param.data_float_1 = param.data_float_1_default
+        param.data_float_2 = param.data_float_2_default
+        param.data_float_3 = param.data_float_3_default
+        param.data_float_4 = param.data_float_4_default
+
+    def execute(self, context):
+        shader_manager = ShaderManager(context.material)
+        if self.parameter and (param := shader_manager.attributes.shader_material_parameters.get(self.parameter)):
+            self._set_shader_parameter_defaults(param)
+        else:
+            for param in shader_manager.attributes.shader_material_parameters:
+                self._set_shader_parameter_defaults(param)
+        return {'FINISHED'}
+
+
+@register
 class I3D_IO_PT_material_shader(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -362,12 +391,15 @@ class I3D_IO_PT_material_shader(Panel):
 def draw_shader_material_parameters(layout: bpy.types.UILayout, i3d_attributes) -> None:
     header, panel = layout.panel('shader_material_parameters', default_closed=False)
     header.label(text="Shader Parameters")
+    header.operator('i3dio.reset_parameters', text='Reset All', icon='FILE_REFRESH')
     if panel:
         column = panel.column(align=False)
         parameters = i3d_attributes.shader_material_parameters
         for parameter in parameters:
             row = column.row(align=True)
             row.label(text=parameter.name)
+            row.operator('i3dio.reset_parameters', text='',
+                         icon='FILE_REFRESH', depress=True).parameter = parameter.name
             match parameter.type:
                 case 'float':
                     row.prop(parameter, 'data_float_1', text="")
