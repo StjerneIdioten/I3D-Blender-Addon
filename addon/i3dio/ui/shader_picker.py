@@ -438,6 +438,8 @@ def _draw_parameter_row(param, column: bpy.types.UILayout) -> None:
 
 
 def draw_shader_material_brand_color(layout: bpy.types.UILayout, i3d_attributes) -> None:
+    if "Farming Simulator 25" not in bpy.context.preferences.addons[base_package].preferences.fs_data_path:
+        return  # Only show brand color for FS25 vehicleShader
     header, panel = layout.panel('shader_material_brand_color', default_closed=False)
     header.label(text="Brand Color")
     if panel:
@@ -457,7 +459,7 @@ def draw_shader_material_parameters(layout: bpy.types.UILayout, i3d_attributes) 
     header.operator('i3dio.reset_parameters', text='Reset All', icon='FILE_REFRESH')
     if not panel:
         return
-    if i3d_attributes.shader_name == BRAND_COLOR_SHADER_NAME:  # Specific to vehicle shader is "brandColor" template
+    if i3d_attributes.shader_name == BRAND_COLOR_SHADER_NAME:  # "brandColor" template is specific to vehicle shader
         draw_shader_material_brand_color(panel, i3d_attributes)
 
     column = panel.column(align=False)
