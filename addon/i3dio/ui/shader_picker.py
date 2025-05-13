@@ -33,6 +33,9 @@ SHADER_ENUM_ITEMS_DEFAULT = (f'{SHADER_DEFAULT}', 'No Shader', 'No Shader Select
 SHADER_ENUMS_GAME = [SHADER_ENUM_ITEMS_DEFAULT]
 SHADER_ENUMS_CUSTOM = [SHADER_ENUM_ITEMS_DEFAULT]
 
+BRAND_COLOR_SHADER_NAME = 'vehicleShader'
+SHADER_BRAND_COLOR_TEMPLATE = 'brandColor'
+
 
 @dataclass
 class ShaderParameter:
@@ -44,12 +47,14 @@ class ShaderParameter:
     name: str
     type: Literal['float', 'float2', 'float3', 'float4']
     default_value: list[str]
+    template: str = 'default'
 
 
 @dataclass
 class ShaderTexture:
     name: str
     default_file: str
+    template: str = 'default'
 
 
 @dataclass
@@ -156,6 +161,7 @@ class ShaderManager:
         new_param = self.attributes.shader_material_parameters.add()
         new_param.name = parameter.name
         new_param.type = parameter.type
+        new_param.template = parameter.template
         cached = self.cached_params.get(new_param.name)
         data = tuple(map(float, parameter.default_value))
         match parameter.type:
@@ -176,8 +182,8 @@ class ShaderManager:
         new_texture = self.attributes.shader_material_textures.add()
         new_texture.name = texture.name
         new_texture.default_source = texture.default_file
-        cached = self.cached_textures.get(new_texture.name)
-        if cached and cached['source'] != new_texture.default_source:
+        new_texture.template = texture.template
+        if (cached := self.cached_textures.get(new_texture.name)) and cached['source'] != new_texture.default_source:
             new_texture.source = cached['source']
 
     def set_vertex_attributes(self, shader: ShaderMetadata, groups: list[str]) -> None:
@@ -199,7 +205,7 @@ class I3DRequiredVertexAttribute(bpy.types.PropertyGroup):
 
 @register
 class I3DShaderParameter(bpy.types.PropertyGroup):
-    def shader_type_items(self, context) -> list[tuple[str, str, str]]:
+    def shader_type_items(self, _context) -> list[tuple[str, str, str]]:
         return [(e.value, e.name, '') for e in ShaderParameter.Type]
 
     name: StringProperty(default='Unnamed Attribute')
@@ -212,6 +218,7 @@ class I3DShaderParameter(bpy.types.PropertyGroup):
     data_float_3_default: FloatVectorProperty(size=3, precision=SHADER_PARAMETER_MAX_DECIMALS)
     data_float_4: FloatVectorProperty(size=4, precision=SHADER_PARAMETER_MAX_DECIMALS)
     data_float_4_default: FloatVectorProperty(size=4, precision=SHADER_PARAMETER_MAX_DECIMALS)
+    template: StringProperty()
 
 
 @register
@@ -224,6 +231,7 @@ class I3DShaderTexture(bpy.types.PropertyGroup):
         default=''
     )
     default_source: StringProperty()
+    template: StringProperty()
 
 
 @register
@@ -413,27 +421,50 @@ class I3D_IO_PT_material_shader(Panel):
             draw_shader_material_textures(layout, i3d_attributes)
 
 
+def _draw_parameter_row(param, column: bpy.types.UILayout) -> None:
+    row = column.row(align=True)
+    row.label(text=param.name)
+    row.operator('i3dio.reset_parameters', text='', icon='FILE_REFRESH').parameter = param.name
+    float_types = {
+        'float': ('data_float_1', 3),
+        'float2': ('data_float_2', 2),
+        'float3': ('data_float_3', 1),
+        'float4': ('data_float_4', 0),
+    }
+    prop_name, empty_labels = float_types.get(param.type, ('data_float_4', 0))
+    row.prop(param, prop_name, text="")
+    for _ in range(empty_labels):
+        row.label(text="")
+
+
+def draw_shader_material_brand_color(layout: bpy.types.UILayout, i3d_attributes) -> None:
+    header, panel = layout.panel('shader_material_brand_color', default_closed=False)
+    header.label(text="Brand Color")
+    if panel:
+        column = panel.column(align=True)
+        for param in i3d_attributes.shader_material_parameters:
+            if param.template == SHADER_BRAND_COLOR_TEMPLATE:
+                _draw_parameter_row(param, column)
+        for texture in i3d_attributes.shader_material_textures:
+            if texture.template == SHADER_BRAND_COLOR_TEMPLATE:
+                placeholder = texture.default_source if texture.default_source else 'Texture not assigned'
+                column.row(align=True).prop(texture, 'source', text=texture.name, placeholder=placeholder)
+
+
 def draw_shader_material_parameters(layout: bpy.types.UILayout, i3d_attributes) -> None:
     header, panel = layout.panel('shader_material_parameters', default_closed=False)
     header.label(text="Shader Parameters")
     header.operator('i3dio.reset_parameters', text='Reset All', icon='FILE_REFRESH')
-    if panel:
-        column = panel.column(align=False)
-        parameters = i3d_attributes.shader_material_parameters
-        for parameter in parameters:
-            row = column.row(align=True)
-            row.label(text=parameter.name)
-            row.operator('i3dio.reset_parameters', text='', icon='FILE_REFRESH').parameter = parameter.name
-            float_types = {
-                'float': ('data_float_1', 3),
-                'float2': ('data_float_2', 2),
-                'float3': ('data_float_3', 1),
-                'float4': ('data_float_4', 0),
-            }
-            prop_name, empty_labels = float_types.get(parameter.type, ('data_float_4', 0))
-            row.prop(parameter, prop_name, text="")
-            for _ in range(empty_labels):
-                row.label(text="")
+    if not panel:
+        return
+    if i3d_attributes.shader_name == BRAND_COLOR_SHADER_NAME:  # Specific to vehicle shader is "brandColor" template
+        draw_shader_material_brand_color(panel, i3d_attributes)
+
+    column = panel.column(align=False)
+    for param in i3d_attributes.shader_material_parameters:
+        if param.template == SHADER_BRAND_COLOR_TEMPLATE:
+            continue  # Skip brand color template, handled separately
+        _draw_parameter_row(param, column)
 
 
 def draw_shader_material_textures(layout: bpy.types.UILayout, i3d_attributes) -> None:
@@ -441,8 +472,9 @@ def draw_shader_material_textures(layout: bpy.types.UILayout, i3d_attributes) ->
     header.label(text="Shader Textures")
     if panel:
         column = panel.column(align=True)
-        textures = i3d_attributes.shader_material_textures
-        for texture in textures:
+        for texture in i3d_attributes.shader_material_textures:
+            if texture.template == SHADER_BRAND_COLOR_TEMPLATE:
+                continue  # Skip brand color template, handled separately
             placeholder = texture.default_source if texture.default_source else 'Texture not assigned'
             column.row(align=True).prop(texture, 'source', text=texture.name, placeholder=placeholder)
 
@@ -473,18 +505,21 @@ def parse_shader_parameters(parameter: xml_i3d.XML_Element) -> list[ShaderParame
         return default_parsed
 
     param_name = parameter.attrib['name']
+    template = parameter.attrib.get('template', 'default')
     if parameter.attrib.get('arraySize') is not None:
         for child in parameter:
             parameter_list.append(ShaderParameter(
                 name=f"{param_name}{child.attrib.get('index', '')}",
                 type=param_type.value,
-                default_value=_parse_default(child.text)
+                default_value=_parse_default(child.text),
+                template=template
             ))
     else:
         parameter_list.append(ShaderParameter(
             name=param_name,
             type=param_type.value,
-            default_value=_parse_default(parameter.attrib.get('defaultValue'))
+            default_value=_parse_default(parameter.attrib.get('defaultValue')),
+            template=template
         ))
 
     return parameter_list
@@ -492,7 +527,8 @@ def parse_shader_parameters(parameter: xml_i3d.XML_Element) -> list[ShaderParame
 
 def parse_shader_texture(texture: xml_i3d.XML_Element) -> ShaderTexture:
     """Parses a shader texture element and returns a dictionary with texture data."""
-    return ShaderTexture(name=texture.attrib['name'], default_file=texture.attrib.get('defaultFilename', ''))
+    return ShaderTexture(name=texture.attrib['name'], default_file=texture.attrib.get('defaultFilename', ''),
+                         template=texture.attrib.get('template', 'default'))
 
 
 def load_shader(path: Path) -> ShaderMetadata | None:
