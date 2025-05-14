@@ -194,29 +194,17 @@ class Material(Node):
                 self._write_attribute('customShaderVariation', shader_settings.shader_variation_name)
             for parameter in shader_settings.shader_material_parameters:
                 parameter_dict = {'name': parameter.name}
-                match parameter.type:
-                    case shader_picker.ShaderParameter.Type.FLOAT.value:
-                        value = parameter.data_float_1
-                        default_value = parameter.data_float_1_default
-                    case shader_picker.ShaderParameter.Type.FLOAT2.value:
-                        value = parameter.data_float_2
-                        default_value = parameter.data_float_2_default
-                    case shader_picker.ShaderParameter.Type.FLOAT3.value:
-                        value = parameter.data_float_3
-                        default_value = parameter.data_float_3_default
-                    case shader_picker.ShaderParameter.Type.FLOAT4.value:
-                        value = parameter.data_float_4
-                        default_value = parameter.data_float_4_default
-                    case _:
-                        value = []
+                value = parameter.value[:parameter.type]
+                default = parameter.default_value[:parameter.type]
 
-                if isinstance(value, float):
-                    if not math.isclose(value, default_value, abs_tol=0.0000001):
-                        parameter_dict['value'] = '{0:.6f}'.format(value)
+                if parameter.type == 1:
+                    if not math.isclose(value[0], default[0], abs_tol=1e-7):
+                        parameter_dict['value'] = f'{value[0]:.6f}'
                         xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
-                elif not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default_value)):
-                    parameter_dict['value'] = ' '.join(map('{0:.6f}'.format, value))
-                    xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
+                else:
+                    if not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default)):
+                        parameter_dict['value'] = ' '.join(f'{v:.6f}' for v in value)
+                        xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
 
             for texture in shader_settings.shader_material_textures:
                 self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")

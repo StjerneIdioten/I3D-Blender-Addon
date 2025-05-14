@@ -1,6 +1,4 @@
 from __future__ import annotations
-from typing import Literal
-from enum import Enum
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -11,7 +9,7 @@ from bpy.props import (
     PointerProperty,
     EnumProperty,
     FloatVectorProperty,
-    FloatProperty,
+    IntProperty,
     CollectionProperty,
     BoolProperty
 )
@@ -39,14 +37,9 @@ SHADER_BRAND_COLOR_TEMPLATE = 'brandColor'
 
 @dataclass
 class ShaderParameter:
-    class Type(Enum):
-        FLOAT = 'float'
-        FLOAT2 = 'float2'
-        FLOAT3 = 'float3'
-        FLOAT4 = 'float4'
     name: str
-    type: Literal['float', 'float2', 'float3', 'float4']
-    default_value: list[str]
+    type: int
+    default_value: list[float]
     template: str = 'default'
 
 
@@ -77,10 +70,7 @@ def _clone_shader_parameter(param: I3DShaderParameter) -> dict:
     return {
         'name': param.name,
         'type': param.type,
-        'data_float_1': param.data_float_1,
-        'data_float_2': tuple(param.data_float_2),
-        'data_float_3': tuple(param.data_float_3),
-        'data_float_4': tuple(param.data_float_4),
+        'value': tuple(param.value),
     }
 
 
@@ -163,20 +153,8 @@ class ShaderManager:
         new_param.type = parameter.type
         new_param.template = parameter.template
         cached = self.cached_params.get(new_param.name)
-        data = tuple(map(float, parameter.default_value))
-        match parameter.type:
-            case ShaderParameter.Type.FLOAT.value:
-                new_param.data_float_1 = cached['data_float_1'] if cached else data[0]
-                new_param.data_float_1_default = data[0]
-            case ShaderParameter.Type.FLOAT2.value:
-                new_param.data_float_2 = cached['data_float_2'] if cached else data
-                new_param.data_float_2_default = data
-            case ShaderParameter.Type.FLOAT3.value:
-                new_param.data_float_3 = cached['data_float_3'] if cached else data
-                new_param.data_float_3_default = data
-            case ShaderParameter.Type.FLOAT4.value:
-                new_param.data_float_4 = cached['data_float_4'] if cached else data
-                new_param.data_float_4_default = data
+        new_param.value = cached['value'] if cached else parameter.default_value
+        new_param.default_value = parameter.default_value
 
     def add_shader_texture(self, texture: ShaderTexture) -> None:
         new_texture = self.attributes.shader_material_textures.add()
@@ -205,19 +183,10 @@ class I3DRequiredVertexAttribute(bpy.types.PropertyGroup):
 
 @register
 class I3DShaderParameter(bpy.types.PropertyGroup):
-    def shader_type_items(self, _context) -> list[tuple[str, str, str]]:
-        return [(e.value, e.name, '') for e in ShaderParameter.Type]
-
     name: StringProperty(default='Unnamed Attribute')
-    type: EnumProperty(items=shader_type_items)
-    data_float_1: FloatProperty(precision=SHADER_PARAMETER_MAX_DECIMALS)
-    data_float_1_default: FloatProperty(precision=SHADER_PARAMETER_MAX_DECIMALS)
-    data_float_2: FloatVectorProperty(size=2, precision=SHADER_PARAMETER_MAX_DECIMALS)
-    data_float_2_default: FloatVectorProperty(size=2, precision=SHADER_PARAMETER_MAX_DECIMALS)
-    data_float_3: FloatVectorProperty(size=3, precision=SHADER_PARAMETER_MAX_DECIMALS)
-    data_float_3_default: FloatVectorProperty(size=3, precision=SHADER_PARAMETER_MAX_DECIMALS)
-    data_float_4: FloatVectorProperty(size=4, precision=SHADER_PARAMETER_MAX_DECIMALS)
-    data_float_4_default: FloatVectorProperty(size=4, precision=SHADER_PARAMETER_MAX_DECIMALS)
+    type: IntProperty(default=4, min=1, max=4)
+    value: FloatVectorProperty(size=4, precision=SHADER_PARAMETER_MAX_DECIMALS)
+    default_value: FloatVectorProperty(size=4, precision=SHADER_PARAMETER_MAX_DECIMALS)
     template: StringProperty()
 
 
@@ -267,13 +236,15 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     def shader_getter(self):
         return self.get('shader', 0)
 
+    def noop_update(self, _context) -> None:
+        return
+
     shader: EnumProperty(
         name='Shader',
         description='The shader to use for this material',
         default=0,
         items=shader_items_update,
-        options=set(),
-        update=None,
+        update=noop_update,  # Required to ensure depsgraph sync after file load (if material is migrated)
         get=shader_getter,
         set=shader_setter,
     )
@@ -361,10 +332,7 @@ class I3DIO_OT_reset_parameters(bpy.types.Operator):
 
     @staticmethod
     def _set_shader_parameter_defaults(param: I3DShaderParameter) -> None:
-        param.data_float_1 = param.data_float_1_default
-        param.data_float_2 = param.data_float_2_default
-        param.data_float_3 = param.data_float_3_default
-        param.data_float_4 = param.data_float_4_default
+        param.value = param.default_value
 
     def execute(self, context):
         shader_manager = ShaderManager(context.material)
@@ -425,15 +393,9 @@ def _draw_parameter_row(param, column: bpy.types.UILayout) -> None:
     row = column.row(align=True)
     row.label(text=param.name)
     row.operator('i3dio.reset_parameters', text='', icon='FILE_REFRESH').parameter = param.name
-    float_types = {
-        'float': ('data_float_1', 3),
-        'float2': ('data_float_2', 2),
-        'float3': ('data_float_3', 1),
-        'float4': ('data_float_4', 0),
-    }
-    prop_name, empty_labels = float_types.get(param.type, ('data_float_4', 0))
-    row.prop(param, prop_name, text="")
-    for _ in range(empty_labels):
+    for i in range(param.type):
+        row.prop(param, 'value', text="", index=i)
+    for _ in range(4 - param.type):
         row.label(text="")
 
 
@@ -485,25 +447,13 @@ def parse_shader_parameters(parameter: xml_i3d.XML_Element) -> list[ShaderParame
     """Parses a shader parameter element and returns a list of dictionaries with parameter data."""
     parameter_list: list[ShaderParameter] = []
 
-    try:
-        if (param_type := parameter.attrib['type']) in ['float', 'float1']:
-            param_type = ShaderParameter.Type.FLOAT
-        else:
-            param_type = ShaderParameter.Type(param_type)
-        type_length = int(param_type.name[-1]) if param_type.name[-1].isdigit() else 1
-    except ValueError:
-        print(f"Shader Parameter type is unknown! {parameter.attrib.get('type', 'UNKNOWN')}")
-        return parameter_list
+    type_str = parameter.attrib.get('type', 'float4')
+    type_length = {'float': 1, 'float1': 1, 'float2': 2, 'float3': 3, 'float4': 4}.get(type_str, 4)
 
-    def _parse_default(default: str | None) -> list[str]:
-        default_parsed = []
-        if default is not None:
-            default_parsed = default.split()
-            # For some reason, Giants shaders has to specify their default values in terms of float4... Where the extra
-            # parts compared with what the actual type length is, aren't in any way relevant.
-            if len(default_parsed) > type_length:
-                default_parsed = default_parsed[:type_length - 1]
-        default_parsed += ['0'] * (type_length - len(default_parsed))
+    def _parse_default(default: str | None) -> list[float]:
+        default_parsed = [float(x) for x in default.split()] if default else []
+        default_parsed = default_parsed[:type_length]  # Truncate to declared type length
+        default_parsed += [0.0] * (4 - len(default_parsed))  # Pad to 4 floats
         return default_parsed
 
     param_name = parameter.attrib['name']
@@ -512,14 +462,14 @@ def parse_shader_parameters(parameter: xml_i3d.XML_Element) -> list[ShaderParame
         for child in parameter:
             parameter_list.append(ShaderParameter(
                 name=f"{param_name}{child.attrib.get('index', '')}",
-                type=param_type.value,
+                type=type_length,
                 default_value=_parse_default(child.text),
                 template=template
             ))
     else:
         parameter_list.append(ShaderParameter(
             name=param_name,
-            type=param_type.value,
+            type=type_length,
             default_value=_parse_default(parameter.attrib.get('defaultValue')),
             template=template
         ))
@@ -670,25 +620,17 @@ def handle_old_shader_format(file) -> None:
         if (old_parameters := attr.get('shader_parameters')) is not None:
             for old_param in old_parameters:
                 old_name = old_param.get('name', '')
-
                 existing_param = next((p for p in attr.shader_material_parameters if p.name == old_name), None)
-
                 if existing_param is not None:
                     existing_param.name = old_name
-
-                    # Old type is stored as index because it was a enum. Ensure it's within bounds
-                    old_type_index = min(old_param.get('type', 0), 3)
-                    old_type = list(ShaderParameter.Type)[old_type_index].value
-                    existing_param.type = old_type
-
-                    if 'data_float_1' in old_param:
-                        existing_param.data_float_1 = old_param['data_float_1']
-                    elif 'data_float_2' in old_param:
-                        existing_param.data_float_2 = old_param['data_float_2']
-                    elif 'data_float_3' in old_param:
-                        existing_param.data_float_3 = old_param['data_float_3']
-                    elif 'data_float_4' in old_param:
-                        existing_param.data_float_4 = old_param['data_float_4']
+                    key_map = {'data_float_1': 1, 'data_float_2': 2, 'data_float_3': 3, 'data_float_4': 4}
+                    for key, length in key_map.items():
+                        if key in old_param:
+                            data = old_param[key]
+                            values = [float(data)] if isinstance(data, float) else list(map(float, data))
+                            existing_param.value = (values + [0.0] * 4)[:4]
+                            existing_param.type = length
+                            break
                     else:
                         print(f"Unhandled data type for parameter: {old_name}")
             del attr['shader_parameters']
@@ -706,19 +648,20 @@ def handle_old_shader_format(file) -> None:
                     if old_texture_source != existing_texture.default_source:
                         existing_texture.source = old_texture_source
             del attr['shader_textures']
+        bpy.context.view_layer.update()  # Update the view layer to reflect changes
 
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Material.i3d_attributes = PointerProperty(type=I3DMaterialShader)
-    load_post.append(handle_old_shader_format)
     load_post.append(populate_shader_cache_handler)
+    load_post.append(handle_old_shader_format)
 
 
 def unregister():
-    load_post.remove(populate_shader_cache_handler)
     load_post.remove(handle_old_shader_format)
+    load_post.remove(populate_shader_cache_handler)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
     del bpy.types.Material.i3d_attributes
