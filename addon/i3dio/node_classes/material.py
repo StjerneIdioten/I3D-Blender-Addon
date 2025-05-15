@@ -192,12 +192,11 @@ class Material(Node):
 
             if shader_settings.shader_variation_name != shader_picker.SHADER_NO_VARIATION:
                 self._write_attribute('customShaderVariation', shader_settings.shader_variation_name)
-            for parameter in shader_settings.shader_material_parameters:
-                parameter_dict = {'name': parameter.name}
-                value = parameter.value[:parameter.type]
-                default = parameter.default_value[:parameter.type]
-
-                if parameter.type == 1:
+            for pname in shader_settings.shader_material_params.keys():
+                parameter_dict = {'name': pname}
+                value = shader_settings.shader_material_params[pname]
+                default = shader_settings.shader_material_params.id_properties_ui(pname).as_dict().get('default')
+                if len(value) == 1:
                     if not math.isclose(value[0], default[0], abs_tol=1e-7):
                         parameter_dict['value'] = f'{value[0]:.6f}'
                         xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
