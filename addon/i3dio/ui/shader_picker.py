@@ -400,8 +400,8 @@ def _draw_parameter_row(param, column: bpy.types.UILayout) -> None:
 
 
 def draw_shader_material_brand_color(layout: bpy.types.UILayout, i3d_attributes) -> None:
-    if "Farming Simulator 25" not in bpy.context.preferences.addons[base_package].preferences.fs_data_path:
-        return  # Only show brand color for FS25 vehicleShader
+    if not any(SHADER_BRAND_COLOR_TEMPLATE in p.template for p in i3d_attributes.shader_material_parameters):
+        return
     header, panel = layout.panel('shader_material_brand_color', default_closed=False)
     header.label(text="Brand Color")
     if panel:
