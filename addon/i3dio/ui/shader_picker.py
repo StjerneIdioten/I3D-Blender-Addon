@@ -16,7 +16,6 @@ from bpy.app.handlers import (persistent, load_post)
 from .. import xml_i3d
 from .. import __package__ as base_package
 
-classes = []
 
 # A module value to represent what the field shows when a shader is not selected
 SHADER_NO_VARIATION = 'None'
@@ -152,6 +151,9 @@ class ShaderManager:
         self.attributes.required_vertex_attributes.clear()
         for name in required_attributes:
             self.attributes.required_vertex_attributes.add().name = name
+
+
+classes = []
 
 
 def register(cls):
@@ -314,6 +316,15 @@ class I3D_IO_PT_material_shader(Panel):
 
         row = layout.row(align=True)
         col = row.column(align=False)
+
+        # Warn user if old shader properties is detected
+        legacykeys = [k for k in ("source", "variation", "shader_parameters", "shader_textures") if k in i3d_attributes]
+        if legacykeys:
+            box = col.box()
+            box.label(text="Old shader properties detected! Please reassign the shader.", icon='ERROR')
+            box.label(text="Some settings could not be migrated from the previous version.", icon='BLANK1')
+            box.label(text=f"Legacy fields: {', '.join(legacykeys)}", icon='BLANK1')
+
         col.prop(i3d_attributes, 'use_custom_shaders')
         col.prop(i3d_attributes, 'shader', text="Shader")
         col.prop_search(i3d_attributes, 'shader_variation_name', i3d_attributes, 'shader_variations', text="Variation")
@@ -322,11 +333,12 @@ class I3D_IO_PT_material_shader(Panel):
             column = layout.column(align=True)
             column.separator(factor=2.5, type='LINE')
             column.label(text="Required Vertex Attributes:")
+            row = column.row(align=True)
             for attr in i3d_attributes.required_vertex_attributes:
-                column.label(text=attr.name, icon='DOT')
+                row.label(text=attr.name, icon='DOT')
             column.separator(factor=2.5, type='LINE')
 
-        if i3d_attributes.shader_name:
+        if i3d_attributes.shader_name not in (SHADER_DEFAULT, ""):
             draw_shader_group_panels(layout, i3d_attributes)
 
 
@@ -516,25 +528,50 @@ def populate_shader_cache_handler(_dummy) -> None:
     populate_custom_shaders()
 
 
+def _detect_fs_version(path: Path) -> int | None:
+    """Extracts FS version ('19', '22', '25') from the path, if present."""
+    return next((v for v in ("19", "22", "25") if v in path.name or v in str(path)), None)
+
+
+def _is_version_compatible(old_ver: str | None, current_ver: str | None) -> bool:
+    """Check if the old shader version is compatible with the current version.
+    Compatibility rules:
+    - Version 19 and 22 are compatible with 22.
+    - Version 25 is only compatible with 25.
+    """
+    if old_ver == current_ver:
+        return True
+    if current_ver == "22" and old_ver in ("19", "22"):
+        return True
+    return False
+
+
 def _migrate_shader_source(attr, old_shader_path: Path) -> bool:
     old_shader_stem = old_shader_path.stem
+    old_version = _detect_fs_version(old_shader_path)
+    current_version = _detect_fs_version(Path(bpy.context.preferences.addons[base_package].preferences.fs_data_path))
 
     # Check if the shader path matches any of the game shaders
     if any(old_shader_path == s.path for s in SHADERS_GAME.values()):
+        print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through path match")
         attr.shader = old_shader_stem
     elif old_shader_stem in SHADERS_GAME:
+        if not _is_version_compatible(old_version, current_version):
+            print(f"[ShaderUpgrade][WARNING] Shader '{old_shader_stem}' is from FS{old_version}, "
+                  f"but the current set game data path is FS{current_version}.")
+        print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through name match")
         attr.shader = old_shader_stem
     elif old_shader_path.exists():  # We have to assume this is a custom shader
+        print(f"[ShaderUpgrade] Found custom shader: {old_shader_stem} through path match to directory")
         if old_shader_stem not in SHADERS_CUSTOM:
             new_item = bpy.context.scene.i3dio.shader_folders.add()
             new_item.name = old_shader_path.parent.stem
             new_item.path = str(old_shader_path.parent)  # Add folder where the shader is located
         attr.use_custom_shaders = True
         attr.shader = old_shader_stem
-    else:  # No shader found, set to default
-        attr.shader = SHADER_DEFAULT
+    else:  # No shader found
+        print(f"[ShaderUpgrade] No shader found for: {old_shader_stem}")
         return False
-    del attr['source']  # Remove old source
     return True
 
 
@@ -542,9 +579,9 @@ def _migrate_shader_source(attr, old_shader_path: Path) -> bool:
 def handle_old_shader_format(file) -> None:
     print(f"[ShaderUpgrade] Handling old shader format for: {file}")
     # Old -> new property names:
-    # shader -> shader
+    # source -> shader
     # variation -> shader_variation_name
-    # shader_parameters -> shader_material_parames
+    # shader_parameters -> shader_material_params
     # shader_textures -> shader_material_textures
     if not file or not bpy.context.preferences.addons[base_package].preferences.fs_data_path:
         return
@@ -558,23 +595,29 @@ def handle_old_shader_format(file) -> None:
         old_shader_path = Path(bpy.path.abspath(old_source))
         if not _migrate_shader_source(attr, old_shader_path):
             continue  # Shader not found, skip this material
+        del attr['source']  # Remove old source if new shader was found
 
         if (old_variation := attr.get('variation')) is not None and \
                 (old_variations := attr.get('variations')) is not None:
             if 0 <= old_variation < len(old_variations):
                 # Old variation was enum, we need to use the index to get the name through its stored variations
                 old_variation_name = old_variations[old_variation].get('name', SHADER_NO_VARIATION)
+                if old_variation_name not in attr.shader_variations:
+                    print(f"Variation {old_variation_name} not found in shader variations, skipping.")
+                    continue  # Skip if the variation is not in the new list
                 print(f"Setting variation to, {old_variation_name}")
                 attr.shader_variation_name = old_variation_name
             else:
-                print(f"Invalid old variation index: {old_variation}, falling back to default.")
-                attr.shader_variation_name = SHADER_NO_VARIATION
-            del attr['variations']
-            del attr['variation']
+                print(f"Invalid old variation index: {old_variation}, skipping.")
+            del attr['variations']  # Remove variation(s) here for both cases,
+            del attr['variation']   # because if index is invalid there is no use for it anyways
 
         if (old_parameters := attr.get('shader_parameters')) is not None:
             for old_param in old_parameters:
                 old_name = old_param.get('name', '')
+                if old_name not in attr.shader_material_params:
+                    print(f"Parameter {old_name} not found in shader, skipping.")
+                    continue  # Skip parameters that are not in the shader dict
                 key_map = {'data_float_1': 1, 'data_float_2': 2, 'data_float_3': 3, 'data_float_4': 4}
                 values = None
                 for key, length in key_map.items():
@@ -593,7 +636,9 @@ def handle_old_shader_format(file) -> None:
                     attr.shader_material_params[old_name] = values
                 except Exception as e:
                     print(f"Failed to migrate parameter '{old_name}': {e}")
-            del attr['shader_parameters']
+            if all(p.get('name', '') in attr.shader_material_params for p in old_parameters):
+                # If all parameters were found, we can safely remove the old ones
+                del attr['shader_parameters']
 
         if (old_textures := attr.get('shader_textures')) is not None:
             for old_texture in old_textures:
@@ -607,7 +652,9 @@ def handle_old_shader_format(file) -> None:
                     # Only override if the texture source differs from the default
                     if old_texture_source != existing_texture.default_source:
                         existing_texture.source = old_texture_source
-            del attr['shader_textures']
+            if all(any(t.name == tex.get('name', '') for t in attr.shader_material_textures) for tex in old_textures):
+                # If all textures were found, we can safely remove the old ones
+                del attr['shader_textures']
 
 
 def register():
