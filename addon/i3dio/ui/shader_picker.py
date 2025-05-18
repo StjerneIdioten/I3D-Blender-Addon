@@ -534,7 +534,7 @@ def _detect_fs_version(path: Path) -> int | None:
 
 
 def _is_version_compatible(old_ver: str | None, current_ver: str | None) -> bool:
-    """Check if the old shader version is compatible with the current version.
+    """Check if the old shader version is compatible with the current version (only relevant for vehicleShader).
     Compatibility rules:
     - Version 19 and 22 are compatible with 22.
     - Version 25 is only compatible with 25.
@@ -556,9 +556,10 @@ def _migrate_shader_source(attr, old_shader_path: Path) -> bool:
         print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through path match")
         attr.shader = old_shader_stem
     elif old_shader_stem in SHADERS_GAME:
-        if not _is_version_compatible(old_version, current_version):
-            print(f"[ShaderUpgrade][WARNING] Shader '{old_shader_stem}' is from FS{old_version}, "
-                  f"but the current set game data path is FS{current_version}.")
+        if not _is_version_compatible(old_version, current_version) and old_shader_stem == "vehicleShader":
+            # Conversion for vehicleShader from 19/22 to 25 is a more involved process and should be handled separately
+            print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through name match, but not compatible")
+            return False
         print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through name match")
         attr.shader = old_shader_stem
     elif old_shader_path.exists():  # We have to assume this is a custom shader
