@@ -326,7 +326,9 @@ class I3D_IO_PT_material_shader(Panel):
             box.label(text=old_shader_source)
             box.label(text="If you want to convert this shader to new format, run the operator")
 
-        col.prop(i3d_attributes, 'use_custom_shaders')
+        custom_shaders_col = col.column(align=True)
+        custom_shaders_col.enabled = len(context.scene.i3dio.shader_folders) > 0
+        custom_shaders_col.prop(i3d_attributes, 'use_custom_shaders')
         col.prop(i3d_attributes, 'shader', text="Shader")
         col.prop_search(i3d_attributes, 'shader_variation_name', i3d_attributes, 'shader_variations', text="Variation")
 
