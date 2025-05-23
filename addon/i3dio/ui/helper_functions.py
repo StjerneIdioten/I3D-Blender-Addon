@@ -2,6 +2,7 @@
 This module contains various small ui helper functions.
 """
 from __future__ import annotations
+from pathlib import Path
 import bpy
 
 
@@ -90,6 +91,24 @@ def i3d_property(layout, attributes, attribute: str, obj):
     else:
         attrib_row = row.row()
         attrib_row.prop(attributes, attribute)
+
+
+def detect_fs_version(path: Path) -> int | None:
+    """Extracts FS version ('19', '22', '25') from the path, if present."""
+    return next((v for v in ("19", "22", "25") if v in path.name or v in str(path)), None)
+
+
+def is_version_compatible(old_ver: str | None, current_ver: str | None) -> bool:
+    """Check if the old shader version is compatible with the current version (only relevant for vehicleShader).
+    Compatibility rules:
+    - Version 19 and 22 are compatible with 22.
+    - Version 25 is only compatible with 25.
+    """
+    if old_ver == current_ver:
+        return True
+    if current_ver == "22" and old_ver in ("19", "22"):
+        return True
+    return False
 
 
 def register():
