@@ -1,7 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
-import re
 
 import bpy
 from bpy.types import Panel
@@ -14,7 +13,7 @@ from bpy.props import (
 )
 from bpy.app.handlers import (persistent, load_post)
 
-from .helper_functions import detect_fs_version, is_version_compatible
+from .helper_functions import detect_fs_version, is_version_compatible, humanize_template
 from .. import xml_i3d
 from .. import __package__ as base_package
 
@@ -29,9 +28,6 @@ SHADERS_CUSTOM: ShaderDict = {}
 SHADER_ENUM_ITEMS_DEFAULT = (f'{SHADER_DEFAULT}', 'No Shader', 'No Shader Selected')
 SHADER_ENUMS_GAME = [SHADER_ENUM_ITEMS_DEFAULT]
 SHADER_ENUMS_CUSTOM = [SHADER_ENUM_ITEMS_DEFAULT]
-
-BRAND_COLOR_SHADER_NAME = 'vehicleShader'
-SHADER_BRAND_COLOR_TEMPLATE = 'brandColor'
 
 
 @dataclass
@@ -367,11 +363,6 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
         for texture in textures:
             placeholder = texture.default_source if texture.default_source else 'Texture not assigned'
             column.row(align=True).prop(texture, 'source', text=texture.name, placeholder=placeholder)
-
-
-def humanize_template(template: str) -> str:
-    """Converts a template name to a human-readable format."""
-    return re.sub(r'(?<=[a-z0-9])([A-Z])', r' \1', template).title()
 
 
 def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes) -> None:

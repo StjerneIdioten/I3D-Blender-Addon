@@ -3,6 +3,7 @@ This module contains various small ui helper functions.
 """
 from __future__ import annotations
 from pathlib import Path
+import re
 import bpy
 
 
@@ -91,6 +92,11 @@ def i3d_property(layout, attributes, attribute: str, obj):
     else:
         attrib_row = row.row()
         attrib_row.prop(attributes, attribute)
+
+
+def humanize_template(template: str) -> str:
+    """Converts a template name to a human-readable format."""
+    return re.sub(r'(?<=[a-z0-9])([A-Z])', r' \1', template).title()
 
 
 def detect_fs_version(path: Path) -> int | None:
