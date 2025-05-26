@@ -338,16 +338,23 @@ class I3D_IO_PT_material_shader(Panel):
             column.separator(factor=2.5, type='LINE')
 
         if i3d_attributes.shader_name not in (SHADER_DEFAULT, ""):
-            draw_shader_group_panels(layout, i3d_attributes)
+            draw_shader_group_panels(layout, i3d_attributes, context.scene.i3dio_material_templates)
 
 
 def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_label: str, i3d_attributes,
-                            params: list[str], textures: list[I3DShaderTexture]) -> None:
+                            params: list[str], textures: list[I3DShaderTexture],
+                            material_templates: bpy.types.PropertyGroup) -> None:
     if params:
         param_header, param_panel = layout.panel(idname + "_params", default_closed=False)
         param_header.label(text=f"{header_label}Parameters")
         if not param_panel:
             return
+        if idname == "shader_material_brandcolor":
+            tmpl_col = param_panel.column()
+            tmpl_col.use_property_split = True
+            tmpl_col.prop_search(material_templates, 'selected_material_template', material_templates,
+                                 'material_templates')
+            tmpl_col.prop_search(material_templates, 'selected_brand_template', material_templates, 'brand_templates')
         column = param_panel.column(align=False)
         for param in params:
             row = column.row(align=True)
@@ -365,7 +372,8 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
             column.row(align=True).prop(texture, 'source', text=texture.name, placeholder=placeholder)
 
 
-def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes) -> None:
+def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes,
+                             material_templates: bpy.types.PropertyGroup) -> None:
     shader_dict = get_shader_dict(i3d_attributes.use_custom_shaders)
     shader_data = shader_dict.get(i3d_attributes.shader_name)
     lookup = shader_data.param_lookup
@@ -386,7 +394,7 @@ def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes) -> None
         textures = textures_by_template.get(template, [])
         group_label = "" if single_template else humanize_template(template) + " "
         idname = f"shader_material_{template.lower()}"
-        draw_shader_group_panel(layout, idname, group_label, i3d_attributes, params, textures)
+        draw_shader_group_panel(layout, idname, group_label, i3d_attributes, params, textures, material_templates)
 
 
 def parse_shader_parameters(parameter: xml_i3d.XML_Element) -> list[ShaderParameter]:
