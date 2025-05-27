@@ -110,8 +110,6 @@ class MaterialTemplateItem(bpy.types.PropertyGroup):
 
 @register
 class I3DMaterialTemplates(bpy.types.PropertyGroup):
-    selected_material_template: bpy.props.StringProperty(name="Material Template", update=None)
-    selected_brand_template: bpy.props.StringProperty(name="Brand Template", update=None)
     material_templates: bpy.props.CollectionProperty(type=MaterialTemplateItem)
     brand_templates: bpy.props.CollectionProperty(type=BrandTemplateItem)
 
