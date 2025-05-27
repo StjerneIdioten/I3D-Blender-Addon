@@ -401,6 +401,9 @@ def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes,
         textures_by_template.setdefault(texture.template, []).append(texture)
 
     all_templates = set(params_by_template) | set(textures_by_template)
+    all_templates = list(all_templates)
+    priority_template = "brandColor"
+    all_templates = [priority_template] + [t for t in all_templates if t != priority_template]
 
     single_template = len(all_templates) == 1
     for template in all_templates:
