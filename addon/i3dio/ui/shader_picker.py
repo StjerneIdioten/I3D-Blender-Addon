@@ -14,6 +14,7 @@ from bpy.props import (
 from bpy.app.handlers import (persistent, load_post)
 
 from .helper_functions import detect_fs_version, is_version_compatible, humanize_template
+from .material_templates import get_material_template, get_brand_material_template, material_template_to_material
 from .. import xml_i3d
 from .. import __package__ as base_package
 
@@ -265,6 +266,20 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     shader_material_textures: CollectionProperty(type=I3DShaderTexture)
     required_vertex_attributes: CollectionProperty(type=I3DRequiredVertexAttribute)
 
+    def update_material_template(self, _context) -> None:
+        if (template := get_material_template(self.selected_material_template)) is not None:
+            material_template_to_material(self.shader_material_params, self.shader_material_textures, template)
+
+    def update_brand_material_template(self, _context) -> None:
+        if (brand_template := get_brand_material_template(self.selected_brand_template)) is not None:
+            parent = getattr(brand_template, 'parentTemplate', None)
+            if parent:
+                material_template_to_material(self.shader_material_params, self.shader_material_textures, parent)
+            material_template_to_material(self.shader_material_params, self.shader_material_textures, brand_template)
+
+    selected_material_template: bpy.props.StringProperty(name="Material Template", update=update_material_template)
+    selected_brand_template: bpy.props.StringProperty(name="Brand Template", update=update_brand_material_template)
+
     alpha_blending: BoolProperty(
         name='Alpha Blending',
         description='Enable alpha blending for this material',
@@ -352,9 +367,8 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
         if idname == "shader_material_brandcolor":
             tmpl_col = param_panel.column()
             tmpl_col.use_property_split = True
-            tmpl_col.prop_search(material_templates, 'selected_material_template', material_templates,
-                                 'material_templates')
-            tmpl_col.prop_search(material_templates, 'selected_brand_template', material_templates, 'brand_templates')
+            tmpl_col.prop_search(i3d_attributes, 'selected_material_template', material_templates, 'material_templates')
+            tmpl_col.prop_search(i3d_attributes, 'selected_brand_template', material_templates, 'brand_templates')
         column = param_panel.column(align=False)
         for param in params:
             row = column.row(align=True)
