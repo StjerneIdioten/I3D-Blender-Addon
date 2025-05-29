@@ -1,4 +1,5 @@
 from __future__ import annotations
+from collections import defaultdict
 import math
 import bpy
 
@@ -159,17 +160,26 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
         # Would also be nice to move all UVs back into 0-1 range of the "first" "udim" tile, since in the FS25 shader
         # "wetness" will only be applied for meshes from Y 0 and above
         # (which means old colorMats won't have wetness without doing this)"
-        new_materials = {}
+        mat_udim_map = defaultdict(lambda: defaultdict(list))
         for obj in mesh_objects:
             mesh = obj.data
             uv_layer = mesh.uv_layers[0]  # UDIM is always in the first UV layer
-            for poly in mesh.polygons:
-                for loop_index in poly.loop_indices:
-                    u_floor = math.floor(abs(uv_layer.data[loop_index].uv.x))
-                    v_floor = math.floor(abs(uv_layer.data[loop_index].uv.y))
-                    v = uv_layer[loop_index].uv.y
-                    udim_index = (abs(v_floor) * 8 + u_floor + (1 if v < 0 else 0)) * (-1 if v < 0 else 1)
-            pass
+            for mat_slot_idx, mat in enumerate(mesh.materials):
+                if mat is None or getattr(mat, 'shader', None) != "vehicleShader":
+                    continue  # Skip non-vehicleShader materials
+                for poly in mesh.polygons:
+                    if poly.material_index != mat_slot_idx:
+                        continue  # Only process polygons with the current material
+                    # Determine the UDIM index based on UV coordinates
+                    udim_indices = set()
+                    for loop_index in poly.loop_indices:
+                        u, v = uv_layer.data[loop_index].uv
+                        u_idx = int(math.floor(u))
+                        v_idx = int(math.floor(v))
+                        udim_index = v_idx * 8 + u_idx
+                        udim_indices.add(udim_index)
+                    for udim in udim_indices:
+                        mat_udim_map[mat][udim].append((obj, poly.index, list(poly.loop_indices)))
 
         self.report({'INFO'}, "UDIM converted to material template")
         return {'FINISHED'}

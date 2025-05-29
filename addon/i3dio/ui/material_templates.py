@@ -115,6 +115,41 @@ class I3DMaterialTemplates(bpy.types.PropertyGroup):
 
 
 @register
+class I3D_IO_OT_template_search_popup(bpy.types.Operator):
+    bl_idname = "i3dio.template_search_popup"
+    bl_label = "Select Template"
+    bl_description = "Search and apply material templates"
+    bl_options = {'INTERNAL', 'UNDO'}
+    bl_property = "my_enum"
+
+    @classmethod
+    def poll(cls, context):
+        return context.material is not None and context.scene.i3dio_material_templates is not None
+
+    is_brand: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
+
+    def enum_items(self, context):
+        i3dio_mat_tmpl = context.scene.i3dio_material_templates
+        templates = i3dio_mat_tmpl.brand_templates if self.is_brand else i3dio_mat_tmpl.material_templates
+        return [(item.name, item.name, "") for item in templates]
+
+    my_enum: bpy.props.EnumProperty(items=enum_items)
+
+    def execute(self, context):
+        i3d_attr = context.material.i3d_attributes
+        if self.is_brand:
+            i3d_attr.selected_brand_template = self.my_enum
+        else:
+            i3d_attr.selected_material_template = self.my_enum
+        self.report({'INFO'}, f"Set {'brand' if self.is_brand else 'material'} template to: {self.my_enum}")
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        context.window_manager.invoke_search_popup(self)
+        return {'FINISHED'}
+
+
+@register
 class I3D_IO_OT_refresh_material_templates(bpy.types.Operator):
     bl_idname = "i3dio.refresh_material_templates"
     bl_label = "Refresh Material Templates"
