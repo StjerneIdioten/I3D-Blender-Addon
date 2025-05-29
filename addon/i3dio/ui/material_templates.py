@@ -78,6 +78,84 @@ def register(cls):
 
 
 @register
+class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
+    bl_idname = "i3dio.create_material_from_template"
+    bl_label = "Create Material from Template"
+    bl_description = "Create a new material based on a template"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    template_name: bpy.props.StringProperty(default="plasticPaintedShinyBlack", options={'HIDDEN'})
+    assignment_mode: bpy.props.EnumProperty(
+        name="Assignment Mode",
+        description="How to assign the created material",
+        items=[
+            ('SLOT', "Material Slot", "Add to new material slot"),
+            ('ACTIVE_OBJECT', "Active Object", "Assign to the active object"),
+            ('SELECTED_OBJECTS', "Selected Objects", "Assign to all selected objects"),
+            ('SELECTED_MESHES', "Selected Meshes", "Assign material to all selected triangles in selected meshes")
+        ],
+        default='SLOT'
+    )
+
+    def execute(self, context):
+        if not (template := get_template(self.template_name)):
+            self.report({'ERROR'}, f"Template '{self.template_name}' not found.")
+            return {'CANCELLED'}
+        mat_name = f"{template.name}_mat"
+        new_material = bpy.data.materials.get(mat_name)
+        if not new_material:
+            new_material = bpy.data.materials.new(name=mat_name)
+            new_material.use_nodes = True
+            i3d_attrs = new_material.i3d_attributes
+            i3d_attrs.shader = 'vehicleShader'
+            params = i3d_attrs.shader_material_params
+            textures = i3d_attrs.shader_material_textures
+            template_to_material(params, textures, template)
+
+        match self.assignment_mode:
+            case 'SLOT':
+                obj = context.active_object
+                if obj and new_material.name not in [mat.name for mat in obj.data.materials]:
+                    obj.data.materials.append(new_material)
+            case 'ACTIVE_OBJECT':
+                obj = context.active_object
+                if obj:
+                    obj.data.materials.clear()
+                    obj.data.materials.append(new_material)
+            case 'SELECTED_OBJECTS':
+                for obj in context.selected_objects:
+                    if obj.type == 'MESH':
+                        obj.data.materials.clear()
+                        obj.data.materials.append(new_material)
+            case 'SELECTED_MESHES':
+                original_mode = None
+                active_object = context.view_layer.objects.active
+                if active_object and active_object.mode != 'OBJECT' and bpy.ops.object.mode_set.poll():
+                    original_mode = active_object.mode
+                    bpy.ops.object.mode_set(mode='OBJECT')
+
+                selected_meshes = [obj for obj in context.selected_objects if obj.type == 'MESH']
+                if not selected_meshes:
+                    self.report({'ERROR'}, "No selected mesh objects found.")
+                    return {'CANCELLED'}
+                for obj in selected_meshes:
+                    # Ensure the material is present
+                    if new_material.name not in [mat.name for mat in obj.data.materials]:
+                        obj.data.materials.append(new_material)
+                    mat_index = obj.data.materials.find(new_material.name)
+                    for poly in obj.data.polygons:
+                        if poly.select:
+                            poly.material_index = mat_index
+
+                if active_object and original_mode:
+                    if bpy.ops.object.mode_set.poll():
+                        bpy.ops.object.mode_set(mode=original_mode)
+
+        self.report({'INFO'}, f"Created material from template: {template.name}")
+        return {'FINISHED'}
+
+
+@register
 class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     bl_idname = "i3dio.template_search_popup"
     bl_label = "Select Template"
