@@ -4,7 +4,7 @@ from pathlib import Path
 import bpy
 
 from .. import xml_i3d
-from .. import __package__ as base_package
+from .helper_functions import get_fs_data_path
 
 
 MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}
@@ -189,11 +189,10 @@ def parse_brand_material_templates(
 
 @bpy.app.handlers.persistent
 def parse_templates(_dummy) -> None:
-    data_path = bpy.context.preferences.addons[base_package].preferences.fs_data_path
-    if not data_path:
+    if not (data_path := get_fs_data_path(as_path=True)):
         return
-    material_tmpl_path = Path(data_path) / 'shared' / 'detailLibrary' / 'materialTemplates.xml'
-    brand_tmpl_path = Path(data_path) / 'shared' / 'brandMaterialTemplates.xml'
+    material_tmpl_path = data_path / 'shared' / 'detailLibrary' / 'materialTemplates.xml'
+    brand_tmpl_path = data_path / 'shared' / 'brandMaterialTemplates.xml'
     if not material_tmpl_path.exists() or not brand_tmpl_path.exists():
         return
     global MATERIAL_TEMPLATES, BRAND_MATERIAL_TEMPLATES
