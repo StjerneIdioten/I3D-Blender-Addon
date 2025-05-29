@@ -14,7 +14,6 @@ from bpy.props import (
 from bpy.app.handlers import (persistent, load_post)
 
 from .helper_functions import detect_fs_version, is_version_compatible, humanize_template
-from .material_templates import get_material_template, get_brand_material_template, material_template_to_material
 from .. import xml_i3d
 from .. import __package__ as base_package
 
@@ -266,20 +265,6 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     shader_material_textures: CollectionProperty(type=I3DShaderTexture)
     required_vertex_attributes: CollectionProperty(type=I3DRequiredVertexAttribute)
 
-    def update_material_template(self, _context) -> None:
-        if (template := get_material_template(self.selected_material_template)) is not None:
-            material_template_to_material(self.shader_material_params, self.shader_material_textures, template)
-
-    def update_brand_material_template(self, _context) -> None:
-        if (brand_template := get_brand_material_template(self.selected_brand_template)) is not None:
-            parent = getattr(brand_template, 'parentTemplate', None)
-            if parent:
-                material_template_to_material(self.shader_material_params, self.shader_material_textures, parent)
-            material_template_to_material(self.shader_material_params, self.shader_material_textures, brand_template)
-
-    selected_material_template: bpy.props.StringProperty(name="Material Template", update=update_material_template)
-    selected_brand_template: bpy.props.StringProperty(name="Brand Template", update=update_brand_material_template)
-
     alpha_blending: BoolProperty(
         name='Alpha Blending',
         description='Enable alpha blending for this material',
@@ -362,8 +347,12 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
         param_header, param_panel = layout.panel(idname + "_params", default_closed=False)
         param_header.label(text=f"{header_label}Parameters")
         if idname == "shader_material_brandcolor":
-            param_header.operator('i3dio.template_search_popup', text="", icon="EVENT_M", emboss=False).is_brand = False
-            param_header.operator('i3dio.template_search_popup', text="", icon="EVENT_B", emboss=False).is_brand = True
+            op = param_header.operator('i3dio.template_search_popup', text="", icon="EVENT_M", emboss=False)
+            op.is_brand = False
+            op.single_param = ""
+            op = param_header.operator('i3dio.template_search_popup', text="", icon="EVENT_B", emboss=False)
+            op.is_brand = True
+            op.single_param = ""
         if not param_panel:
             return
         param_arrays = [i3d_attributes.shader_material_params[param] for param in params]
@@ -372,10 +361,10 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
         for param in params:
             row = column.row(align=True)
             row.prop(i3d_attributes.shader_material_params, f'["{param}"]')
-
             if idname == "shader_material_brandcolor":
-                row.operator('i3dio.template_search_popup', text="", icon="EVENT_B").is_brand = True
-
+                op = row.operator('i3dio.template_search_popup', text="", icon="EVENT_B")
+                op.is_brand = True
+                op.single_param = param
             for _ in range(max_param_length - len(i3d_attributes.shader_material_params[param])):
                 row.label(text="")  # pad with empty text to make everything align
     if textures:

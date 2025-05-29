@@ -11,24 +11,18 @@ MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}
 BRAND_MATERIAL_TEMPLATES: dict[str, BrandMaterialTemplate] = {}
 
 
-def get_material_template(name: str) -> MaterialTemplate | None:
-    """Get a material template by name."""
-    return MATERIAL_TEMPLATES.get(name)
+def get_template(name: str, brand: bool = False) -> MaterialTemplate | BrandMaterialTemplate | None:
+    """Get a material or brand material template by name."""
+    return (BRAND_MATERIAL_TEMPLATES if brand else MATERIAL_TEMPLATES).get(name)
 
 
-def get_brand_material_template(name: str) -> BrandMaterialTemplate | None:
-    """Get a brand material template by name."""
-    return BRAND_MATERIAL_TEMPLATES.get(name)
-
-
-def material_template_to_material(
+def template_to_material(
     params,
     textures,
     template,
     allowed_params={"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
                     "smoothnessScale", "metalnessScale", "porosity"},
-    allowed_textures={"detailDiffuse", "detailNormal", "detailSpecular"},
-    skip_if_already_set=False
+    allowed_textures={"detailDiffuse", "detailNormal", "detailSpecular"}
 ) -> None:
     """
     Apply parameters/textures from a MaterialTemplate or BrandMaterialTemplate to the given params/textures.
@@ -39,11 +33,9 @@ def material_template_to_material(
         value = getattr(template, prop_name)
         if prop_name in allowed_params:
             if value is None:
-                if not (skip_if_already_set and params.get(prop_name) is not None):
-                    params[prop_name] = params.id_properties_ui(prop_name).as_dict().get('default')
+                params[prop_name] = params.id_properties_ui(prop_name).as_dict().get('default')
             else:
-                if not (skip_if_already_set and params.get(prop_name) is not None):
-                    params[prop_name] = list(value) if isinstance(value, (tuple, list)) else [value]
+                params[prop_name] = list(value) if isinstance(value, (tuple, list)) else [value]
         elif prop_name in allowed_textures:
             tex = next((t for t in textures if t.name == prop_name), None)
             if tex is not None:
@@ -96,67 +88,48 @@ def register(cls):
 
 
 @register
-class BrandTemplateItem(bpy.types.PropertyGroup):
-    name: bpy.props.StringProperty()
-    brand: bpy.props.StringProperty()
-    description: bpy.props.StringProperty()
-
-
-@register
-class MaterialTemplateItem(bpy.types.PropertyGroup):
-    name: bpy.props.StringProperty()
-    category: bpy.props.StringProperty()
-
-
-@register
-class I3DMaterialTemplates(bpy.types.PropertyGroup):
-    material_templates: bpy.props.CollectionProperty(type=MaterialTemplateItem)
-    brand_templates: bpy.props.CollectionProperty(type=BrandTemplateItem)
-
-
-@register
 class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     bl_idname = "i3dio.template_search_popup"
     bl_label = "Select Template"
     bl_description = "Search and apply material templates"
     bl_options = {'INTERNAL', 'UNDO'}
-    bl_property = "my_enum"
+    bl_property = "template_name"
 
     @classmethod
     def poll(cls, context):
-        return context.material is not None and context.scene.i3dio_material_templates is not None
-
-    is_brand: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
+        return context.material
 
     def enum_items(self, context):
-        i3dio_mat_tmpl = context.scene.i3dio_material_templates
-        templates = i3dio_mat_tmpl.brand_templates if self.is_brand else i3dio_mat_tmpl.material_templates
+        global MATERIAL_TEMPLATES, BRAND_MATERIAL_TEMPLATES
+        templates = (BRAND_MATERIAL_TEMPLATES if self.is_brand else MATERIAL_TEMPLATES).values()
         return [(item.name, item.name, "") for item in templates]
 
-    my_enum: bpy.props.EnumProperty(items=enum_items)
+    template_name: bpy.props.EnumProperty(items=enum_items)
+    is_brand: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
+    single_param: bpy.props.StringProperty(default="", options={'HIDDEN'})  # Used inline with single params in UI
 
     def execute(self, context):
-        i3d_attr = context.material.i3d_attributes
-        if self.is_brand:
-            i3d_attr.selected_brand_template = self.my_enum
+        if not (template := get_template(self.template_name, self.is_brand)):
+            self.report({'ERROR'}, f"Template '{self.template_name}' not found.")
+            return {'CANCELLED'}
+        params = context.material.i3d_attributes.shader_material_params
+        textures = context.material.i3d_attributes.shader_material_textures
+
+        if self.single_param:  # Updating single param only, no need for parent inheritance
+            template_to_material(params, textures, template, allowed_params={self.single_param}, allowed_textures=[])
         else:
-            i3d_attr.selected_material_template = self.my_enum
-        self.report({'INFO'}, f"Set {'brand' if self.is_brand else 'material'} template to: {self.my_enum}")
+            if (parent := getattr(template, 'parentTemplate', None)) is not None:
+                template_to_material(params, textures, parent)
+            template_to_material(params, textures, template)
+
+        if context.area:
+            context.area.tag_redraw()
+
+        self.report({'INFO'}, f"Set {'brand' if self.is_brand else 'material'} template to: {self.template_name}")
         return {'FINISHED'}
 
     def invoke(self, context, event):
         context.window_manager.invoke_search_popup(self)
-        return {'FINISHED'}
-
-
-@register
-class I3D_IO_OT_refresh_material_templates(bpy.types.Operator):
-    bl_idname = "i3dio.refresh_material_templates"
-    bl_label = "Refresh Material Templates"
-    bl_description = "Reload material templates from the data path"
-
-    def execute(self, _context):
-        parse_templates(None)
         return {'FINISHED'}
 
 
@@ -167,28 +140,32 @@ def _float(val):
         return None
 
 
+def _parse_template_common(tmpl) -> dict:
+    return dict(
+        name=tmpl.attrib["name"],
+        colorScale=tuple(map(float, tmpl.attrib['colorScale'].split())) if 'colorScale' in tmpl.attrib else None,
+        clearCoatIntensity=_float(tmpl.attrib.get("clearCoatIntensity")),
+        clearCoatSmoothness=_float(tmpl.attrib.get("clearCoatSmoothness")),
+        smoothnessScale=_float(tmpl.attrib.get("smoothnessScale")),
+        metalnessScale=_float(tmpl.attrib.get("metalnessScale")),
+        porosity=_float(tmpl.attrib.get("porosity")),
+    )
+
+
 def parse_material_templates(path: Path) -> dict[str, MaterialTemplate]:
     tree = xml_i3d.parse(path)
     root = tree.getroot()
     templates = {}
     for tmpl in root.findall("template"):
-        color_scale = None
-        if 'colorScale' in tmpl.attrib:
-            color_scale = tuple(map(float, tmpl.attrib['colorScale'].split()))
-        templates[tmpl.attrib["name"]] = MaterialTemplate(
-            name=tmpl.attrib["name"],
+        args = _parse_template_common(tmpl)
+        args.update(
             category=tmpl.attrib.get("category", ""),
             iconPath=path.parent / tmpl.attrib.get("iconFilename", ""),
             detailDiffuse=tmpl.attrib.get("detailDiffuse", ""),
             detailNormal=tmpl.attrib.get("detailNormal", ""),
             detailSpecular=tmpl.attrib.get("detailSpecular", ""),
-            colorScale=color_scale,
-            clearCoatIntensity=_float(tmpl.attrib.get("clearCoatIntensity")),
-            clearCoatSmoothness=_float(tmpl.attrib.get("clearCoatSmoothness")),
-            smoothnessScale=_float(tmpl.attrib.get("smoothnessScale")),
-            metalnessScale=_float(tmpl.attrib.get("metalnessScale")),
-            porosity=_float(tmpl.attrib.get("porosity")),
         )
+        templates[args["name"]] = MaterialTemplate(**args)
     return templates
 
 
@@ -198,23 +175,15 @@ def parse_brand_material_templates(
     root = tree.getroot()
     templates = {}
     for tmpl in root.findall("template"):
-        color_scale = None
-        if 'colorScale' in tmpl.attrib:
-            color_scale = tuple(map(float, tmpl.attrib['colorScale'].split()))
+        args = _parse_template_common(tmpl)
         parent_template = tmpl.attrib.get('parentTemplate')
-        templates[tmpl.attrib["name"]] = BrandMaterialTemplate(
-            name=tmpl.attrib["name"],
+        args.update(
             brand=tmpl.attrib.get("brand"),
             usage=int(tmpl.attrib.get("usage", "0")),
             description=tmpl.attrib.get("description"),
             parentTemplate=all_material_templates.get(parent_template) if parent_template else None,
-            colorScale=color_scale,
-            clearCoatIntensity=_float(tmpl.attrib.get("clearCoatIntensity")),
-            clearCoatSmoothness=_float(tmpl.attrib.get("clearCoatSmoothness")),
-            smoothnessScale=_float(tmpl.attrib.get("smoothnessScale")),
-            metalnessScale=_float(tmpl.attrib.get("metalnessScale")),
-            porosity=_float(tmpl.attrib.get("porosity")),
         )
+        templates[args["name"]] = BrandMaterialTemplate(**args)
     return templates
 
 
@@ -231,27 +200,15 @@ def parse_templates(_dummy) -> None:
     MATERIAL_TEMPLATES = parse_material_templates(material_tmpl_path)
     BRAND_MATERIAL_TEMPLATES = parse_brand_material_templates(brand_tmpl_path, MATERIAL_TEMPLATES)
 
-    for name, template in MATERIAL_TEMPLATES.items():
-        item = bpy.context.scene.i3dio_material_templates.material_templates.add()
-        item.name = name
-        item.category = template.category
-    for name, template in BRAND_MATERIAL_TEMPLATES.items():
-        item = bpy.context.scene.i3dio_material_templates.brand_templates.add()
-        item.name = name
-        item.brand = template.brand if template.brand else ""
-        item.description = template.description if template.description else ""
-
 
 _register, _unregister = bpy.utils.register_classes_factory(classes)
 
 
 def register():
     _register()
-    bpy.types.Scene.i3dio_material_templates = bpy.props.PointerProperty(type=I3DMaterialTemplates)
     bpy.app.handlers.load_post.append(parse_templates)
 
 
 def unregister():
     _unregister()
-    del bpy.types.Scene.i3dio_material_templates
     bpy.app.handlers.load_post.remove(parse_templates)

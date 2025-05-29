@@ -6,6 +6,7 @@ from bpy.types import AddonPreferences
 from bpy.props import (StringProperty, EnumProperty)
 from .. import __package__ as base_package
 from .shader_picker import populate_game_shaders
+from .material_templates import parse_templates
 
 
 def show_popup(title: str, message: str, icon: str = 'ERROR', units: int = 10):
@@ -38,6 +39,7 @@ def update_fs_data_path(self, context: bpy.types.Context) -> None:
     if corrected_path != last_path:  # Prevent infinite recursion by only updating if different
         self.fs_data_path = corrected_path
         populate_game_shaders()
+        parse_templates(None)
 
 
 class I3D_IO_AddonPreferences(AddonPreferences):
