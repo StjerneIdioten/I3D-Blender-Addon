@@ -13,9 +13,8 @@ from bpy.props import (
 )
 from bpy.app.handlers import (persistent, load_post)
 
-from .helper_functions import detect_fs_version, is_version_compatible, humanize_template
+from .helper_functions import get_fs_data_path, detect_fs_version, is_version_compatible, humanize_template
 from .. import xml_i3d
-from .. import __package__ as base_package
 
 
 # A module value to represent what the field shows when a shader is not selected
@@ -66,11 +65,7 @@ def get_shader_dict(use_custom: bool) -> ShaderDict:
 
 
 def _clone_shader_texture(tex: I3DShaderTexture) -> dict:
-    return {
-        'name': tex.name,
-        'source': tex.source,
-        'default_source': tex.default_source,
-    }
+    return {'name': tex.name, 'source': tex.source, 'default_source': tex.default_source}
 
 
 class ShaderManager:
@@ -499,7 +494,7 @@ def populate_game_shaders() -> None:
     global SHADERS_GAME, SHADER_ENUMS_GAME
     SHADERS_GAME.clear()
 
-    shader_dir = Path(bpy.context.preferences.addons[base_package].preferences.fs_data_path) / 'shaders'
+    shader_dir = get_fs_data_path(as_path=True) / 'shaders'
     if shader_dir.exists():
         SHADERS_GAME.update(load_shaders_from_directory(shader_dir))
 
@@ -542,7 +537,7 @@ def _debug_print(message: str) -> None:
 def _migrate_shader_source(i3d_attr, old_shader_path: Path) -> bool:
     old_shader_stem = old_shader_path.stem
     old_version = detect_fs_version(old_shader_path)
-    current_version = detect_fs_version(Path(bpy.context.preferences.addons[base_package].preferences.fs_data_path))
+    current_version = detect_fs_version(get_fs_data_path(as_path=True))
 
     # Check if the shader path matches any of the game shaders
     if any(old_shader_path == s.path for s in SHADERS_GAME.values()):
@@ -577,7 +572,7 @@ def migrate_old_shader_format(file) -> None:
     # variation -> shader_variation_name
     # shader_parameters -> shader_material_params
     # shader_textures -> shader_material_textures
-    if not file or not bpy.context.preferences.addons[base_package].preferences.fs_data_path:
+    if not file or not get_fs_data_path():
         return
 
     for mat in bpy.data.materials:
