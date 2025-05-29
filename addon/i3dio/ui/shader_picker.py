@@ -366,7 +366,8 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
             param_header.operator('i3dio.template_search_popup', text="", icon="EVENT_B", emboss=False).is_brand = True
         if not param_panel:
             return
-
+        param_arrays = [i3d_attributes.shader_material_params[param] for param in params]
+        max_param_length = max((len(arr) for arr in param_arrays), default=4)
         column = param_panel.column(align=False)
         for param in params:
             row = column.row(align=True)
@@ -375,7 +376,7 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
             if idname == "shader_material_brandcolor":
                 row.operator('i3dio.template_search_popup', text="", icon="EVENT_B").is_brand = True
 
-            for _ in range(4 - len(i3d_attributes.shader_material_params[param])):
+            for _ in range(max_param_length - len(i3d_attributes.shader_material_params[param])):
                 row.label(text="")  # pad with empty text to make everything align
     if textures:
         texture_header, texture_panel = layout.panel(idname + "_textures", default_closed=False)
