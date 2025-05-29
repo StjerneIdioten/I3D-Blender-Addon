@@ -16,18 +16,14 @@ def get_template(name: str, brand: bool = False) -> MaterialTemplate | BrandMate
     return (BRAND_MATERIAL_TEMPLATES if brand else MATERIAL_TEMPLATES).get(name)
 
 
-def template_to_material(
-    params,
-    textures,
-    template,
-    allowed_params={"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
-                    "smoothnessScale", "metalnessScale", "porosity"},
-    allowed_textures={"detailDiffuse", "detailNormal", "detailSpecular"}
-) -> None:
+def template_to_material(params, textures, template, allowed_params=None, allowed_textures=None) -> None:
     """
     Apply parameters/textures from a MaterialTemplate or BrandMaterialTemplate to the given params/textures.
     If `skip_if_already_set` is True, only assign if not set.
     """
+    allowed_params = allowed_params or {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
+                                        "smoothnessScale", "metalnessScale", "porosity"}
+    allowed_textures = allowed_textures or {"detailDiffuse", "detailNormal", "detailSpecular"}
     for f in fields(template):
         prop_name = f.name
         value = getattr(template, prop_name)
@@ -44,9 +40,6 @@ def template_to_material(
 
 @dataclass
 class MaterialTemplate:
-    # For "None", use shader defaults (or should we just ignore it?)
-    # value = shader_settings.shader_material_params[pname]
-    # default = shader_settings.shader_material_params.id_properties_ui(pname).as_dict().get('default')
     name: str
     category: str
     iconPath: Path
@@ -63,14 +56,11 @@ class MaterialTemplate:
 
 @dataclass
 class BrandMaterialTemplate:
-    # For "None", use shader defaults (or should we just ignore it?)
-    # value = shader_settings.shader_material_params[pname]
-    # default = shader_settings.shader_material_params.id_properties_ui(pname).as_dict().get('default')
     name: str
-    usage: int  # not sure what this is for
+    usage: int  # NOTE: not sure what this is for
     brand: str | None = None
     description: str | None = None
-    parentTemplate: MaterialTemplate | None = None  # Not sure if using MaterialTemplate is correct?
+    parentTemplate: MaterialTemplate | None = None
     colorScale: tuple[float, float, float] | None = None
     clearCoatIntensity: float | None = None
     clearCoatSmoothness: float | None = None
@@ -99,8 +89,7 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     def poll(cls, context):
         return context.material
 
-    def enum_items(self, context):
-        global MATERIAL_TEMPLATES, BRAND_MATERIAL_TEMPLATES
+    def enum_items(self, _context):
         templates = (BRAND_MATERIAL_TEMPLATES if self.is_brand else MATERIAL_TEMPLATES).values()
         return [(item.name, item.name, "") for item in templates]
 
@@ -133,23 +122,15 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
         return {'FINISHED'}
 
 
-def _float(val):
-    try:
-        return float(val) if val is not None else None
-    except Exception:
-        return None
-
-
-def _parse_template_common(tmpl) -> dict:
-    return dict(
-        name=tmpl.attrib["name"],
-        colorScale=tuple(map(float, tmpl.attrib['colorScale'].split())) if 'colorScale' in tmpl.attrib else None,
-        clearCoatIntensity=_float(tmpl.attrib.get("clearCoatIntensity")),
-        clearCoatSmoothness=_float(tmpl.attrib.get("clearCoatSmoothness")),
-        smoothnessScale=_float(tmpl.attrib.get("smoothnessScale")),
-        metalnessScale=_float(tmpl.attrib.get("metalnessScale")),
-        porosity=_float(tmpl.attrib.get("porosity")),
-    )
+def _parse_template_common(tmpl) -> dict[str, float | tuple[float, float, float] | str]:
+    result = {"name": tmpl.attrib["name"]}
+    for key, value in tmpl.attrib.items():
+        match key:
+            case "colorScale":
+                result[key] = tuple(map(float, value.split()))
+            case "clearCoatIntensity" | "clearCoatSmoothness" | "smoothnessScale" | "metalnessScale" | "porosity":
+                result[key] = float(value) if value is not None else None
+    return result
 
 
 def parse_material_templates(path: Path) -> dict[str, MaterialTemplate]:
