@@ -21,9 +21,11 @@ def template_to_material(params, textures, template, allowed_params=None, allowe
     Apply parameters/textures from a MaterialTemplate or BrandMaterialTemplate to the given params/textures.
     If `skip_if_already_set` is True, only assign if not set.
     """
-    allowed_params = allowed_params or {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
-                                        "smoothnessScale", "metalnessScale", "porosity"}
-    allowed_textures = allowed_textures or {"detailDiffuse", "detailNormal", "detailSpecular"}
+    if allowed_params is None:
+        allowed_params = {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
+                          "smoothnessScale", "metalnessScale", "porosity"}
+    if allowed_textures is None:
+        allowed_textures = {"detailDiffuse", "detailNormal", "detailSpecular"}
     for f in fields(template):
         prop_name = f.name
         value = getattr(template, prop_name)
@@ -159,7 +161,9 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
 class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     bl_idname = "i3dio.template_search_popup"
     bl_label = "Select Template"
-    bl_description = "Search and apply material templates"
+    bl_description = ("Search and apply material templates.\n"
+                      "• Hold Shift: Skip color scale\n"
+                      "• Hold Ctrl: Only apply color scale")
     bl_options = {'INTERNAL', 'UNDO'}
     bl_property = "template_name"
 
@@ -174,8 +178,18 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     template_name: bpy.props.EnumProperty(items=enum_items)
     is_brand: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
     single_param: bpy.props.StringProperty(default="", options={'HIDDEN'})  # Used inline with single params in UI
+    skip_color_scale: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
+    only_color_scale: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
 
     def execute(self, context):
+        allowed_params = {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
+                          "smoothnessScale", "metalnessScale", "porosity"}
+        allowed_textures = {"detailDiffuse", "detailNormal", "detailSpecular"}
+        if self.skip_color_scale:
+            allowed_params.discard("colorScale")
+        if self.only_color_scale:
+            allowed_params = {"colorScale"}
+            allowed_textures = set()
         if not (template := get_template(self.template_name, self.is_brand)):
             self.report({'ERROR'}, f"Template '{self.template_name}' not found.")
             return {'CANCELLED'}
@@ -186,8 +200,8 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
             template_to_material(params, textures, template, allowed_params={self.single_param}, allowed_textures=[])
         else:
             if (parent := getattr(template, 'parentTemplate', None)) is not None:
-                template_to_material(params, textures, parent)
-            template_to_material(params, textures, template)
+                template_to_material(params, textures, parent, allowed_params, allowed_textures)
+            template_to_material(params, textures, template, allowed_params, allowed_textures)
 
         if context.area:
             context.area.tag_redraw()
@@ -196,6 +210,8 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
         return {'FINISHED'}
 
     def invoke(self, context, event):
+        self.skip_color_scale = event.shift  # If shift is pressed, skip colorScale
+        self.only_color_scale = event.ctrl  # If ctrl is pressed, only colorScale
         context.window_manager.invoke_search_popup(self)
         return {'FINISHED'}
 
