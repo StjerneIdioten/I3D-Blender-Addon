@@ -163,7 +163,7 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     bl_label = "Select Template"
     bl_description = ("Search and apply material templates.\n"
                       "• Hold Shift: Skip color scale\n"
-                      "• Hold Ctrl: Only apply color scale")
+                      "• Hold Ctrl: Only apply color scale\n")
     bl_options = {'INTERNAL', 'UNDO'}
     bl_property = "template_name"
 
@@ -185,11 +185,16 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
         allowed_params = {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
                           "smoothnessScale", "metalnessScale", "porosity"}
         allowed_textures = {"detailDiffuse", "detailNormal", "detailSpecular"}
+        info_parts = []
+
         if self.skip_color_scale:
             allowed_params.discard("colorScale")
+            info_parts.append("skipped colorScale")
         if self.only_color_scale:
             allowed_params = {"colorScale"}
             allowed_textures = set()
+            info_parts.append("only applied colorScale")
+
         if not (template := get_template(self.template_name, self.is_brand)):
             self.report({'ERROR'}, f"Template '{self.template_name}' not found.")
             return {'CANCELLED'}
@@ -198,20 +203,27 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
 
         if self.single_param:  # Updating single param only, no need for parent inheritance
             template_to_material(params, textures, template, allowed_params={self.single_param}, allowed_textures=[])
+            info_parts.append(f"Only set param: {self.single_param}")
         else:
             if (parent := getattr(template, 'parentTemplate', None)) is not None:
                 template_to_material(params, textures, parent, allowed_params, allowed_textures)
+                info_parts.append(f"Applied parent template: {parent.name}")
             template_to_material(params, textures, template, allowed_params, allowed_textures)
 
         if context.area:
             context.area.tag_redraw()
 
-        self.report({'INFO'}, f"Set {'brand' if self.is_brand else 'material'} template to: {self.template_name}")
+        info_str = " | ".join(info_parts)
+        msg = f"Set {'brand' if self.is_brand else 'material'} template: {self.template_name}"
+        if info_str:
+            msg = f"{msg} [{info_str}]"
+        self.report({'INFO'}, msg)
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        self.skip_color_scale = event.shift  # If shift is pressed, skip colorScale
-        self.only_color_scale = event.ctrl  # If ctrl is pressed, only colorScale
+        if not self.single_param:
+            self.skip_color_scale = event.shift and not event.ctrl  # If shift is pressed, skip colorScale
+            self.only_color_scale = event.ctrl and not event.shift  # If ctrl is pressed, only colorScale
         context.window_manager.invoke_search_popup(self)
         return {'FINISHED'}
 
