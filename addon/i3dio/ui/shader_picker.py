@@ -299,6 +299,7 @@ class I3D_IO_PT_material_shader(Panel):
         layout.use_property_decorate = False
         material = context.material
         i3d_attributes = material.i3d_attributes
+        layout.operator('i3dio.create_material_from_template_popup')  # Find a more suitable place for this
 
         main_props = layout.column(align=True)
         main_props.use_property_split = True

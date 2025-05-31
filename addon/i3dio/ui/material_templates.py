@@ -4,11 +4,13 @@ from pathlib import Path
 import bpy
 
 from .. import xml_i3d
-from .helper_functions import get_fs_data_path
+from .helper_functions import get_fs_data_path, humanize_template
 
 
 MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}
 BRAND_MATERIAL_TEMPLATES: dict[str, BrandMaterialTemplate] = {}
+
+preview_collections = {}
 
 
 def get_template(name: str, brand: bool = False) -> MaterialTemplate | BrandMaterialTemplate | None:
@@ -79,12 +81,82 @@ def register(cls):
     return cls
 
 
+def group_templates_by_category(templates: list[MaterialTemplate]) -> dict[str, dict[str, list[MaterialTemplate]]]:
+    """Return nested dict: {main_cat: {subcat: [templates]}}"""
+    grouped = {}
+    for tmpl in templates:
+        cats = tmpl.category.split('/') if tmpl.category else ["Uncategorized"]
+        main, *subs = cats
+        d = grouped.setdefault(main, {})
+        subcat = '/'.join(subs) if subs else None
+        d.setdefault(subcat, []).append(tmpl)
+    return grouped
+
+
+@register
+class I3D_IO_OT_create_material_from_template_popup(bpy.types.Operator):
+    bl_idname = "i3dio.create_material_from_template_popup"
+    bl_label = "Create Material from Template"
+    bl_description = "Create a new material based on a template"
+    bl_options = {'INTERNAL', 'UNDO'}
+
+    assignment_mode: bpy.props.EnumProperty(
+        name="Assignment Mode",
+        description="How to assign the created material",
+        items=[
+            ('SLOT', "Material Slot", "Add to new material slot"),
+            ('ACTIVE_OBJECT', "Active Object", "Assign to the active object"),
+            ('SELECTED_OBJECTS', "Selected Objects", "Assign to all selected objects"),
+            ('SELECTED_MESHES', "Selected Meshes", "Assign material to all selected triangles in selected meshes")
+        ],
+        default='SLOT'
+    )
+
+    def draw(self, _context):
+        layout = self.layout
+        box = layout.box()
+        box.label(text="Choose how the material will be assigned to objects:")
+        box.row().prop(self, "assignment_mode", expand=True)
+
+        grouped = group_templates_by_category(MATERIAL_TEMPLATES.values())
+        for main_cat, subdict in grouped.items():
+            header, main_panel = layout.panel(f"cat_{main_cat}", default_closed=False)
+            header.label(text=humanize_template(main_cat), icon='FILE_FOLDER')
+            if not main_panel:
+                continue
+            for subcat, templates in sorted(subdict.items()):
+                if subcat:
+                    subheader, subpanel = main_panel.panel(f"subcat_{main_cat}_{subcat}", default_closed=True)
+                    subheader.label(text=f"{humanize_template(subcat)}", icon='DOT')
+                    if not subpanel:
+                        continue
+                    target_layout = subpanel
+                else:
+                    target_layout = main_panel
+
+                grid = target_layout.grid_flow(row_major=True, columns=5, even_columns=True, even_rows=True)
+                for template in sorted(templates, key=lambda t: t.name.lower()):
+                    cell = grid.column().box()
+                    icon_id = preview_collections['material_templates'].get(template.iconPath.stem).icon_id
+                    cell.template_icon(icon_id, scale=8.0)
+                    op = cell.operator("i3dio.create_material_from_template", text=humanize_template(template.name))
+                    op.template_name = template.name
+                    op.assignment_mode = self.assignment_mode
+        layout.row(align=True).template_popup_confirm("", text="", cancel_text="Close")
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+    def invoke(self, context: bpy.types.Context, _event):
+        return context.window_manager.invoke_props_dialog(self, width=800)
+
+
 @register
 class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
     bl_idname = "i3dio.create_material_from_template"
     bl_label = "Create Material from Template"
     bl_description = "Create a new material based on a template"
-    bl_options = {'REGISTER', 'UNDO'}
+    bl_options = {'INTERNAL', 'UNDO'}
 
     template_name: bpy.props.StringProperty(default="plasticPaintedShinyBlack", options={'HIDDEN'})
     assignment_mode: bpy.props.EnumProperty(
@@ -274,6 +346,17 @@ def parse_brand_material_templates(
     return templates
 
 
+def generate_template_previews():
+    """Generate previews for all material templates."""
+    if not (data_path := get_fs_data_path(as_path=True)):
+        return
+    pcoll = bpy.utils.previews.new()
+    template_icons_dir = data_path / 'shared' / 'detailLibrary' / 'icons'
+    for icon_path in sorted(template_icons_dir.glob("*.png")):
+        pcoll.load(icon_path.stem, str(icon_path), 'IMAGE')
+    preview_collections['material_templates'] = pcoll
+
+
 @bpy.app.handlers.persistent
 def parse_templates(_dummy) -> None:
     if not (data_path := get_fs_data_path(as_path=True)):
@@ -293,8 +376,12 @@ _register, _unregister = bpy.utils.register_classes_factory(classes)
 def register():
     _register()
     bpy.app.handlers.load_post.append(parse_templates)
+    generate_template_previews()
 
 
 def unregister():
     _unregister()
     bpy.app.handlers.load_post.remove(parse_templates)
+    for pcoll in preview_collections.values():
+        bpy.utils.previews.remove(pcoll)
+    preview_collections.clear()
