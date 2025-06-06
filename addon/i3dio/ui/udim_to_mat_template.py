@@ -209,8 +209,6 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                                 mat_face_map[
                                     (mat, f"colorMat{colormat_slot}",
                                      template_idx)][obj].append((poly.index, list(poly.loop_indices)))
-                        else:
-                            print(f"WARNING: Missing or bad {param_name} in {mat.name}")
                     else:
                         mat_face_map[(mat, None, udim)][obj].append((poly.index, list(poly.loop_indices)))
 
