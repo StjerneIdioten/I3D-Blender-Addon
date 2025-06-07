@@ -12,42 +12,47 @@ from bpy.props import (
 )
 from bpy.app.handlers import (persistent, load_post)
 
-from .shader_parser import (get_shader_dict, ShaderMetadata, ShaderParameter, ShaderTexture)
+from .shader_parser import (get_shader_dict, ShaderParameter, ShaderTexture)
 from .helper_functions import (get_fs_data_path, detect_fs_version, is_version_compatible, humanize_template)
 
 
-SHADER_NO_VARIATION = 'None'
-SHADER_PARAMETER_MAX_DECIMALS = 3  # 0-6 per blender properties documentation
 SHADER_DEFAULT = ''
+SHADER_PARAMETER_MAX_DECIMALS = 3  # 0-6 per blender properties documentation
 
 
 def _clone_shader_texture(tex: I3DShaderTexture) -> dict:
-    return {'name': tex.name, 'source': tex.source, 'default_source': tex.default_source}
+    return {k: getattr(tex, k) for k in ('name', 'source', 'default_source')}
 
 
 class ShaderManager:
+    """Manages synchronization of material attributes and UI with parsed shader data."""
     def __init__(self, material: bpy.types.Material) -> None:
         self.attributes = material.i3d_attributes
         self.shader_dict = get_shader_dict(self.attributes.use_custom_shaders)
         self.dynamic_params = self.attributes.shader_material_params
         self.cached_textures = {t.name: _clone_shader_texture(t) for t in self.attributes.shader_material_textures}
+        self.shader = self.shader_dict.get(self.attributes.shader_name, None)
 
     def clear_shader_data(self, clear_all: bool = False) -> None:
         self.attributes.shader_material_textures.clear()
         self.attributes.required_vertex_attributes.clear()
         if clear_all:
             self._cleanup_unused_params(set())  # When clearing all, remove all params
+            self.attributes.shader_variation_name = SHADER_DEFAULT
             self.attributes.shader_variations.clear()
 
-    def _add_shader_groups(self, shader: ShaderMetadata, group_names: list[str]) -> set[str]:
+    def _add_shader_groups(self, group_names: list[str]) -> set[str]:
         """Adds parameters and textures from the specified groups. Returns used param names."""
         used_params = set()
         for group in group_names:
-            for param in shader.parameters.get(group, []):
+            for param in self.shader.parameters.get(group, []):
                 self.add_shader_parameter(param)
                 used_params.add(param.name)
-            for texture in shader.textures.get(group, []):
+            for texture in self.shader.textures.get(group, []):
                 self.add_shader_texture(texture)
+        for attr_name, attr_group in self.shader.vertex_attributes.items():
+            if attr_group in group_names:
+                self.attributes.required_vertex_attributes.add().name = attr_name
         return used_params
 
     def _cleanup_unused_params(self, used_params: set[str]) -> None:
@@ -56,51 +61,45 @@ class ShaderManager:
             if param not in used_params:
                 del self.dynamic_params[param]
 
-    def update_shader(self, shader_name: str) -> None:
+    def update_shader(self) -> None:
         self.clear_shader_data(clear_all=True)
-        self.attributes.shader_name = shader_name
-        self.attributes.shader_variations.add().name = SHADER_NO_VARIATION
-        self.attributes.shader_variation_name = SHADER_NO_VARIATION
-
-        if shader_name == SHADER_DEFAULT or not (shader := self.shader_dict.get(shader_name)):
+        attr = self.attributes
+        if not self.shader:
+            attr.shader_name = SHADER_DEFAULT  # Set to default to prevent errors in panels
             return
+        attr.shader_game_version = "" if attr.use_custom_shaders else detect_fs_version(self.shader.path) or ""
 
-        for variation in shader.variations:  # Add all variations to the collection
-            self.attributes.shader_variations.add().name = variation
-        self._add_shader_groups(shader, ['base'])  # Always add the base group (default for all shaders)
-        # No need to cleanup for new shader, dynamic_params will always be empty before
+        for variation in self.shader.variations:  # Add all variations to the collection
+            attr.shader_variations.add().name = variation
+        self._add_shader_groups(['base'])  # Always add the base group (default for all shaders)
 
-    def update_variation(self, shader_name: str, shader_variation_name: str) -> None:
-        if shader_name == SHADER_DEFAULT or not (shader := self.shader_dict.get(shader_name)):
-            return
+    def update_variation(self, shader_variation_name: str) -> None:
         self.clear_shader_data()
-        groups = shader.variations.get(shader_variation_name) or ['base']
-        used_params = self._add_shader_groups(shader, groups)
+        if not self.shader:
+            self.attributes.shader_variation_name = SHADER_DEFAULT
+            return
+        groups = self.shader.variations.get(shader_variation_name) or ['base']
+        used_params = self._add_shader_groups(groups)
         self._cleanup_unused_params(used_params)
-        self.set_vertex_attributes(shader, groups)
 
     def add_shader_parameter(self, parameter: ShaderParameter) -> None:
-        if parameter.name in self.dynamic_params:
-            return  # Preserve the parameter value when switching shader variations
-        self.dynamic_params[parameter.name] = parameter.default_value
-        ui = self.dynamic_params.id_properties_ui(parameter.name)
-        ui.clear()
-        ui.update(default=parameter.default_value, min=parameter.min_value,
-                  max=parameter.max_value, description=parameter.description)
+        if parameter.name not in self.dynamic_params:  # Preserve existing param value when switching shader variations
+            self.dynamic_params[parameter.name] = parameter.default_value
+            ui = self.dynamic_params.id_properties_ui(parameter.name)
+            ui.clear()
+            ui.update(default=parameter.default_value, min=parameter.min_value,
+                      max=parameter.max_value, description=parameter.description)
 
     def add_shader_texture(self, texture: ShaderTexture) -> None:
         new_texture = self.attributes.shader_material_textures.add()
         new_texture.name = texture.name
-        new_texture.default_source = texture.default_file
         new_texture.template = texture.template
-        if (cached := self.cached_textures.get(new_texture.name)) and cached['source'] != new_texture.default_source:
+        if cached := self.cached_textures.get(texture.name):
             new_texture.source = cached['source']
-
-    def set_vertex_attributes(self, shader: ShaderMetadata, groups: list[str]) -> None:
-        required_attributes = {name for name, group in shader.vertex_attributes.items() if group in groups}
-        self.attributes.required_vertex_attributes.clear()
-        for name in required_attributes:
-            self.attributes.required_vertex_attributes.add().name = name
+            new_texture.default_source = cached['default_source']
+        else:
+            new_texture.source = texture.default_file
+            new_texture.default_source = texture.default_file
 
 
 classes = []
@@ -119,49 +118,44 @@ class I3DRequiredVertexAttribute(bpy.types.PropertyGroup):
 @register
 class I3DShaderTexture(bpy.types.PropertyGroup):
     name: StringProperty(default='Unnamed Texture')
-    source: StringProperty(
-        name='Texture source',
-        description='Path to the texture',
-        subtype='FILE_PATH',
-        default=''
-    )
+    source: StringProperty(name='Texture source', description='Path to the texture', default='', subtype='FILE_PATH')
     default_source: StringProperty()
     template: StringProperty()
 
 
 @register
 class I3DShaderDynamicParams(bpy.types.PropertyGroup):
-    # Shader parameter system inspired by Blender OSL node/camera dynamic property design.
-    # See: Cycles OSL implementation for similar dynamic, per-shader, per-property metadata-driven UI.
+    """Dynamic container for shader parameter values (populated at runtime via id_properties)."""
     pass
 
 
 @register
 class I3DShaderVariation(bpy.types.PropertyGroup):
-    name: StringProperty(default=SHADER_NO_VARIATION)
+    name: StringProperty(default=SHADER_DEFAULT)
 
 
 @register
 class I3DMaterialShader(bpy.types.PropertyGroup):
-    def custom_shaders_update(self, _context) -> None:
+    shader_game_version: StringProperty(options={'HIDDEN'})  # Used for migrating shaders between game versions
+
+    def _custom_shaders_update(self, _context) -> None:
         self['shader_name'] = SHADER_DEFAULT
-        ShaderManager(self.id_data).update_shader(SHADER_DEFAULT)
+        ShaderManager(self.id_data).update_shader()
 
     use_custom_shaders: BoolProperty(
         name='Use Custom Shaders',
         description='Enable to use custom shaders instead of game shaders',
         default=False,
-        update=custom_shaders_update
+        update=_custom_shaders_update
     )
 
     def _shader_name_getter(self) -> str:
-        return self.get('shader_name', "")
+        return self.get('shader_name', SHADER_DEFAULT)
 
     def _shader_name_setter(self, shader_name: str) -> None:
-        existing_shader = self.get('shader_name', SHADER_DEFAULT)
-        if existing_shader != shader_name:
+        if shader_name != self.get('shader_name', SHADER_DEFAULT):
             self['shader_name'] = shader_name
-            ShaderManager(self.id_data).update_shader(shader_name)
+            ShaderManager(self.id_data).update_shader()
 
     def _shader_name_search(self, _context, _search: str) -> list[str]:
         shader_dict = get_shader_dict(self.use_custom_shaders)
@@ -175,31 +169,28 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         search=_shader_name_search
     )
 
-    # Variations
-    def variation_setter(self, variation: str) -> None:
-        shader_name = self.get('shader_name', SHADER_DEFAULT)
-        if shader_name == SHADER_DEFAULT:  # If no shader is selected, reset variation safely
-            if self.get('shader_variation_name', '') != SHADER_NO_VARIATION:
-                self['shader_variation_name'] = SHADER_NO_VARIATION
-            return
-        if not variation:  # Convert empty variation to default
-            variation = SHADER_NO_VARIATION
-        # Prevent recursion when setting the same variation
-        if self.get('shader_variation_name', SHADER_NO_VARIATION) != variation:
-            self['shader_variation_name'] = variation
-            ShaderManager(self.id_data).update_variation(shader_name, variation)
+    def _variation_getter(self) -> str:
+        return self.get('shader_variation_name', SHADER_DEFAULT)
 
-    def variation_getter(self) -> str:
-        if not len(self.shader_variations):
-            return ""  # No variations available, return empty string to avoid red field in prop search
-        return self.get('shader_variation_name', SHADER_NO_VARIATION)
+    def _variation_setter(self, variation_name: str) -> None:
+        if variation_name == self.get('shader_variation_name', SHADER_DEFAULT):
+            return  # No change, return to avoid RecursionError
+        if variation_name in [v.name for v in self.shader_variations] or variation_name == SHADER_DEFAULT:
+            self['shader_variation_name'] = variation_name
+            ShaderManager(self.id_data).update_variation(variation_name)
+            return
+        self['shader_variation_name'] = SHADER_DEFAULT
+        ShaderManager(self.id_data).update_variation(SHADER_DEFAULT)
+
+    def _shader_variation_name_search(self, _context, _search: str) -> list[str]:
+        return [variation.name for variation in self.shader_variations]
 
     shader_variation_name: StringProperty(
         name="Variation",
         description="The selected variation for the current shader",
-        default=SHADER_NO_VARIATION,
-        get=variation_getter,
-        set=variation_setter
+        get=_variation_getter,
+        set=_variation_setter,
+        search=_shader_variation_name_search
     )
     shader_variations: CollectionProperty(type=I3DShaderVariation)
 
@@ -271,7 +262,9 @@ class I3D_IO_PT_material_shader(Panel):
         row = row.row(align=True)
         row.enabled = any(folder.path for folder in context.scene.i3dio.custom_shader_folders)
         row.prop(i3d_attributes, 'use_custom_shaders', text="", icon='EVENT_C')
-        col.prop_search(i3d_attributes, 'shader_variation_name', i3d_attributes, 'shader_variations')
+        col = col.column(align=True)
+        col.enabled = i3d_attributes.shader_name != SHADER_DEFAULT
+        col.prop(i3d_attributes, 'shader_variation_name', placeholder="None", icon='EVENT_V')
 
         if i3d_attributes.required_vertex_attributes:
             column = layout.column(align=True)
@@ -400,7 +393,7 @@ def migrate_old_shader_format(file) -> None:
                 (old_variations := i3d_attr.get('variations')) is not None:
             if 0 <= old_variation < len(old_variations):
                 # Old variation was enum, we need to use the index to get the name through its stored variations
-                old_variation_name = old_variations[old_variation].get('name', SHADER_NO_VARIATION)
+                old_variation_name = old_variations[old_variation].get('name', SHADER_DEFAULT)
                 if old_variation_name not in i3d_attr.shader_variations:
                     _debug_print(f"Variation {old_variation_name} not found in shader variations, skipping.")
                     continue  # Skip if the variation is not in the new list

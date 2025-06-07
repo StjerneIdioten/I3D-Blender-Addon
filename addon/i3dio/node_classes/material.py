@@ -190,7 +190,7 @@ class Material(Node):
                 params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
                 xml_i3d.SubElement(self.element, 'Reflectionmap', params)
 
-            if shader_settings.shader_variation_name != shader_picker.SHADER_NO_VARIATION:
+            if shader_settings.shader_variation_name != shader_picker.SHADER_DEFAULT:
                 self._write_attribute('customShaderVariation', shader_settings.shader_variation_name)
             for pname in shader_settings.shader_material_params.keys():
                 parameter_dict = {'name': pname}
