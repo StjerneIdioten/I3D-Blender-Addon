@@ -149,7 +149,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
 
     use_custom_shaders: BoolProperty(
         name='Use Custom Shaders',
-        description='Use a custom shaders instead of the game shaders',
+        description='Enable to use custom shaders instead of game shaders',
         default=False,
         update=custom_shaders_update
     )
@@ -264,13 +264,13 @@ class I3D_IO_PT_material_shader(Panel):
             box.label(text=old_shader_source)
             box.label(text="If you want to convert this shader to new format, run the operator")
 
-        custom_shaders_col = col.column(align=True)
-        custom_shaders_col.enabled = len(context.scene.i3dio.custom_shaders)
-        custom_shaders_col.prop(i3d_attributes, 'use_custom_shaders')
-
         is_shader_default = i3d_attributes.shader_name == SHADER_DEFAULT
         shader_icon = 'FILE_BLANK' if is_shader_default else 'FILE'
-        col.prop(i3d_attributes, 'shader_name', placeholder="No Shader", icon=shader_icon)
+        row = col.row(align=True)
+        row.prop(i3d_attributes, 'shader_name', placeholder="No Shader", icon=shader_icon)
+        row = row.row(align=True)
+        row.enabled = any(folder.path for folder in context.scene.i3dio.custom_shader_folders)
+        row.prop(i3d_attributes, 'use_custom_shaders', text="", icon='EVENT_C')
         col.prop_search(i3d_attributes, 'shader_variation_name', i3d_attributes, 'shader_variations')
 
         if i3d_attributes.required_vertex_attributes:

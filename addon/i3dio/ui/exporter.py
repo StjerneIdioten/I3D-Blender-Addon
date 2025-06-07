@@ -36,12 +36,6 @@ def register(cls):
 
 
 @register
-class I3DShaderEntry(bpy.types.PropertyGroup):
-    name: StringProperty(options={'HIDDEN'})
-    path: StringProperty(options={'HIDDEN'})
-
-
-@register
 class I3DShaderFolderEntry(bpy.types.PropertyGroup):
     name: StringProperty(
         name="Name",
@@ -50,7 +44,7 @@ class I3DShaderFolderEntry(bpy.types.PropertyGroup):
     )
 
     def update_path(self, _context):
-        from .shader_picker import populate_custom_shaders
+        from .shader_parser import populate_custom_shaders
         populate_custom_shaders()
 
     path: StringProperty(
@@ -72,9 +66,6 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         subtype='FILE_PATH',
         default=''
     )
-
-    game_shaders: CollectionProperty(type=I3DShaderEntry)
-    custom_shaders: CollectionProperty(type=I3DShaderEntry)
 
     custom_shader_folders: CollectionProperty(
         type=I3DShaderFolderEntry,

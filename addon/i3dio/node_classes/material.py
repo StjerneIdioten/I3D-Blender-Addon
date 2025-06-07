@@ -180,13 +180,13 @@ class Material(Node):
 
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes
-        if shader_settings.shader != shader_picker.SHADER_DEFAULT:
+        if shader_settings.shader_name != shader_picker.SHADER_DEFAULT:
             shaders = shader_parser.get_shader_dict(shader_settings.use_custom_shaders)
-            shader_path = str(shaders[shader_settings.shader].path)
+            shader_path = str(shaders[shader_settings.shader_name].path)
             shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
 
-            if shader_settings.shader == "mirrorShader":
+            if shader_settings.shader_name == "mirrorShader":
                 params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
                 xml_i3d.SubElement(self.element, 'Reflectionmap', params)
 

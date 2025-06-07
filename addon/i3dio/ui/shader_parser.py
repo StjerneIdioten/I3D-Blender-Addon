@@ -156,15 +156,6 @@ def populate_game_shaders() -> None:
     shader_dir = get_fs_data_path(as_path=True) / 'shaders'
     if shader_dir.exists():
         SHADERS_GAME.update(load_shaders_from_directory(shader_dir))
-
-    scene = bpy.context.scene
-    game_shaders = scene.i3dio.game_shaders
-    game_shaders.clear()
-    for shader in SHADERS_GAME.values():
-        item = game_shaders.add()
-        item.name = shader.path.stem
-        item.path = str(shader.path)
-
     print(f"Loaded {len(SHADERS_GAME)} game shaders")
 
 
@@ -182,13 +173,6 @@ def populate_custom_shaders() -> None:
                     print(f"[Custom Shader] Folder does not exist: {entry.path}")
     except Exception as e:
         print("Error reading custom shader folders:", e)
-
-    custom_shaders = bpy.context.scene.i3dio.custom_shaders
-    custom_shaders.clear()
-    for shader in SHADERS_CUSTOM.values():
-        item = custom_shaders.add()
-        item.name = shader.path.stem
-        item.path = str(shader.path)
     print(f"Loaded {len(SHADERS_CUSTOM)} custom shaders")
 
 
