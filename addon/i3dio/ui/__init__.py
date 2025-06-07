@@ -9,6 +9,7 @@ if "bpy" in locals():
         'object',
         'mesh',
         'light',
+        'shader_parser',
         'shader_picker',
         'user_attributes',
         'udim_picker'
@@ -19,4 +20,4 @@ if "bpy" in locals():
             importlib.reload(locals()[module_name])
 
 from . import (helper_functions, addon_preferences, exporter, bit_mask_editor, object, presets, user_attributes, mesh,
-               light, shader_picker, udim_picker)
+               light, shader_parser, shader_picker, udim_picker)

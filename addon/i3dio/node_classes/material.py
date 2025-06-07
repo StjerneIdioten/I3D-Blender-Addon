@@ -4,7 +4,7 @@ import mathutils
 from dataclasses import dataclass
 from .. import utility, xml_i3d
 from ..i3d import I3D
-from ..ui import shader_picker
+from ..ui import shader_picker, shader_parser
 from .node import Node
 
 
@@ -181,7 +181,7 @@ class Material(Node):
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes
         if shader_settings.shader != shader_picker.SHADER_DEFAULT:
-            shaders = shader_picker.get_shader_dict(shader_settings.use_custom_shaders)
+            shaders = shader_parser.get_shader_dict(shader_settings.use_custom_shaders)
             shader_path = str(shaders[shader_settings.shader].path)
             shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
