@@ -108,7 +108,7 @@ def humanize_template(template: str) -> str:
     return re.sub(r'(?<=[a-z0-9])([A-Z])', r' \1', template).title()
 
 
-def detect_fs_version(path: Path) -> int | None:
+def detect_fs_version(path: Path) -> str | None:
     """Extracts FS version ('19', '22', '25') from the path, if present."""
     return next((v for v in ("19", "22", "25") if v in path.name or v in str(path)), None)
 
