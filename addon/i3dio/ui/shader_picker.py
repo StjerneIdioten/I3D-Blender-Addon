@@ -18,7 +18,6 @@ from .helper_functions import (detect_fs_version, is_version_compatible, humaniz
 
 
 SHADER_DEFAULT = ''
-SHADER_PARAMETER_MAX_DECIMALS = 3  # 0-6 per blender properties documentation
 
 
 def _clone_shader_texture(tex: I3DShaderTexture) -> dict:
