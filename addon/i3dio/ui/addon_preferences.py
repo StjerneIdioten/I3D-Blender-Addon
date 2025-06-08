@@ -5,7 +5,7 @@ import bpy
 from bpy.types import AddonPreferences
 from bpy.props import (StringProperty, EnumProperty)
 from .. import __package__ as base_package
-from .shader_picker import populate_game_shaders
+from .shader_parser import populate_game_shaders
 from .material_templates import parse_templates
 
 

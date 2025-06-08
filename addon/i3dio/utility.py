@@ -61,7 +61,7 @@ def as_fs_relative_path(filepath: str) -> str:
     filepath_clean = Path(bpy.path.abspath(filepath)).resolve(strict=False)
     logger.debug(f"Cleaned filepath: {filepath_clean}")
 
-    fs_data_pref = bpy.context.preferences.addons[__package__].preferences.fs_data_path
+    fs_data_pref = get_fs_data_path()
     if not fs_data_pref:
         logger.warning("No FS data path set in the addon preferences")
         return filepath_clean.as_posix()
@@ -81,10 +81,22 @@ def as_fs_relative_path(filepath: str) -> str:
 def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderObject]:
     return sorted(objects, key=lambda x: x.name)
 
+
 """
 Blenders outliner does not follow a stricly lexographical ordering, but rather what is called a "natural" ordering.
-This function implements the same ordering as per https://github.com/blender/blender/blob/b0e7a6db56caf6669b6fade1622710d70b96483e/source/blender/blenlib/intern/string.c#L727,
+This function implements the same ordering as per:
+https://github.com/blender/blender/blob/b0e7a6db56caf6669b6fade1622710d70b96483e/source/blender/blenlib/intern/string.c#L727,
 with the use of a regex as detailed in this answer on stackoverflow https://stackoverflow.com/a/16090640
 """
+
+
 def sort_blender_objects_by_outliner_ordering(objects: List[BlenderObject]) -> List[BlenderObject]:
     return sorted(objects, key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split('(\d+)', s.name)])
+
+
+def get_fs_data_path(as_path: bool = False) -> str | Path:
+    """Returns the path to the Farming Simulator data directory."""
+    fs_data_path = bpy.context.preferences.addons[__package__].preferences.fs_data_path
+    if as_path:
+        return Path(fs_data_path)
+    return fs_data_path

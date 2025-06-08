@@ -95,20 +95,12 @@ def i3d_property(layout, attributes, attribute: str, obj):
         attrib_row.prop(attributes, attribute)
 
 
-def get_fs_data_path(as_path: bool = False) -> str | Path:
-    """Returns the path to the Farming Simulator data directory."""
-    fs_data_path = bpy.context.preferences.addons[base_package].preferences.fs_data_path
-    if as_path:
-        return Path(fs_data_path)
-    return fs_data_path
-
-
 def humanize_template(template: str) -> str:
     """Converts a template name to a human-readable format."""
     return re.sub(r'(?<=[a-z0-9])([A-Z])', r' \1', template).title()
 
 
-def detect_fs_version(path: Path) -> int | None:
+def detect_fs_version(path: Path) -> str | None:
     """Extracts FS version ('19', '22', '25') from the path, if present."""
     return next((v for v in ("19", "22", "25") if v in path.name or v in str(path)), None)
 

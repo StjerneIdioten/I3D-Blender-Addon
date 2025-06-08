@@ -44,7 +44,7 @@ class I3DShaderFolderEntry(bpy.types.PropertyGroup):
     )
 
     def update_path(self, _context):
-        from .shader_picker import populate_custom_shaders
+        from .shader_parser import populate_custom_shaders
         populate_custom_shaders()
 
     path: StringProperty(
@@ -67,7 +67,7 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=''
     )
 
-    shader_folders: CollectionProperty(
+    custom_shader_folders: CollectionProperty(
         type=I3DShaderFolderEntry,
         name="Extra Shader Search Paths",
         description="Directories containing additional shader XML files"
@@ -390,9 +390,9 @@ class I3D_IO_OT_AddShaderFolder(Operator):
 
     def execute(self, context):
         scene_props = context.scene.i3dio
-        new_item = scene_props.shader_folders.add()
+        new_item = scene_props.custom_shader_folders.add()
         new_item.name = "New Shader Search Path"
-        scene_props.shader_extra_paths_index = len(scene_props.shader_folders) - 1
+        scene_props.shader_extra_paths_index = len(scene_props.custom_shader_folders) - 1
         return {'FINISHED'}
 
 
@@ -405,13 +405,13 @@ class I3D_IO_OT_RemoveShaderFolder(Operator):
 
     @classmethod
     def poll(cls, context):
-        return len(context.scene.i3dio.shader_folders)
+        return len(context.scene.i3dio.custom_shader_folders)
 
     def execute(self, context):
         scene_props = context.scene.i3dio
         index = scene_props.shader_extra_paths_index
-        if 0 <= index < len(scene_props.shader_folders):
-            scene_props.shader_folders.remove(index)
+        if 0 <= index < len(scene_props.custom_shader_folders):
+            scene_props.custom_shader_folders.remove(index)
             scene_props.shader_extra_paths_index = max(0, index - 1)
         return {'FINISHED'}
 
@@ -442,7 +442,7 @@ class I3D_IO_PT_i3d_scene(Panel):
             row = body.row()
             row.template_list(
                 "UI_UL_list", "i3d_shader_folders",
-                scene_props, "shader_folders",
+                scene_props, "custom_shader_folders",
                 scene_props, "shader_extra_paths_index",
                 rows=2
             )
@@ -450,8 +450,8 @@ class I3D_IO_PT_i3d_scene(Panel):
             col.operator("i3dio.add_shader_folder", icon='ADD', text="")
             col.operator("i3dio.remove_shader_folder", icon='REMOVE', text="")
 
-            if 0 <= scene_props.shader_extra_paths_index < len(scene_props.shader_folders):
-                active_path = scene_props.shader_folders[scene_props.shader_extra_paths_index]
+            if 0 <= scene_props.shader_extra_paths_index < len(scene_props.custom_shader_folders):
+                active_path = scene_props.custom_shader_folders[scene_props.shader_extra_paths_index]
                 body.prop(active_path, "path", text="Folder", placeholder="Path to shader folder")
 
 
