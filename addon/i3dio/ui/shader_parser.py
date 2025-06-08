@@ -5,8 +5,8 @@ from pathlib import Path
 import bpy
 from bpy.app.handlers import (persistent, load_post)
 
-from .helper_functions import get_fs_data_path
 from .. import xml_i3d
+from ..utility import get_fs_data_path
 
 
 SHADERS_GAME: ShaderDict = {}

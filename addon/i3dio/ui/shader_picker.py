@@ -12,8 +12,9 @@ from bpy.props import (
 )
 from bpy.app.handlers import (persistent, load_post)
 
+from ..utility import get_fs_data_path
 from .shader_parser import (get_shader_dict, ShaderParameter, ShaderTexture)
-from .helper_functions import (get_fs_data_path, detect_fs_version, is_version_compatible, humanize_template)
+from .helper_functions import (detect_fs_version, is_version_compatible, humanize_template)
 
 
 SHADER_DEFAULT = ''
@@ -93,13 +94,10 @@ class ShaderManager:
     def add_shader_texture(self, texture: ShaderTexture) -> None:
         new_texture = self.attributes.shader_material_textures.add()
         new_texture.name = texture.name
+        new_texture.default_source = texture.default_file
         new_texture.template = texture.template
-        if cached := self.cached_textures.get(texture.name):
+        if (cached := self.cached_textures.get(new_texture.name)) and cached['source'] != new_texture.default_source:
             new_texture.source = cached['source']
-            new_texture.default_source = cached['default_source']
-        else:
-            new_texture.source = texture.default_file
-            new_texture.default_source = texture.default_file
 
 
 classes = []
@@ -345,14 +343,14 @@ def _migrate_shader_source(i3d_attr, old_shader_path: Path) -> bool:
     # Check if the shader path matches any of the game shaders
     if any(old_shader_path == s.path for s in get_shader_dict().values()):
         _debug_print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through path match")
-        i3d_attr.shader = old_shader_stem
+        i3d_attr.shader_name = old_shader_stem
     elif old_shader_stem in get_shader_dict():  # Check if the shader name matches any of the game shaders
         if not is_version_compatible(old_version, current_version) and old_shader_stem == "vehicleShader":
             # Conversion for vehicleShader from 19/22 to 25 is a more involved process and need to be handled separately
             _debug_print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through name match, but not compatible")
             return False
         _debug_print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through name match")
-        i3d_attr.shader = old_shader_stem
+        i3d_attr.shader_name = old_shader_stem
     elif old_shader_path.exists():  # We have to assume this is a custom shader
         _debug_print(f"[ShaderUpgrade] Found custom shader: {old_shader_stem} through path match to directory")
         if old_shader_stem not in get_shader_dict(True):
@@ -371,7 +369,7 @@ def _migrate_shader_source(i3d_attr, old_shader_path: Path) -> bool:
 def migrate_old_shader_format(file) -> None:
     _debug_print(f"[ShaderUpgrade] Handling old shader format for: {file}")
     # Old -> new property names:
-    # source -> shader
+    # source -> shader_name
     # variation -> shader_variation_name
     # shader_parameters -> shader_material_params
     # shader_textures -> shader_material_textures
