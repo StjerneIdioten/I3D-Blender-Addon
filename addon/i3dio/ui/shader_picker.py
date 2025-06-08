@@ -252,10 +252,9 @@ class I3D_IO_PT_material_shader(Panel):
             box.label(text=old_shader_source)
             box.label(text="If you want to convert this shader to new format, run the operator")
 
-        is_shader_default = i3d_attributes.shader_name == SHADER_DEFAULT
-        shader_icon = 'FILE_BLANK' if is_shader_default else 'FILE'
+        shaderdefault = i3d_attributes.shader_name == SHADER_DEFAULT
         row = col.row(align=True)
-        row.prop(i3d_attributes, 'shader_name', placeholder="No Shader", icon=shader_icon)
+        row.prop(i3d_attributes, 'shader_name', placeholder="No Shader", icon='FILE_BLANK' if shaderdefault else 'FILE')
         row = row.row(align=True)
         row.enabled = any(folder.path for folder in context.scene.i3dio.custom_shader_folders)
         row.prop(i3d_attributes, 'use_custom_shaders', text="", icon='EVENT_C')
@@ -272,7 +271,7 @@ class I3D_IO_PT_material_shader(Panel):
                 row.label(text=attr.name, icon='DOT')
             column.separator(factor=2.5, type='LINE')
 
-        if not is_shader_default:
+        if not shaderdefault:
             draw_shader_group_panels(layout, i3d_attributes)
 
 
@@ -357,7 +356,7 @@ def _migrate_shader_source(i3d_attr, old_shader_path: Path) -> bool:
             shader_folder_item.name = old_shader_path.parent.stem
             shader_folder_item.path = str(old_shader_path.parent)  # Add folder where the shader is located
         i3d_attr.use_custom_shaders = True
-        i3d_attr.shader = old_shader_stem
+        i3d_attr.shader_name = old_shader_stem
     else:  # No shader found
         _debug_print(f"[ShaderUpgrade] No shader found for: {old_shader_stem}")
         return False
@@ -392,24 +391,17 @@ def migrate_old_shader_format(file) -> None:
                 # Old variation was enum, we need to use the index to get the name through its stored variations
                 old_variation_name = old_variations[old_variation].get('name', SHADER_DEFAULT)
                 if old_variation_name not in i3d_attr.shader_variations:
-                    _debug_print(f"Variation {old_variation_name} not found in shader variations, skipping.")
-                    continue  # Skip if the variation is not in the new list
-                _debug_print(f"Setting variation to, {old_variation_name}")
+                    continue  # Skip if the variation is not in the new list (usually if it was "None")
                 i3d_attr.shader_variation_name = old_variation_name
-            else:
-                _debug_print(f"Invalid old variation index: {old_variation}, skipping.")
             del i3d_attr['variations']  # Remove variation(s) here for both cases,
             del i3d_attr['variation']   # because if index is invalid there is no use for it anyways
 
         if (old_parameters := i3d_attr.get('shader_parameters')) is not None:
             for old_param in old_parameters:
-                old_name = old_param.get('name', '')
-                if old_name not in i3d_attr.shader_material_params:
-                    _debug_print(f"Parameter {old_name} not found in shader, skipping.")
+                if (old_name := old_param.get('name', '')) not in i3d_attr.shader_material_params:
                     continue  # Skip parameters that are not in the shader dict
-                key_map = {'data_float_1': 1, 'data_float_2': 2, 'data_float_3': 3, 'data_float_4': 4}
                 values = None
-                for key, length in key_map.items():
+                for key, length in {'data_float_1': 1, 'data_float_2': 2, 'data_float_3': 3, 'data_float_4': 4}.items():
                     if key in old_param:
                         data = old_param[key]
                         if isinstance(data, (float, int)):
@@ -419,12 +411,11 @@ def migrate_old_shader_format(file) -> None:
                         values = (values + [0.0] * length)[:length]
                         break
                 if values is None:
-                    _debug_print(f"Unhandled data type for parameter: {old_name}")
                     continue
                 try:
                     i3d_attr.shader_material_params[old_name] = values
-                except Exception as e:
-                    _debug_print(f"Failed to migrate parameter '{old_name}': {e}")
+                except Exception:
+                    pass
             # Always remove old parameters after migration to prevent leftover legacy data.
             del i3d_attr['shader_parameters']
 
@@ -434,9 +425,7 @@ def migrate_old_shader_format(file) -> None:
                 existing_texture = next((t for t in i3d_attr.shader_material_textures if t.name == old_name), None)
                 if existing_texture is not None:
                     existing_texture.name = old_name
-                    _debug_print(f"Setting texture source for {old_name}")
                     old_texture_source = old_texture.get('source', '')
-                    _debug_print(f"Old source: {old_texture_source}")
                     # Only override if the texture source differs from the default
                     if old_texture_source != existing_texture.default_source:
                         existing_texture.source = old_texture_source
