@@ -4,7 +4,8 @@ from pathlib import Path
 import bpy
 
 from .. import xml_i3d
-from .helper_functions import get_fs_data_path, humanize_template
+from ..utility import get_fs_data_path
+from .helper_functions import humanize_template
 
 
 MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}
@@ -38,8 +39,8 @@ def template_to_material(params, textures, template, allowed_params=None, allowe
                 params[prop_name] = list(value) if isinstance(value, (tuple, list)) else [value]
         elif prop_name in allowed_textures:
             tex = next((t for t in textures if t.name == prop_name), None)
-            if tex is not None:
-                tex.source = value if value else tex.default_source
+            if tex is not None and value and value != tex.default_source:
+                tex.source = value
 
 
 @dataclass
@@ -181,10 +182,8 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
             new_material = bpy.data.materials.new(name=mat_name)
             new_material.use_nodes = True
             i3d_attrs = new_material.i3d_attributes
-            i3d_attrs.shader = 'vehicleShader'
-            params = i3d_attrs.shader_material_params
-            textures = i3d_attrs.shader_material_textures
-            template_to_material(params, textures, template)
+            i3d_attrs.shader_name = 'vehicleShader'
+            template_to_material(i3d_attrs.shader_material_params, i3d_attrs.shader_material_textures, template)
 
         match self.assignment_mode:
             case 'SLOT':
