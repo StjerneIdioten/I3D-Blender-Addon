@@ -138,7 +138,7 @@ def register(cls):
 
 def is_vehicle_shader(i3d_attributes):
     """Check if the material is a vehicle shader."""
-    return (i3d_attributes.shader == "vehicleShader" or "vehicleShader" in i3d_attributes.get('source', ''))
+    return (i3d_attributes.shader_name == "vehicleShader" or "vehicleShader" in i3d_attributes.get('source', ''))
 
 
 def custom_udim_index(u: float, v: float) -> int:
@@ -179,14 +179,16 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
         # Would also be nice to move all UVs back into 0-1 range of the "first" "udim" tile, since in the FS25 shader
         # "wetness" will only be applied for meshes from Y 0 and above
         # (which means old colorMats won't have wetness without doing this)"
+
+        # First we need to gather all faces per (material, target_index)
         mat_face_map = defaultdict(lambda: defaultdict(list))
         for obj in mesh_objects:
             mesh = obj.data
             uv_layer = mesh.uv_layers[0]  # UDIM is always in the first UV layer
             for mat_slot_idx, mat in enumerate(mesh.materials):
-                if mat is None or not is_vehicle_shader(mat.i3d_attributes):
-                    continue  # Skip non-vehicleShader materials
-
+                if mat is None or not is_vehicle_shader(mat.i3d_attributes) \
+                        or mat.i3d_attributes.shader_game_version == '25':
+                    continue  # Skip non-vehicleShader materials and those with game version 25
                 for poly in mesh.polygons:
                     if poly.material_index != mat_slot_idx:
                         continue  # Only process polygons with the current material
@@ -202,18 +204,38 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                         if udim < 0:
                             colormat_slot = get_colormat_index_from_udim(udim)
                             param_name = f"colorMat{colormat_slot}"
-                            shader_params = mat.i3d_attributes.get('shaderParameters', {})
-                            color_mat_vec = shader_params.get(param_name, None)
+                            shader_params = mat.i3d_attributes.get('shader_parameters', {})
+                            color_mat_vec = None
+                            for param in shader_params:
+                                if param.get("name") == param_name:
+                                    color_mat_vec = param.get("data_float_4", None)
+                                    break
                             if color_mat_vec and len(color_mat_vec) == 4:
-                                template_idx = int(color_mat_vec[3])  # The last value is the template index
-                                mat_face_map[
-                                    (mat, f"colorMat{colormat_slot}",
-                                     template_idx)][obj].append((poly.index, list(poly.loop_indices)))
+                                template_idx = int(color_mat_vec[3])  # The last value is the udim/template index
+                                mat_face_map[(mat, f"colorMat{colormat_slot}", template_idx)][obj].append(
+                                    (poly.index, list(poly.loop_indices)))
                     else:
                         mat_face_map[(mat, None, udim)][obj].append((poly.index, list(poly.loop_indices)))
 
         print(f"Found {len(mat_face_map)} materials with UDIMs")
         print(f"UDIM map: {mat_face_map}")
+
+        new_material_lookup = dict()  # key: mat, param, idx) -> new_mat
+        for (old_mat, param, idx), obj_dict in mat_face_map.items():
+            key = (old_mat, param, idx)
+            if key in new_material_lookup:
+                continue  # Already processed this material 
+            template_info = UDIM_TO_MAT_TEMPLATE.get(idx)
+            new_mat = old_mat.copy()
+            if template_info:
+                new_mat.name = f"{template_info[0]}_{old_mat.name}"
+            else:
+                new_mat.name = f"UnknownTemplate_{old_mat.name}"
+
+            new_material_lookup[key] = new_mat
+
+        print(f"Created {len(new_material_lookup)} new materials")
+        print(f"New material lookup: {new_material_lookup}")
 
         self.report({'INFO'}, "UDIM converted to material template")
         return {'FINISHED'}
