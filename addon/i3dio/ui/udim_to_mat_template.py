@@ -1,7 +1,10 @@
 from __future__ import annotations
 from collections import defaultdict
 import math
+import re
 import bpy
+
+from .material_templates import get_template, template_to_material
 
 
 UDIM_TO_MAT_TEMPLATE = {
@@ -138,21 +141,43 @@ def register(cls):
 
 def is_vehicle_shader(i3d_attributes):
     """Check if the material is a vehicle shader."""
+    # Modern and legacy property checks (old files stored the entire shader path in 'source')
     return (i3d_attributes.shader_name == "vehicleShader" or "vehicleShader" in i3d_attributes.get('source', ''))
 
 
-def custom_udim_index(u: float, v: float) -> int:
+def custom_udim_index(u: float, v: float, udim_tiles_x: int = 8) -> int:
+    """
+    Calculates the UDIM tile index for given UV coordinates, supporting negative Y ("colorMat" row).
+    - For positive Y: standard UDIM index (v * tiles_x + u).
+    - For negative Y: only the first row below (v < 0), returns negative indices.
+    """
     u_idx = int(math.floor(abs(u)))
     v_idx = int(math.floor(abs(v)))
     if v < 0:
-        udim = (abs(v_idx) * 8 + u_idx + 1) * -1
+        udim = (abs(v_idx) * udim_tiles_x + u_idx + 1) * -1
     else:
-        udim = v_idx * 8 + u_idx
+        udim = v_idx * udim_tiles_x + u_idx
     return udim
 
 
-def get_colormat_index_from_udim(neg_udim_index: int) -> int:
-    return abs(neg_udim_index) - 1  # -1 => 0, -2 => 1, ..., -8 => 7
+def get_poly_udim_by_center(poly: bpy.types.MeshPolygon, uv_layer: bpy.types.MeshUVLoopLayer) -> int:
+    """
+    Returns the UDIM tile index for a face based on the average (center) of its UVs.
+    Prevents border/corner faces from being split across multiple tiles.
+    """
+    u_total, v_total = 0.0, 0.0
+    for loop_index in poly.loop_indices:
+        u, v = uv_layer.data[loop_index].uv
+        u_total += u
+        v_total += v
+    n = len(poly.loop_indices)
+    u_avg, v_avg = u_total / n, v_total / n
+    return custom_udim_index(u_avg, v_avg)
+
+
+def format_material_name(old_name: str, template_name: str) -> str:
+    base = re.sub(r'(_mat|\.mat)$', '', old_name, flags=re.IGNORECASE)
+    return f"{base}_{template_name}_mat"
 
 
 @register
@@ -163,24 +188,22 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        """
+        Converts legacy FS19/22 UDIM-based vehicleShader materials to FS25 material templates.
+        - For each mesh and material, assign triangles to a new material based on their UDIM tile.
+        - Faces in negative Y UDIMs (Y = -1) are handled as colorable materials ("colorMat" row).
+          For these, the real target template is taken from the A-channel of the appropriate
+          colorMatN parameter (colorMat0..7) in shader_parameters.
+        - All faces are remapped to use a single template/material per UDIM/colorMat index.
+        - Optionally, remap UVs into 0-1 space within first tile (for FS25 wetness support).
+        """
         mesh_objects = [obj for obj in context.scene.objects if obj.type == 'MESH' and obj.data.uv_layers]
         if not mesh_objects:
             self.report({'ERROR'}, "No mesh objects with UV layers found")
             return {'CANCELLED'}
 
-        # TODO: Implement the conversion logic
-        # Need to iterate through each mesh object and convert first UV layer uvs locations to material template (0-49)
-        # NOTE: materials can be used by multiple objects, we therefore need to ensure we collect all information
-        # for each object for each material.
-        # Also keep in mind that -1 on Y axis -> 0 -> 8 on X axis belongs to old "colorMaterials", to correctly extract
-        # the material template for these we need the colorMat
-        # parameters from the material (first 3 = color and last is the material (0-49))
-        # When we have retrived all the information, we will create/assign new correct materials to respective triangles
-        # Would also be nice to move all UVs back into 0-1 range of the "first" "udim" tile, since in the FS25 shader
-        # "wetness" will only be applied for meshes from Y 0 and above
-        # (which means old colorMats won't have wetness without doing this)"
-
-        # First we need to gather all faces per (material, target_index)
+        # Gather all faces per (material, target_index)
+        # key: (material, param name or None, template idx) → value: {obj: [ (poly.index, loop_indices), ... ]}
         mat_face_map = defaultdict(lambda: defaultdict(list))
         for obj in mesh_objects:
             mesh = obj.data
@@ -188,54 +211,94 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
             for mat_slot_idx, mat in enumerate(mesh.materials):
                 if mat is None or not is_vehicle_shader(mat.i3d_attributes) \
                         or mat.i3d_attributes.shader_game_version == '25':
-                    continue  # Skip non-vehicleShader materials and those with game version 25
+                    continue  # Skip non-vehicleShader materials and those already migrated
                 for poly in mesh.polygons:
                     if poly.material_index != mat_slot_idx:
                         continue  # Only process polygons with the current material
-                    # Find all UDIMs touched by this face
-                    udim_indices = set()
-                    for loop_index in poly.loop_indices:
-                        u, v = uv_layer.data[loop_index].uv
-                        u_idx = int(math.floor(u))
-                        v_idx = int(math.floor(v))
-                        udim_index = v_idx * 8 + u_idx
-                        udim_indices.add(udim_index)
-                    for udim in udim_indices:
-                        if udim < 0:
-                            colormat_slot = get_colormat_index_from_udim(udim)
-                            param_name = f"colorMat{colormat_slot}"
-                            shader_params = mat.i3d_attributes.get('shader_parameters', {})
-                            color_mat_vec = None
-                            for param in shader_params:
-                                if param.get("name") == param_name:
-                                    color_mat_vec = param.get("data_float_4", None)
-                                    break
-                            if color_mat_vec and len(color_mat_vec) == 4:
-                                template_idx = int(color_mat_vec[3])  # The last value is the udim/template index
-                                mat_face_map[(mat, f"colorMat{colormat_slot}", template_idx)][obj].append(
-                                    (poly.index, list(poly.loop_indices)))
+                    # Use the average UV center to determine the tile index
+                    udim = get_poly_udim_by_center(poly, uv_layer)
+                    if udim < 0:  # colorMat logic, negative UDIMs
+                        colormat_slot = abs(udim) - 1  # Negative UDIM index to colorMat tile: -1→0, -2→1, ..., -8→7
+                        param_name = f"colorMat{colormat_slot}"
+                        shader_params = mat.i3d_attributes.get('shader_parameters', {})
+                        color_mat_vec = None
+                        print(f"Processing UDIM colormat {udim} for material {mat.name} on object {obj.name}")
+                        for param in shader_params:  # Find colorMatN in shader parameters
+                            if param.get("name") == param_name:
+                                color_mat_vec = param.get("data_float_4", None)
+                                break
+                        if color_mat_vec and len(color_mat_vec) == 4:
+                            template_idx = int(color_mat_vec[3])  # The last value is the udim/template index
+                            print(f"Found {param_name} with template index {template_idx} for UDIM {udim}")
+                            mat_face_map[(mat, f"colorMat{colormat_slot}", template_idx)][obj].append(
+                                (poly.index, list(poly.loop_indices)))
+                        else:
+                            print(f"WARNING: {param_name} missing or wrong length in {mat.name}")
                     else:
+                        # Standard template mapping for positive UDIMs
                         mat_face_map[(mat, None, udim)][obj].append((poly.index, list(poly.loop_indices)))
+                        print(f"Processing UDIM {udim} for material {mat.name} on object {obj.name}")
 
         print(f"Found {len(mat_face_map)} materials with UDIMs")
-        print(f"UDIM map: {mat_face_map}")
 
+        # Create a new material for each unique (mat, param, idx) combo (reuse if possible)
         new_material_lookup = dict()  # key: mat, param, idx) -> new_mat
-        for (old_mat, param, idx), obj_dict in mat_face_map.items():
+        for (old_mat, param, idx), _obj_dict in mat_face_map.items():
             key = (old_mat, param, idx)
             if key in new_material_lookup:
                 continue  # Already processed this material
             template_info = UDIM_TO_MAT_TEMPLATE.get(idx)
-            new_mat = old_mat.copy()
-            if template_info:
-                new_mat.name = f"{template_info[0]}_{old_mat.name}"
+            if not template_info:
+                new_name = format_material_name(old_mat.name, "unknownTemplate")
+                new_mat = bpy.data.materials.new(name=new_name)
+                new_mat.use_nodes = True
+                i3d_attrs = new_mat.i3d_attributes
+                i3d_attrs.shader_name = 'vehicleShader'
             else:
-                new_mat.name = f"UnknownTemplate_{old_mat.name}"
+                template_name = template_info[1]  # Use the new template name
+                new_name = format_material_name(old_mat.name, template_name)
+                new_mat = bpy.data.materials.new(name=new_name)
+                new_mat.use_nodes = True
+                i3d_attrs = new_mat.i3d_attributes
+                i3d_attrs.shader_name = 'vehicleShader'
+                if template := get_template(template_info[1]):
+                    template_to_material(i3d_attrs.shader_material_params, i3d_attrs.shader_material_textures, template)
+                else:
+                    print(f"WARNING: Could not find template '{template_name}' for material '{new_name}'")
 
             new_material_lookup[key] = new_mat
 
         print(f"Created {len(new_material_lookup)} new materials")
         print(f"New material lookup: {new_material_lookup}")
+
+        # Update mesh material slots and poly assignments
+        for obj in mesh_objects:
+            mesh = obj.data
+            uv_layer = mesh.uv_layers[0]
+            new_slots = []
+            old_to_new_slot = {}
+            # Iterate over all faces relevant to this object
+            for (old_mat, param, idx), obj_dict in mat_face_map.items():
+                if obj not in obj_dict:
+                    continue
+                new_mat = new_material_lookup[(old_mat, param, idx)]
+                if new_mat not in new_slots:
+                    new_slots.append(new_mat)
+                old_to_new_slot[(old_mat, param, idx)] = new_slots.index(new_mat)
+            # Clear existing materials
+            mesh.materials.clear()
+            # Assign new materials to the mesh
+            for mat in new_slots:
+                mesh.materials.append(mat)
+
+            # Assign polygons and remap UVs
+            for (old_mat, param, idx), obj_dict in mat_face_map.items():
+                if obj not in obj_dict:
+                    continue
+                slot_idx = old_to_new_slot[(old_mat, param, idx)]
+                for poly_idx, _loop_indices in obj_dict[obj]:
+                    poly = mesh.polygons[poly_idx]
+                    poly.material_index = slot_idx
 
         self.report({'INFO'}, "UDIM converted to material template")
         return {'FINISHED'}
