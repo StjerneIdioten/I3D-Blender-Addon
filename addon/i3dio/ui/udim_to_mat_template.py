@@ -224,7 +224,7 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
         for (old_mat, param, idx), obj_dict in mat_face_map.items():
             key = (old_mat, param, idx)
             if key in new_material_lookup:
-                continue  # Already processed this material 
+                continue  # Already processed this material
             template_info = UDIM_TO_MAT_TEMPLATE.get(idx)
             new_mat = old_mat.copy()
             if template_info:
