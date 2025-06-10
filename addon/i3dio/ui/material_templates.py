@@ -14,9 +14,18 @@ BRAND_MATERIAL_TEMPLATES: dict[str, BrandMaterialTemplate] = {}
 preview_collections = {}
 
 
-def get_template(name: str, brand: bool = False) -> MaterialTemplate | BrandMaterialTemplate | None:
+def get_brand_mat_name_from_color(color: tuple[float, float, float]) -> str | None:
+    """Get the brand material name based on the color scale."""
+    rounded_color = tuple(round(c, 4) for c in color)  # Round to 4 decimal places for comparison
+    for template in BRAND_MATERIAL_TEMPLATES.values():
+        if template.colorScale and tuple(template.colorScale) == rounded_color:
+            return template.name
+    return None
+
+
+def get_template_by_name(name: str) -> MaterialTemplate | BrandMaterialTemplate | None:
     """Get a material or brand material template by name."""
-    return (BRAND_MATERIAL_TEMPLATES if brand else MATERIAL_TEMPLATES).get(name)
+    return MATERIAL_TEMPLATES.get(name) or BRAND_MATERIAL_TEMPLATES.get(name)
 
 
 def template_to_material(params, textures, template, allowed_params=None, allowed_textures=None) -> None:
@@ -24,17 +33,27 @@ def template_to_material(params, textures, template, allowed_params=None, allowe
     Apply parameters/textures from a MaterialTemplate or BrandMaterialTemplate to the given params/textures.
     If `skip_if_already_set` is True, only assign if not set.
     """
+
     if allowed_params is None:
         allowed_params = {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
                           "smoothnessScale", "metalnessScale", "porosity"}
     if allowed_textures is None:
         allowed_textures = {"detailDiffuse", "detailNormal", "detailSpecular"}
+
+    # If the incoming template is a BrandMaterialTemplate and it has a parent, assign parent template fields first
+    if (parent := getattr(template, 'parentTemplate', None)) is not None:
+        # Apply parent template parameters/textures
+        template_to_material(params, textures, parent, allowed_params, allowed_textures)
+
     for f in fields(template):
         prop_name = f.name
         value = getattr(template, prop_name)
         if prop_name in allowed_params:
             if value is None:
-                params[prop_name] = params.id_properties_ui(prop_name).as_dict().get('default')
+                # Only set default if this is the root template (no parent)
+                if parent is None:
+                    params[prop_name] = params.id_properties_ui(prop_name).as_dict().get('default')
+                # else: leave value as inherited from parent
             else:
                 params[prop_name] = list(value) if isinstance(value, (tuple, list)) else [value]
         elif prop_name in allowed_textures:
@@ -173,7 +192,7 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
     )
 
     def execute(self, context):
-        if not (template := get_template(self.template_name)):
+        if not (template := get_template_by_name(self.template_name)):
             self.report({'ERROR'}, f"Template '{self.template_name}' not found.")
             return {'CANCELLED'}
         mat_name = f"{template.name}_mat"
@@ -266,7 +285,7 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
             allowed_textures = set()
             info_parts.append("only applied colorScale")
 
-        if not (template := get_template(self.template_name, self.is_brand)):
+        if not (template := get_template_by_name(self.template_name)):
             self.report({'ERROR'}, f"Template '{self.template_name}' not found.")
             return {'CANCELLED'}
         params = context.material.i3d_attributes.shader_material_params
@@ -277,7 +296,6 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
             info_parts.append(f"Only set param: {self.single_param}")
         else:
             if (parent := getattr(template, 'parentTemplate', None)) is not None:
-                template_to_material(params, textures, parent, allowed_params, allowed_textures)
                 info_parts.append(f"Applied parent template: {parent.name}")
             template_to_material(params, textures, template, allowed_params, allowed_textures)
 

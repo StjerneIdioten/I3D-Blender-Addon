@@ -4,9 +4,11 @@ import math
 import re
 import bpy
 
-from .material_templates import get_template, template_to_material
+from .material_templates import get_template_by_name, template_to_material, get_brand_mat_name_from_color
 
-
+# UDIM tile index to material template mapping.
+# key[1] = colorMask variations with colorMatN
+# key[0] = template name for the rest of the UDIMs
 UDIM_TO_MAT_TEMPLATE = {
     0: ('metalPaintedGray', 'metalPainted'),
     1: ('plasticPaintedBlack', 'plasticPainted'),
@@ -60,7 +62,6 @@ UDIM_TO_MAT_TEMPLATE = {
     49: ('fabric6Bluish', 'fabric6'),
 }
 
-
 OLD_TO_NEW_VARIATIONS = {
     'secondUV_colorMask': 'vmaskUV2',
     'secondUV': 'vmaskUV2',
@@ -106,7 +107,6 @@ OLD_TO_NEW_VARIATIONS = {
     'backLight_colorMask': 'backLight',
 }
 
-
 OLD_TO_NEW_PARAMETERS = {
     'morphPosition': 'morphPos',
     'scrollPosition': 'scrollPos',
@@ -129,6 +129,7 @@ OLD_TO_NEW_PARAMETERS = {
 }
 
 OLD_TO_NEW_CUSTOM_TEXTURES = {'mTrackArray': 'trackArray'}
+COLOR_MASK_VARIATIONS = ("colormask", "staticlight", "tirepressuredeformation")
 
 
 classes = []
@@ -175,9 +176,28 @@ def get_poly_udim_by_center(poly: bpy.types.MeshPolygon, uv_layer: bpy.types.Mes
     return custom_udim_index(u_avg, v_avg)
 
 
-def format_material_name(old_name: str, template_name: str) -> str:
-    base = re.sub(r'(_mat|\.mat)$', '', old_name, flags=re.IGNORECASE)
-    return f"{base}_{template_name}_mat"
+def remove_mat_suffix(name: str) -> str:
+    """
+    Removes the '_mat' suffix from a material name, if present.
+    This is used to clean up material names before applying templates.
+    """
+    return re.sub(r'(_mat|\.mat)$', '', name, flags=re.IGNORECASE)
+
+
+def strip_texture_suffix(name: str) -> str:
+    return re.sub(r'_(diffuse|normal|specular|vmask|alpha|height)\.dds$', '', name, flags=re.IGNORECASE)
+
+
+def get_name_from_texture_node(mat: bpy.types.Material) -> str:
+    """
+    Extracts the name from the first texture node in the material's node tree.
+    If no texture nodes are found, returns the material's name.
+    """
+    texture_node = next((node for node in mat.node_tree.nodes if node.type == 'TEX_IMAGE'), None)
+    if texture_node and texture_node.image:
+        # If the texture node has an image, use its name
+        return strip_texture_suffix(texture_node.image.name)
+    return remove_mat_suffix(mat.name)
 
 
 @register
@@ -196,15 +216,21 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
           colorMatN parameter (colorMat0..7) in shader_parameters.
         - All faces are remapped to use a single template/material per UDIM/colorMat index.
         - Optionally, remap UVs into 0-1 space within first tile (for FS25 wetness support).
+        - Optionally, delete old materials after conversion (if they have no users).
         """
-        mesh_objects = [obj for obj in context.scene.objects if obj.type == 'MESH' and obj.data.uv_layers]
+        # NOTE: should we run on scene objects or all data objects?
+        mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH' and obj.data.uv_layers]
         if not mesh_objects:
             self.report({'ERROR'}, "No mesh objects with UV layers found")
             return {'CANCELLED'}
 
+        # NOTE: While FS19/22 had a "strict rule" to only have one material per mesh.
+        # We cannot guarantee that, so loop over everthing.
+
         # Gather all faces per (material, target_index)
         # key: (material, param name or None, template idx) → value: {obj: [ (poly.index, loop_indices), ... ]}
-        mat_face_map = defaultdict(lambda: defaultdict(list))
+
+        new_material_work_orders = defaultdict(lambda: {'objects': defaultdict(list), 'color': None})
         for obj in mesh_objects:
             mesh = obj.data
             uv_layer = mesh.uv_layers[0]  # UDIM is always in the first UV layer
@@ -217,54 +243,67 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                         continue  # Only process polygons with the current material
                     # Use the average UV center to determine the tile index
                     udim = get_poly_udim_by_center(poly, uv_layer)
-                    if udim < 0:  # colorMat logic, negative UDIMs
+
+                    key = (mat, udim)
+                    work_order = new_material_work_orders[key]
+                    work_order['objects'][obj].append((poly.index, list(poly.loop_indices)))
+
+                    if udim < 0:  # If it's a colorable material, find and store its color now.
                         colormat_slot = abs(udim) - 1  # Negative UDIM index to colorMat tile: -1→0, -2→1, ..., -8→7
                         param_name = f"colorMat{colormat_slot}"
                         shader_params = mat.i3d_attributes.get('shader_parameters', {})
-                        color_mat_vec = None
-                        print(f"Processing UDIM colormat {udim} for material {mat.name} on object {obj.name}")
-                        for param in shader_params:  # Find colorMatN in shader parameters
-                            if param.get("name") == param_name:
-                                color_mat_vec = param.get("data_float_4", None)
-                                break
-                        if color_mat_vec and len(color_mat_vec) == 4:
-                            template_idx = int(color_mat_vec[3])  # The last value is the udim/template index
-                            print(f"Found {param_name} with template index {template_idx} for UDIM {udim}")
-                            mat_face_map[(mat, f"colorMat{colormat_slot}", template_idx)][obj].append(
-                                (poly.index, list(poly.loop_indices)))
-                        else:
-                            print(f"WARNING: {param_name} missing or wrong length in {mat.name}")
-                    else:
-                        # Standard template mapping for positive UDIMs
-                        mat_face_map[(mat, None, udim)][obj].append((poly.index, list(poly.loop_indices)))
-                        print(f"Processing UDIM {udim} for material {mat.name} on object {obj.name}")
 
-        print(f"Found {len(mat_face_map)} materials with UDIMs")
+                        if (color_mat_vec := next((p.get("data_float_4") for p in shader_params
+                                                   if p.get("name") == param_name), None)):
+                            work_order['color'] = color_mat_vec[:3]
+                            work_order['template_idx_from_alpha'] = int(color_mat_vec[3])
+
+        print(f"Found {len(new_material_work_orders)} materials with UDIMs")
 
         # Create a new material for each unique (mat, param, idx) combo (reuse if possible)
         new_material_lookup = dict()  # key: mat, param, idx) -> new_mat
-        for (old_mat, param, idx), _obj_dict in mat_face_map.items():
-            key = (old_mat, param, idx)
-            if key in new_material_lookup:
-                continue  # Already processed this material
-            template_info = UDIM_TO_MAT_TEMPLATE.get(idx)
-            if not template_info:
-                new_name = format_material_name(old_mat.name, "unknownTemplate")
-                new_mat = bpy.data.materials.new(name=new_name)
-                new_mat.use_nodes = True
-                i3d_attrs = new_mat.i3d_attributes
-                i3d_attrs.shader_name = 'vehicleShader'
+        for (old_mat, udim), work_order in new_material_work_orders.items():
+            key = (old_mat, udim)
+
+            template_idx = work_order.get('template_idx_from_alpha', udim)
+
+            template_info = UDIM_TO_MAT_TEMPLATE.get(template_idx)
+            template_name = template_info[1] if template_info else f"unknownTemplate_{template_idx}"
+            brand_name = None
+            if work_order['color']:
+                brand_name = get_brand_mat_name_from_color(work_order['color'])
+
+            name_from_texture_node = get_name_from_texture_node(old_mat)
+            name_parts = [name_from_texture_node]
+            if brand_name:
+                name_parts.append(brand_name)
+            name_parts.append(template_name)
+            final_name = "_".join(name_parts) + "_mat"
+
+            # Create a full copy of the old material
+            # This is necessary to preserve node tree, textures and all other properties that user might have set
+            new_mat = old_mat.copy()
+            new_mat.name = final_name
+            i3d_attrs = new_mat.i3d_attributes
+            i3d_attrs.shader_name = 'vehicleShader'
+
+            old_variation_name = old_mat.i3d_attributes.get('temp_old_variation_name', '')
+            if old_variation_name:
+                new_variation = OLD_TO_NEW_VARIATIONS.get(old_variation_name, old_variation_name)
+                if new_variation in i3d_attrs.shader_variations:
+                    i3d_attrs.shader_variation_name = new_variation
+
+            target_template_name_for_lookup = f"{brand_name}_{template_name}" if brand_name else template_name
+            if template := get_template_by_name(target_template_name_for_lookup) or get_template_by_name(template_name):
+                template_to_material(i3d_attrs.shader_material_params, i3d_attrs.shader_material_textures, template)
             else:
-                template_name = template_info[1]  # Use the new template name
-                new_name = format_material_name(old_mat.name, template_name)
-                new_mat = bpy.data.materials.new(name=new_name)
-                new_mat.use_nodes = True
-                i3d_attrs = new_mat.i3d_attributes
-                i3d_attrs.shader_name = 'vehicleShader'
-                if template := get_template(template_info[1]):
-                    template_to_material(i3d_attrs.shader_material_params, i3d_attrs.shader_material_textures, template)
+                print(f"WARNING: No template found for '{target_template_name_for_lookup}' or '{template_name}'.")
+
+            if work_order['color']:
+                if 'colorScale' in i3d_attrs.shader_material_params:
+                    i3d_attrs.shader_material_params['colorScale'] = work_order['color']
                 else:
-                    print(f"WARNING: Could not find template '{template_name}' for material '{new_name}'")
+                    print(f"WARNING: Could not find 'colorScale' on '{new_mat.name}' to apply color.")
 
             new_material_lookup[key] = new_mat
 
@@ -273,22 +312,22 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
 
         # Update mesh material slots and poly assignments
         for obj in mesh_objects:
-            mesh = obj.data
-            uv_layer = mesh.uv_layers[0]
             # Only process objects that actually have faces to update
-            relevant_keys = [key for key in mat_face_map if obj in mat_face_map[key]]
+            relevant_keys = [key for key in new_material_work_orders if obj in new_material_work_orders[key]]
             if not relevant_keys:
                 continue  # Skip objects with no faces to update
+            mesh = obj.data
+            uv_layer = mesh.uv_layers[0]
             new_slots = []
             old_to_new_slot = {}
             # Iterate over all faces relevant to this object
-            for (old_mat, param, idx), obj_dict in mat_face_map.items():
-                if obj not in obj_dict:
+            for (old_mat, udim), work_order in new_material_work_orders.items():
+                if obj not in work_order['objects']:
                     continue
-                new_mat = new_material_lookup[(old_mat, param, idx)]
+                new_mat = new_material_lookup[(old_mat, udim)]
                 if new_mat not in new_slots:
                     new_slots.append(new_mat)
-                old_to_new_slot[(old_mat, param, idx)] = new_slots.index(new_mat)
+                old_to_new_slot[(old_mat, udim)] = new_slots.index(new_mat)
             # Clear existing materials
             mesh.materials.clear()
             # Assign new materials to the mesh
@@ -296,11 +335,11 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                 mesh.materials.append(mat)
 
             # Assign polygons and remap UVs
-            for (old_mat, param, idx), obj_dict in mat_face_map.items():
-                if obj not in obj_dict:
+            for (old_mat, udim), work_order in new_material_work_orders.items():
+                if obj not in work_order['objects']:
                     continue
-                slot_idx = old_to_new_slot[(old_mat, param, idx)]
-                for poly_idx, _loop_indices in obj_dict[obj]:
+                slot_idx = old_to_new_slot[(old_mat, udim)]
+                for poly_idx, _loop_indices in work_order['objects'][obj]:
                     poly = mesh.polygons[poly_idx]
                     poly.material_index = slot_idx
 
