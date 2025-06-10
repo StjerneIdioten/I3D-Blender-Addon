@@ -275,6 +275,10 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
         for obj in mesh_objects:
             mesh = obj.data
             uv_layer = mesh.uv_layers[0]
+            # Only process objects that actually have faces to update
+            relevant_keys = [key for key in mat_face_map if obj in mat_face_map[key]]
+            if not relevant_keys:
+                continue  # Skip objects with no faces to update
             new_slots = []
             old_to_new_slot = {}
             # Iterate over all faces relevant to this object

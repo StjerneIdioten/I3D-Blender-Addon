@@ -15,6 +15,7 @@ from bpy.app.handlers import (persistent, load_post)
 from ..utility import get_fs_data_path
 from .shader_parser import (get_shader_dict, ShaderParameter, ShaderTexture)
 from .helper_functions import (detect_fs_version, is_version_compatible, humanize_template)
+from .udim_to_mat_template import OLD_TO_NEW_VARIATIONS, OLD_TO_NEW_PARAMETERS, OLD_TO_NEW_CUSTOM_TEXTURES
 
 
 SHADER_DEFAULT = ''
@@ -340,44 +341,16 @@ def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes) -> None
         draw_shader_group_panel(layout, idname, group_label, i3d_attributes, params, textures)
 
 
-def _debug_print(message: str) -> None:
-    if True:
+DEBUG = True
+
+
+def _print(message: str) -> None:
+    if DEBUG:
         print(message)
-
-
-def _migrate_shader_source(i3d_attr, old_shader_path: Path) -> bool:
-    old_shader_stem = old_shader_path.stem
-    old_version = detect_fs_version(old_shader_path)
-    current_version = detect_fs_version(get_fs_data_path(as_path=True))
-
-    # Check if the shader path matches any of the game shaders
-    if any(old_shader_path == s.path for s in get_shader_dict().values()):
-        _debug_print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through path match")
-        i3d_attr.shader_name = old_shader_stem
-    elif old_shader_stem in get_shader_dict():  # Check if the shader name matches any of the game shaders
-        if not is_version_compatible(old_version, current_version) and old_shader_stem == "vehicleShader":
-            # Conversion for vehicleShader from 19/22 to 25 is a more involved process and need to be handled separately
-            _debug_print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through name match, but not compatible")
-            return False
-        _debug_print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through name match")
-        i3d_attr.shader_name = old_shader_stem
-    elif old_shader_path.exists():  # We have to assume this is a custom shader
-        _debug_print(f"[ShaderUpgrade] Found custom shader: {old_shader_stem} through path match to directory")
-        if old_shader_stem not in get_shader_dict(True):
-            shader_folder_item = bpy.context.scene.i3dio.custom_shader_folders.add()
-            shader_folder_item.name = old_shader_path.parent.stem
-            shader_folder_item.path = str(old_shader_path.parent)  # Add folder where the shader is located
-        i3d_attr.use_custom_shaders = True
-        i3d_attr.shader_name = old_shader_stem
-    else:  # No shader found
-        _debug_print(f"[ShaderUpgrade] No shader found for: {old_shader_stem}")
-        return False
-    return True
 
 
 @persistent
 def migrate_old_shader_format(file) -> None:
-    _debug_print(f"[ShaderUpgrade] Handling old shader format for: {file}")
     # Old -> new property names:
     # source -> shader_name
     # variation -> shader_variation_name
@@ -385,33 +358,71 @@ def migrate_old_shader_format(file) -> None:
     # shader_textures -> shader_material_textures
     if not file or not get_fs_data_path():
         return
+    _print(f"[ShaderUpgrade] Handling old shader format for: {file}")
 
     for mat in bpy.data.materials:
         i3d_attr = mat.i3d_attributes
         if not (old_source := i3d_attr.get('source')) or not old_source.endswith('.xml'):
             continue  # No old source, nothing to do
 
-        _debug_print(f"\nMaterial: {mat.name}, has old source: {old_source}")
         old_shader_path = Path(bpy.path.abspath(old_source))
-        if not _migrate_shader_source(i3d_attr, old_shader_path):
-            continue  # Shader not found, skip this material
-        del i3d_attr['source']  # Remove old source if new shader was found
+        old_shader_stem = old_shader_path.stem
+        old_version = detect_fs_version(old_shader_path)
+        current_version = detect_fs_version(get_fs_data_path(as_path=True))
+        version_compatible = is_version_compatible(old_version, current_version)
 
-        if (old_variation := i3d_attr.get('variation')) is not None and \
+        if not old_shader_stem:
+            continue  # No shader, nothing to do
+
+        old_variation_name = None
+        if (old_variation_index := i3d_attr.get('variation')) is not None and \
                 (old_variations := i3d_attr.get('variations')) is not None:
-            if 0 <= old_variation < len(old_variations):
-                # Old variation was enum, we need to use the index to get the name through its stored variations
-                old_variation_name = old_variations[old_variation].get('name', SHADER_DEFAULT)
-                if old_variation_name not in i3d_attr.shader_variations:
-                    continue  # Skip if the variation is not in the new list (usually if it was "None")
-                i3d_attr.shader_variation_name = old_variation_name
-            del i3d_attr['variations']  # Remove variation(s) here for both cases,
-            del i3d_attr['variation']   # because if index is invalid there is no use for it anyways
+            if 0 <= old_variation_index < len(old_variations):
+                old_variation_name = old_variations[old_variation_index].get('name')
+            del i3d_attr['variation']  # Remove old variation index
+            del i3d_attr['variations']  # Remove old variations list
+
+        if any(old_shader_path == s.path for s in get_shader_dict().values()):
+            _print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} through path match")
+            i3d_attr.shader_name = old_shader_stem
+        elif old_shader_stem in get_shader_dict():  # Check if the shader name matches any of the game shaders
+            # Special handling for incompatible vehicleShaders
+            if old_shader_stem == "vehicleShader" and not version_compatible:
+                if old_variation_name and "colormask" in old_variation_name.lower():
+                    # vehicleShader with colorMask variations is handled by a separate operator
+                    _print(f"[ShaderUpgrade] Skipping vehicleShader with colorMask variation: {old_variation_name}")
+                    continue
+            # For all other game shaders (or compatible vehicleShaders), proceed
+            _print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} by name. Old variation: {old_variation_name}")
+            i3d_attr.shader_name = old_shader_stem
+        elif old_shader_path.exists():  # We have to assume this is a custom shader
+            _print(f"[ShaderUpgrade] Found custom shader: {old_shader_stem} through path match to directory")
+            if old_shader_stem not in get_shader_dict(True):
+                shader_folder_item = bpy.context.scene.i3dio.custom_shader_folders.add()
+                shader_folder_item.name = old_shader_path.parent.stem
+                shader_folder_item.path = str(old_shader_path.parent)
+            i3d_attr.use_custom_shaders = True
+            i3d_attr.shader_name = old_shader_stem
+        else:  # No shader found
+            _print(f"[ShaderUpgrade] No shader found for: {old_shader_stem}")
+            continue  # No shader found, nothing to do
+        del i3d_attr['source']  # New shader is set, remove old source
+
+        if old_variation_name:
+            new_variation = old_variation_name
+            if old_shader_stem == "vehicleShader" and not version_compatible:
+                # For all vehicleShader variations that is not part of colorMask, we can safely convert with this check
+                new_variation = OLD_TO_NEW_VARIATIONS.get(old_variation_name, old_variation_name)
+            _print(f"[ShaderUpgrade] Old variation: {old_variation_name}, New variation: {new_variation}")
+            if new_variation in i3d_attr.shader_variations:
+                i3d_attr.shader_variation_name = new_variation
 
         if (old_parameters := i3d_attr.get('shader_parameters')) is not None:
             for old_param in old_parameters:
                 if (old_name := old_param.get('name', '')) not in i3d_attr.shader_material_params:
-                    continue  # Skip parameters that are not in the shader dict
+                    old_name = OLD_TO_NEW_PARAMETERS.get(old_name, old_name)
+                    if old_name not in i3d_attr.shader_material_params:
+                        continue
                 values = None
                 for key, length in {'data_float_1': 1, 'data_float_2': 2, 'data_float_3': 3, 'data_float_4': 4}.items():
                     if key in old_param:
@@ -426,17 +437,19 @@ def migrate_old_shader_format(file) -> None:
                     continue
                 try:
                     i3d_attr.shader_material_params[old_name] = values
-                except Exception:
-                    pass
+                except (TypeError, ValueError, KeyError) as e:
+                    _print(f"[ShaderUpgrade] Could not set param '{old_name}' on mat '{mat.name}': {e}")
             # Always remove old parameters after migration to prevent leftover legacy data.
             del i3d_attr['shader_parameters']
 
         if (old_textures := i3d_attr.get('shader_textures')) is not None:
             for old_texture in old_textures:
                 old_name = old_texture.get('name', '')
-                existing_texture = next((t for t in i3d_attr.shader_material_textures if t.name == old_name), None)
-                if existing_texture is not None:
-                    existing_texture.name = old_name
+                if not old_name:
+                    continue
+                new_name = OLD_TO_NEW_CUSTOM_TEXTURES.get(old_name, old_name)
+                if (existing_texture := next((t for t in i3d_attr.shader_material_textures
+                                              if t.name == new_name), None)) is not None:
                     old_texture_source = old_texture.get('source', '')
                     # Only override if the texture source differs from the default
                     if old_texture_source != existing_texture.default_source:
