@@ -15,8 +15,8 @@ from bpy.app.handlers import (persistent, load_post)
 from ..utility import get_fs_data_path
 from .shader_parser import (get_shader_dict, ShaderParameter, ShaderTexture)
 from .helper_functions import (detect_fs_version, is_version_compatible, humanize_template)
-from .udim_to_mat_template import (OLD_TO_NEW_VARIATIONS, OLD_TO_NEW_PARAMETERS,
-                                   OLD_TO_NEW_CUSTOM_TEXTURES, COLOR_MASK_VARIATIONS)
+from .shader_migration_utils import (COLOR_MASK_VARIATIONS, migrate_variation,
+                                     migrate_material_parameters, migrate_material_textures)
 
 
 SHADER_DEFAULT = ''
@@ -375,7 +375,7 @@ def migrate_old_shader_format(file) -> None:
         if not old_shader_stem:
             continue  # No shader, nothing to do
 
-        old_variation_name = None
+        old_variation_name = ""
         if (old_variation_index := i3d_attr.get('variation')) is not None and \
                 (old_variations := i3d_attr.get('variations')) is not None:
             if 0 <= old_variation_index < len(old_variations):
@@ -411,55 +411,10 @@ def migrate_old_shader_format(file) -> None:
             continue  # No shader found, nothing to do
         del i3d_attr['source']  # New shader is set, remove old source
 
-        if old_variation_name:
-            new_variation = old_variation_name
-            if old_shader_stem == "vehicleShader" and not version_compatible:
-                # For all vehicleShader variations that is not part of colorMask, we can safely convert with this check
-                new_variation = OLD_TO_NEW_VARIATIONS.get(old_variation_name, old_variation_name)
-            _print(f"[ShaderUpgrade] Old variation: {old_variation_name}, New variation: {new_variation}")
-            if new_variation in i3d_attr.shader_variations:
-                i3d_attr.shader_variation_name = new_variation
-
-        if (old_parameters := i3d_attr.get('shader_parameters')) is not None:
-            for old_param in old_parameters:
-                if (old_name := old_param.get('name', '')) not in i3d_attr.shader_material_params:
-                    old_name = OLD_TO_NEW_PARAMETERS.get(old_name, old_name)
-                    if old_name not in i3d_attr.shader_material_params:
-                        continue
-                values = None
-                for key, length in {'data_float_1': 1, 'data_float_2': 2, 'data_float_3': 3, 'data_float_4': 4}.items():
-                    if key in old_param:
-                        data = old_param[key]
-                        if isinstance(data, (float, int)):
-                            values = [float(data)]
-                        else:
-                            values = [float(v) for v in data]
-                        values = (values + [0.0] * length)[:length]
-                        break
-                if values is None:
-                    _print(f"[ShaderUpgrade] No valid data found for param '{old_name}' in mat '{mat.name}'")
-                    continue
-                try:
-                    i3d_attr.shader_material_params[old_name] = values
-                except (TypeError, ValueError, KeyError) as e:
-                    _print(f"[ShaderUpgrade] Could not set param '{old_name}' on mat '{mat.name}': {e}")
-            # Always remove old parameters after migration to prevent leftover legacy data.
-            del i3d_attr['shader_parameters']
-
-        if (old_textures := i3d_attr.get('shader_textures')) is not None:
-            for old_texture in old_textures:
-                old_name = old_texture.get('name', '')
-                if not old_name:
-                    continue
-                new_name = OLD_TO_NEW_CUSTOM_TEXTURES.get(old_name, old_name)
-                if (existing_texture := next((t for t in i3d_attr.shader_material_textures
-                                              if t.name == new_name), None)) is not None:
-                    old_texture_source = old_texture.get('source', '')
-                    # Only override if the texture source differs from the default
-                    if old_texture_source != existing_texture.default_source:
-                        existing_texture.source = old_texture_source
-            # Always remove old textures after migration to prevent leftover legacy data.
-            del i3d_attr['shader_textures']
+        is_incompatible_vehicle = (old_shader_stem == "vehicleShader" and not version_compatible)
+        migrate_variation(i3d_attr, old_variation_name, is_incompatible_vehicle)
+        migrate_material_parameters(i3d_attr)
+        migrate_material_textures(i3d_attr)
 
 
 def register():

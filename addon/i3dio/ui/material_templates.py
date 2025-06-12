@@ -14,7 +14,7 @@ BRAND_MATERIAL_TEMPLATES: dict[str, BrandMaterialTemplate] = {}
 preview_collections = {}
 
 
-def get_brand_mat_name_from_color(color: tuple[float, float, float]) -> str | None:
+def brand_name_from_color(color: tuple[float, float, float]) -> str | None:
     """Get the brand material name based on the color scale."""
     rounded_color = tuple(round(c, 4) for c in color)  # Round to 4 decimal places for comparison
     for template in BRAND_MATERIAL_TEMPLATES.values():
