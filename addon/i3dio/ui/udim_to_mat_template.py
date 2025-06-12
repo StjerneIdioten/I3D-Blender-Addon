@@ -4,7 +4,7 @@ import math
 import re
 import bpy
 
-from .material_templates import get_template_by_name, template_to_material, brand_name_from_color
+from .material_templates import get_template_by_name, apply_template_to_material, brand_name_from_color
 from .shader_migration_utils import migrate_variation, migrate_and_apply_parameters, migrate_material_textures
 
 # UDIM tile index to material template mapping.
@@ -250,16 +250,16 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                 # Check if brand template has a parent template
                 if getattr(brand_template, 'parentTemplate', None):
                     # Use the parent template to create the material
-                    template_to_material(params, textures, brand_template)
+                    apply_template_to_material(params, textures, brand_template)
                 else:
                     # The brand template have no parent
                     # Apply the base UDIM template first, then the brand template on top
                     if base_template:
-                        template_to_material(params, textures, base_template)
-                    template_to_material(params, textures, brand_template)
+                        apply_template_to_material(params, textures, base_template)
+                    apply_template_to_material(params, textures, brand_template)
             elif base_template:
                 # No brand was found, apply the base UDIM template
-                template_to_material(params, textures, base_template)
+                apply_template_to_material(params, textures, base_template)
             else:
                 print(f"WARNING: No base or brand template found for {template_name!r} or {brand_name!r}.")
 

@@ -10,8 +10,118 @@ from .helper_functions import humanize_template
 
 MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}
 BRAND_MATERIAL_TEMPLATES: dict[str, BrandMaterialTemplate] = {}
-
 preview_collections = {}
+
+
+@dataclass
+class TemplateBase:
+    """Base class for shared material template attributes defined in XML files."""
+    name: str = "UnknownTemplate"
+    colorScale: tuple[float, float, float] = (1.0, 1.0, 1.0)
+    clearCoatIntensity: float = 0.0
+    clearCoatSmoothness: float = 0.0
+    smoothnessScale: float = 1.0
+    metalnessScale: float = 1.0
+    porosity: float = 0.0
+
+    def _initialize_from_elem(self, elem: xml_i3d.XML_Element):
+        """Overwrites instance attributes with values explicitly defined in the provided XML element's attributes."""
+        type_converters = {
+            "colorScale": lambda v: tuple(float(c) for c in v.split()),
+            "clearCoatIntensity": float,
+            "clearCoatSmoothness": float,
+            "smoothnessScale": float,
+            "metalnessScale": float,
+            "porosity": float
+        }
+        for attr_name, attr_value in elem.attrib.items():
+            if attr_name in type_converters:
+                setattr(self, attr_name, type_converters[attr_name](attr_value))
+            elif attr_name == "name":
+                setattr(self, attr_name, attr_value)
+
+
+@dataclass
+class MaterialTemplate(TemplateBase):
+    category: str = "default"
+    detailDiffuse: str = "$data/shared/detailLibrary/nonMetallic/default_diffuse.dds"
+    detailNormal: str = "$data/shared/detailLibrary/nonMetallic/default_normal.dds"
+    detailSpecular: str = "$data/shared/detailLibrary/nonMetallic/default_specular.dds"
+
+    @classmethod
+    def from_elem(cls, elem: xml_i3d.XML_Element) -> MaterialTemplate:
+        """Create a MaterialTemplate instance from an XML element."""
+        instance = cls()
+        instance._initialize_from_elem(elem)
+        instance.category = elem.attrib.get("category", cls.category)
+        for field_name in ("detailDiffuse", "detailNormal", "detailSpecular"):
+            if field_name in elem.attrib:
+                setattr(instance, field_name, elem.attrib[field_name])
+        return instance
+
+
+@dataclass
+class BrandMaterialTemplate(MaterialTemplate):
+    usage: int = 0  # NOTE: not sure what this is for
+    brand: str = ""
+    description: str = ""
+    parentTemplate: MaterialTemplate | None = None
+
+    @classmethod
+    def from_elem(cls, elem: xml_i3d.XML_Element, default_parent: str) -> BrandMaterialTemplate:
+        """Create a BrandMaterialTemplate instance from an XML element."""
+        parent_template = get_template_by_name(elem.attrib.get("parentTemplate", default_parent))
+        if not parent_template:
+            return None
+        parent_props = {f.name: getattr(parent_template, f.name) for f in fields(MaterialTemplate)}
+        instance = cls(**parent_props)
+        instance._initialize_from_elem(elem)
+        instance.usage = int(elem.attrib.get("usage", 0))
+        instance.brand = elem.attrib.get("brand", "")
+        instance.description = elem.attrib.get("description", "")
+        instance.parentTemplate = parent_template
+        return instance
+
+
+def _parse_material_templates(path: Path) -> dict[str, MaterialTemplate]:
+    tree = xml_i3d.parse(path)
+    root = tree.getroot()
+    templates = {}
+    for tmpl in root.findall("template"):
+        if name := tmpl.attrib.get("name"):
+            templates[name] = MaterialTemplate.from_elem(tmpl)
+    return templates
+
+
+def _parse_brand_material_templates(path: Path) -> dict[str, BrandMaterialTemplate]:
+    tree = xml_i3d.parse(path)
+    root = tree.getroot()
+    default_parent = root.attrib.get("parentTemplateDefault", "calibratedPaint")
+    templates = {}
+    for tmpl in root.findall("template"):
+        if name := tmpl.attrib.get("name"):  # Just to be safe
+            if (new_template := BrandMaterialTemplate.from_elem(tmpl, default_parent)):
+                templates[name] = new_template
+    return templates
+
+
+@bpy.app.handlers.persistent
+def parse_templates(_dummy) -> None:
+    if not (data_path := get_fs_data_path(as_path=True)):
+        return
+    material_tmpl_path = data_path / 'shared' / 'detailLibrary' / 'materialTemplates.xml'
+    brand_tmpl_path = data_path / 'shared' / 'brandMaterialTemplates.xml'
+    if not material_tmpl_path.exists() or not brand_tmpl_path.exists():
+        return
+    global MATERIAL_TEMPLATES, BRAND_MATERIAL_TEMPLATES
+    MATERIAL_TEMPLATES = _parse_material_templates(material_tmpl_path)
+    BRAND_MATERIAL_TEMPLATES = _parse_brand_material_templates(brand_tmpl_path)
+
+    pcoll = bpy.utils.previews.new()
+    template_icons_dir = data_path / 'shared' / 'detailLibrary' / 'icons'
+    for icon_path in sorted(template_icons_dir.glob("*.png")):
+        pcoll.load(icon_path.stem, str(icon_path), 'IMAGE')
+    preview_collections['material_templates'] = pcoll
 
 
 def brand_name_from_color(color: tuple[float, float, float]) -> str | None:
@@ -28,69 +138,27 @@ def get_template_by_name(name: str) -> MaterialTemplate | BrandMaterialTemplate 
     return MATERIAL_TEMPLATES.get(name) or BRAND_MATERIAL_TEMPLATES.get(name)
 
 
-def template_to_material(params, textures, template, allowed_params=None, allowed_textures=None) -> None:
-    """
-    Apply parameters/textures from a MaterialTemplate or BrandMaterialTemplate to the given params/textures.
-    If `skip_if_already_set` is True, only assign if not set.
-    """
-
+def apply_template_to_material(params, textures, template, allowed_params=None, allowed_textures=None) -> None:
+    """Applies params and textures from a template to the given material property collections."""
     if allowed_params is None:
         allowed_params = {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
                           "smoothnessScale", "metalnessScale", "porosity"}
     if allowed_textures is None:
         allowed_textures = {"detailDiffuse", "detailNormal", "detailSpecular"}
 
-    # If the incoming template is a BrandMaterialTemplate and it has a parent, assign parent template fields first
-    if (parent := getattr(template, 'parentTemplate', None)) is not None:
-        # Apply parent template parameters/textures
-        template_to_material(params, textures, parent, allowed_params, allowed_textures)
+    print(f"Applying template: {template.name}")
 
     for f in fields(template):
         prop_name = f.name
+        if prop_name not in allowed_params and prop_name not in allowed_textures:
+            continue
         value = getattr(template, prop_name)
         if prop_name in allowed_params:
-            if value is None:
-                # Only set default if this is the root template (no parent)
-                if parent is None:
-                    params[prop_name] = params.id_properties_ui(prop_name).as_dict().get('default')
-                # else: leave value as inherited from parent
-            else:
-                params[prop_name] = list(value) if isinstance(value, (tuple, list)) else [value]
+            params[prop_name] = list(value) if isinstance(value, (tuple, list)) else [value]
         elif prop_name in allowed_textures:
             tex = next((t for t in textures if t.name == prop_name), None)
             if tex is not None and value and value != tex.default_source:
                 tex.source = value
-
-
-@dataclass
-class MaterialTemplate:
-    name: str
-    category: str
-    iconPath: Path
-    detailDiffuse: str
-    detailNormal: str
-    detailSpecular: str
-    colorScale: tuple[float, float, float] | None = None
-    clearCoatIntensity: float | None = None
-    clearCoatSmoothness: float | None = None
-    smoothnessScale: float | None = None
-    metalnessScale: float | None = None
-    porosity: float | None = None
-
-
-@dataclass
-class BrandMaterialTemplate:
-    name: str
-    usage: int  # NOTE: not sure what this is for
-    brand: str | None = None
-    description: str | None = None
-    parentTemplate: MaterialTemplate | None = None
-    colorScale: tuple[float, float, float] | None = None
-    clearCoatIntensity: float | None = None
-    clearCoatSmoothness: float | None = None
-    smoothnessScale: float | None = None
-    metalnessScale: float | None = None
-    porosity: float | None = None
 
 
 classes = []
@@ -157,7 +225,7 @@ class I3D_IO_OT_create_material_from_template_popup(bpy.types.Operator):
                 grid = target_layout.grid_flow(row_major=True, columns=5, even_columns=True, even_rows=True)
                 for template in sorted(templates, key=lambda t: t.name.lower()):
                     cell = grid.column().box()
-                    icon_id = preview_collections['material_templates'].get(template.iconPath.stem).icon_id
+                    icon_id = preview_collections['material_templates'].get(template.name).icon_id
                     cell.template_icon(icon_id, scale=8.0)
                     op = cell.operator("i3dio.create_material_from_template", text=humanize_template(template.name))
                     op.template_name = template.name
@@ -202,7 +270,7 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
             new_material.use_nodes = True
             i3d_attrs = new_material.i3d_attributes
             i3d_attrs.shader_name = 'vehicleShader'
-            template_to_material(i3d_attrs.shader_material_params, i3d_attrs.shader_material_textures, template)
+            apply_template_to_material(i3d_attrs.shader_material_params, i3d_attrs.shader_material_textures, template)
 
         match self.assignment_mode:
             case 'SLOT':
@@ -258,6 +326,14 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     bl_property = "template_name"
 
     @classmethod
+    def description(cls, _context, properties):
+        if properties.single_param:
+            return f"Set single parameter: {properties.single_param}"
+        return ("Search and apply material templates.\n"
+                "• Hold Shift: Skip color scale\n"
+                "• Hold Ctrl: Only apply color scale\n")
+
+    @classmethod
     def poll(cls, context):
         return context.material
 
@@ -292,12 +368,13 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
         textures = context.material.i3d_attributes.shader_material_textures
 
         if self.single_param:  # Updating single param only, no need for parent inheritance
-            template_to_material(params, textures, template, allowed_params={self.single_param}, allowed_textures=[])
+            apply_template_to_material(params, textures, template,
+                                       allowed_params={self.single_param}, allowed_textures=[])
             info_parts.append(f"Only set param: {self.single_param}")
         else:
             if (parent := getattr(template, 'parentTemplate', None)) is not None:
                 info_parts.append(f"Applied parent template: {parent.name}")
-            template_to_material(params, textures, template, allowed_params, allowed_textures)
+            apply_template_to_material(params, textures, template, allowed_params, allowed_textures)
 
         if context.area:
             context.area.tag_redraw()
@@ -317,83 +394,12 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
         return {'FINISHED'}
 
 
-def _parse_template_common(tmpl) -> dict[str, float | tuple[float, float, float] | str]:
-    result = {"name": tmpl.attrib["name"]}
-    for key, value in tmpl.attrib.items():
-        match key:
-            case "colorScale":
-                result[key] = tuple(map(float, value.split()))
-            case "clearCoatIntensity" | "clearCoatSmoothness" | "smoothnessScale" | "metalnessScale" | "porosity":
-                result[key] = float(value) if value is not None else None
-    return result
-
-
-def parse_material_templates(path: Path) -> dict[str, MaterialTemplate]:
-    tree = xml_i3d.parse(path)
-    root = tree.getroot()
-    templates = {}
-    for tmpl in root.findall("template"):
-        args = _parse_template_common(tmpl)
-        args.update(
-            category=tmpl.attrib.get("category", ""),
-            iconPath=path.parent / tmpl.attrib.get("iconFilename", ""),
-            detailDiffuse=tmpl.attrib.get("detailDiffuse", ""),
-            detailNormal=tmpl.attrib.get("detailNormal", ""),
-            detailSpecular=tmpl.attrib.get("detailSpecular", ""),
-        )
-        templates[args["name"]] = MaterialTemplate(**args)
-    return templates
-
-
-def parse_brand_material_templates(
-        path: Path, all_material_templates: dict[str, MaterialTemplate]) -> dict[str, BrandMaterialTemplate]:
-    tree = xml_i3d.parse(path)
-    root = tree.getroot()
-    templates = {}
-    for tmpl in root.findall("template"):
-        args = _parse_template_common(tmpl)
-        parent_template = tmpl.attrib.get('parentTemplate')
-        args.update(
-            brand=tmpl.attrib.get("brand"),
-            usage=int(tmpl.attrib.get("usage", "0")),
-            description=tmpl.attrib.get("description"),
-            parentTemplate=all_material_templates.get(parent_template) if parent_template else None,
-        )
-        templates[args["name"]] = BrandMaterialTemplate(**args)
-    return templates
-
-
-def generate_template_previews():
-    """Generate previews for all material templates."""
-    if not (data_path := get_fs_data_path(as_path=True)):
-        return
-    pcoll = bpy.utils.previews.new()
-    template_icons_dir = data_path / 'shared' / 'detailLibrary' / 'icons'
-    for icon_path in sorted(template_icons_dir.glob("*.png")):
-        pcoll.load(icon_path.stem, str(icon_path), 'IMAGE')
-    preview_collections['material_templates'] = pcoll
-
-
-@bpy.app.handlers.persistent
-def parse_templates(_dummy) -> None:
-    if not (data_path := get_fs_data_path(as_path=True)):
-        return
-    material_tmpl_path = data_path / 'shared' / 'detailLibrary' / 'materialTemplates.xml'
-    brand_tmpl_path = data_path / 'shared' / 'brandMaterialTemplates.xml'
-    if not material_tmpl_path.exists() or not brand_tmpl_path.exists():
-        return
-    global MATERIAL_TEMPLATES, BRAND_MATERIAL_TEMPLATES
-    MATERIAL_TEMPLATES = parse_material_templates(material_tmpl_path)
-    BRAND_MATERIAL_TEMPLATES = parse_brand_material_templates(brand_tmpl_path, MATERIAL_TEMPLATES)
-
-
 _register, _unregister = bpy.utils.register_classes_factory(classes)
 
 
 def register():
     _register()
     bpy.app.handlers.load_post.append(parse_templates)
-    generate_template_previews()
 
 
 def unregister():
