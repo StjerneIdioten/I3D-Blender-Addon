@@ -117,6 +117,9 @@ def parse_templates(_dummy) -> None:
     MATERIAL_TEMPLATES = _parse_material_templates(material_tmpl_path)
     BRAND_MATERIAL_TEMPLATES = _parse_brand_material_templates(brand_tmpl_path)
 
+    if 'material_templates' in preview_collections:
+        bpy.utils.previews.remove(preview_collections['material_templates'])
+        del preview_collections['material_templates']
     pcoll = bpy.utils.previews.new()
     template_icons_dir = data_path / 'shared' / 'detailLibrary' / 'icons'
     for icon_path in sorted(template_icons_dir.glob("*.png")):
