@@ -7,7 +7,7 @@ from .. import xml_i3d
 from ..utility import get_fs_data_path
 from .helper_functions import humanize_template
 
-
+TEMPLATES_GROUP_NAMES: dict[str, str] = {}  # template_id -> friendly name
 MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}
 BRAND_MATERIAL_TEMPLATES: dict[str, BrandMaterialTemplate] = {}
 preview_collections = {}
@@ -86,6 +86,10 @@ class BrandMaterialTemplate(MaterialTemplate):
 def _parse_material_templates(path: Path) -> dict[str, MaterialTemplate]:
     tree = xml_i3d.parse(path)
     root = tree.getroot()
+    template_id = root.attrib.get("id")
+    template_name = root.attrib.get("name")
+    if template_id and template_name:
+        TEMPLATES_GROUP_NAMES[template_id] = template_name
     templates = {}
     for tmpl in root.findall("template"):
         if name := tmpl.attrib.get("name"):
@@ -96,6 +100,10 @@ def _parse_material_templates(path: Path) -> dict[str, MaterialTemplate]:
 def _parse_brand_material_templates(path: Path) -> dict[str, BrandMaterialTemplate]:
     tree = xml_i3d.parse(path)
     root = tree.getroot()
+    template_id = root.attrib.get("id")
+    template_name = root.attrib.get("name")
+    if template_id and template_name:
+        TEMPLATES_GROUP_NAMES[template_id] = template_name
     default_parent = root.attrib.get("parentTemplateDefault", "calibratedPaint")
     templates = {}
     for tmpl in root.findall("template"):
@@ -148,8 +156,6 @@ def apply_template_to_material(params, textures, template, allowed_params=None, 
                           "smoothnessScale", "metalnessScale", "porosity"}
     if allowed_textures is None:
         allowed_textures = {"detailDiffuse", "detailNormal", "detailSpecular"}
-
-    print(f"Applying template: {template.name}")
 
     for f in fields(template):
         prop_name = f.name

@@ -35,6 +35,7 @@ class ShaderTexture:
 class ShaderMetadata:
     path: Path
     variations: dict[str, list[str]] = field(default_factory=dict)
+    parameter_templates: dict[str, str] = field(default_factory=dict)
     parameters: dict[str, list[ShaderParameter]] = field(default_factory=dict)
     textures: dict[str, list[ShaderTexture]] = field(default_factory=dict)
     vertex_attributes: dict[str, str] = field(default_factory=dict)
@@ -123,6 +124,11 @@ def load_shader(path: Path) -> ShaderMetadata | None:
             if v.tag == 'Variation':
                 # Some variations don't have a group defined, but should still use the 'base' group regardless
                 shader.variations[v.attrib.get('name')] = v.attrib.get('groups', 'base').split()
+
+    if (templates := root.find('ParameterTemplates')) is not None:
+        for template in templates:
+            if template.tag == 'ParameterTemplate':
+                shader.parameter_templates[template.attrib['id']] = template.attrib['filename']
 
     if (parameters := root.find('Parameters')) is not None:
         for p in parameters:

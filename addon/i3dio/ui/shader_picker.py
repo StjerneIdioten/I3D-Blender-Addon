@@ -17,6 +17,7 @@ from .shader_parser import (get_shader_dict, ShaderParameter, ShaderTexture)
 from .helper_functions import (detect_fs_version, is_version_compatible, humanize_template)
 from .shader_migration_utils import (COLOR_MASK_VARIATIONS, migrate_variation,
                                      migrate_material_parameters, migrate_material_textures)
+from .material_templates import TEMPLATES_GROUP_NAMES
 
 
 SHADER_DEFAULT = ''
@@ -236,7 +237,8 @@ class I3D_IO_PT_material_shader(Panel):
         layout.use_property_decorate = False
         material = context.material
         i3d_attributes = material.i3d_attributes
-        layout.operator('i3dio.create_material_from_template_popup')  # Find a more suitable place for this
+        if get_fs_data_path() and detect_fs_version(get_fs_data_path(as_path=True)) == "25":
+            layout.operator('i3dio.create_material_from_template_popup')  # Find a more suitable place for this
 
         main_props = layout.column(align=True)
         main_props.use_property_split = True
@@ -337,7 +339,8 @@ def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes) -> None
     for template in all_templates:
         params = params_by_template.get(template, [])
         textures = textures_by_template.get(template, [])
-        group_label = "" if single_template else humanize_template(template) + " "
+        friendly_name = TEMPLATES_GROUP_NAMES.get(template, humanize_template(template))
+        group_label = "" if single_template else friendly_name + " "
         idname = f"shader_material_{template.lower()}"
         draw_shader_group_panel(layout, idname, group_label, i3d_attributes, params, textures)
 
