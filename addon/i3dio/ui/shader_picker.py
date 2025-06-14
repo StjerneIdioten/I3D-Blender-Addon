@@ -18,6 +18,7 @@ from .helper_functions import (detect_fs_version, is_version_compatible, humaniz
 from .shader_migration_utils import (COLOR_MASK_VARIATIONS, migrate_variation,
                                      migrate_material_parameters, migrate_material_textures)
 from .material_templates import TEMPLATES_GROUP_NAMES
+from .. import __package__ as base_package
 
 
 SHADER_DEFAULT = ''
@@ -70,7 +71,7 @@ class ShaderManager:
         if not self.shader:
             attr.shader_name = SHADER_DEFAULT  # Set to default to prevent errors in panels
             return
-        attr.shader_game_version = "" if attr.use_custom_shaders else detect_fs_version(self.shader.path) or ""
+        attr.shader_game_version = "" if attr.use_custom_shaders else detect_fs_version(str(self.shader.path)) or ""
 
         for variation in self.shader.variations:  # Add all variations to the collection
             attr.shader_variations.add().name = variation
@@ -237,8 +238,12 @@ class I3D_IO_PT_material_shader(Panel):
         layout.use_property_decorate = False
         material = context.material
         i3d_attributes = material.i3d_attributes
-        if get_fs_data_path() and detect_fs_version(get_fs_data_path(as_path=True)) == "25":
-            layout.operator('i3dio.create_material_from_template_popup')  # Find a more suitable place for this
+        data_path = get_fs_data_path()
+        print(f"[I3D_IO_PT_material_shader] Data path: {data_path}")
+        game_version = detect_fs_version(data_path) or ""
+
+        if game_version == "25":
+            layout.operator('i3dio.create_material_from_template_popup')  # TODO: Find a more suitable place for this
 
         main_props = layout.column(align=True)
         main_props.use_property_split = True
@@ -250,12 +255,22 @@ class I3D_IO_PT_material_shader(Panel):
         row = layout.row(align=True)
         col = row.column(align=False)
 
-        # Only "Valid" legacy key we care about is the "source" key, which is the old shader path
-        if (old_shader_source := i3d_attributes.get('source')) and old_shader_source.endswith('.xml'):
+        if not data_path:
             box = col.box()
-            box.label(text="Old shader source found:")
-            box.label(text=old_shader_source)
+            box.label(text="No game data path set", icon='ERROR')
+            box.prop(context.preferences.addons[base_package].preferences, 'fs_data_path')
+
+        # Only "Valid" legacy key we care about is the "source" key, which is the old shader path
+        if game_version and i3d_attributes.shader_game_version != game_version and \
+                ('source' in i3d_attributes or i3d_attributes.shader_name != SHADER_DEFAULT):
+            box = col.box()
+            box.label(text="Old vehicleShader found:")
+            if (old_shader_source := i3d_attributes.get('source')):
+                box.label(text=old_shader_source)
+            else:
+                box.label(text=i3d_attributes.shader_name)
             box.label(text="If you want to convert this shader to new format, run the operator")
+            box.operator('i3dio.udim_to_mat_template', text="Convert to Material Template...")
 
         shaderdefault = i3d_attributes.shader_name == SHADER_DEFAULT
         row = col.row(align=True)
@@ -360,7 +375,8 @@ def migrate_old_shader_format(file) -> None:
     # variation -> shader_variation_name
     # shader_parameters -> shader_material_params
     # shader_textures -> shader_material_textures
-    if not file or not get_fs_data_path():
+    fs_data_path = get_fs_data_path()
+    if not file or not fs_data_path:
         return
     _print(f"[ShaderUpgrade] Handling old shader format for: {file}")
 
@@ -371,8 +387,8 @@ def migrate_old_shader_format(file) -> None:
 
         old_shader_path = Path(bpy.path.abspath(old_source))
         old_shader_stem = old_shader_path.stem
-        old_version = detect_fs_version(old_shader_path)
-        current_version = detect_fs_version(get_fs_data_path(as_path=True))
+        old_version = detect_fs_version(str(old_shader_path))
+        current_version = detect_fs_version(fs_data_path)
         version_compatible = is_version_compatible(old_version, current_version)
 
         if not old_shader_stem:

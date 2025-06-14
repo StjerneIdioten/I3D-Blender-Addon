@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, field
 from pathlib import Path
 import bpy
 
@@ -62,24 +62,26 @@ class MaterialTemplate(TemplateBase):
 
 @dataclass
 class BrandMaterialTemplate(MaterialTemplate):
-    usage: int = 0  # NOTE: not sure what this is for
+    usage: int = 0  # NOTE: useful for blender?
     brand: str = ""
     description: str = ""
-    parentTemplate: MaterialTemplate | None = None
+    parentTemplate: str = ""
+    declared_fields: set[str] = field(default_factory=set, repr=False)
 
     @classmethod
     def from_elem(cls, elem: xml_i3d.XML_Element, default_parent: str) -> BrandMaterialTemplate:
         """Create a BrandMaterialTemplate instance from an XML element."""
-        parent_template = get_template_by_name(elem.attrib.get("parentTemplate", default_parent))
-        if not parent_template:
-            return None
+        parent_template_name = elem.attrib.get("parentTemplate", default_parent)
+        parent_template = get_template_by_name(parent_template_name)
         parent_props = {f.name: getattr(parent_template, f.name) for f in fields(MaterialTemplate)}
         instance = cls(**parent_props)
         instance._initialize_from_elem(elem)
         instance.usage = int(elem.attrib.get("usage", 0))
         instance.brand = elem.attrib.get("brand", "")
         instance.description = elem.attrib.get("description", "")
-        instance.parentTemplate = parent_template
+        instance.parentTemplate = parent_template_name
+        # Track which fields were actually declared in the XML element
+        instance.declared_fields = set(elem.attrib)
         return instance
 
 
@@ -149,7 +151,8 @@ def get_template_by_name(name: str) -> MaterialTemplate | BrandMaterialTemplate 
     return MATERIAL_TEMPLATES.get(name) or BRAND_MATERIAL_TEMPLATES.get(name)
 
 
-def apply_template_to_material(params, textures, template, allowed_params=None, allowed_textures=None) -> None:
+def apply_template_to_material(params, textures, template,
+                               allowed_params=None, allowed_textures=None, overlay_only_declared=False) -> None:
     """Applies params and textures from a template to the given material property collections."""
     if allowed_params is None:
         allowed_params = {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
@@ -157,17 +160,23 @@ def apply_template_to_material(params, textures, template, allowed_params=None, 
     if allowed_textures is None:
         allowed_textures = {"detailDiffuse", "detailNormal", "detailSpecular"}
 
+    declared_fields = getattr(template, 'declared_fields', None) if overlay_only_declared else None
+
     for f in fields(template):
         prop_name = f.name
         if prop_name not in allowed_params and prop_name not in allowed_textures:
             continue
-        value = getattr(template, prop_name)
+        if overlay_only_declared and declared_fields is not None and prop_name not in declared_fields:
+            continue  # Skip non-explicit fields if overlay mode
+        if (value := getattr(template, prop_name, None)) is None:
+            continue
         if prop_name in allowed_params:
             params[prop_name] = list(value) if isinstance(value, (tuple, list)) else [value]
         elif prop_name in allowed_textures:
             tex = next((t for t in textures if t.name == prop_name), None)
             if tex is not None and value and value != tex.default_source:
                 tex.source = value
+        print(f"    Applied template property: {prop_name} = {value}")
 
 
 classes = []
