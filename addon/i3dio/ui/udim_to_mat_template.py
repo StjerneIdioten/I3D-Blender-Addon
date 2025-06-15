@@ -4,6 +4,7 @@ import math
 import re
 import bpy
 
+from ..utility import get_fs_data_path
 from .material_templates import get_template_by_name, apply_template_to_material, brand_name_from_color
 from .shader_migration_utils import migrate_variation, migrate_and_apply_parameters, migrate_material_textures
 
@@ -62,6 +63,7 @@ UDIM_TO_MAT_TEMPLATE = {
     48: ('calibratedMetallic', 'calibratedMetallic'),
     49: ('fabric6Bluish', 'fabric6'),
 }
+UDIM_TILES_X = 8  # Number of UDIM tiles in the X direction (standard FS UDIM layout)
 
 classes = []
 
@@ -80,7 +82,7 @@ def is_vehicle_shader(i3d_attributes) -> bool:
     return (i3d_attributes.shader_name == "vehicleShader" or "vehicleShader" in i3d_attributes.get('source', ''))
 
 
-def custom_udim_index(u: float, v: float, udim_tiles_x: int = 8) -> int:
+def custom_udim_index(u: float, v: float) -> int:
     """
     Calculates a "custom" UDIM tile index, supporting both standard (positive Y) and colorMat row (negative Y).
 
@@ -92,9 +94,9 @@ def custom_udim_index(u: float, v: float, udim_tiles_x: int = 8) -> int:
     v_idx = int(math.floor(abs(v)))
     if v < 0:
         # For negative Y, encode the UDIM as a negative value (to keep colorMat row distinct)
-        udim = (abs(v_idx) * udim_tiles_x + u_idx + 1) * -1
+        udim = (abs(v_idx) * UDIM_TILES_X + u_idx + 1) * -1
     else:
-        udim = v_idx * udim_tiles_x + u_idx
+        udim = v_idx * UDIM_TILES_X + u_idx
     return udim
 
 
@@ -147,6 +149,147 @@ def main_texture_name(mat: bpy.types.Material) -> str:
     return remove_mat_suffix(mat.name)
 
 
+def ensure_base_color_texture(material: bpy.types.Material) -> None:
+    """
+    Ensures a material has a texture connected to its Base Color input.
+
+    If the Principled BSDF's 'Base Color' socket is not linked, this function creates a new image texture node,
+    loads the game's standard 'white_diffuse.dds', and connects it. This is a common requirement for
+    game shaders that expect a texture in the primary diffuse/albedo slot.
+    """
+    if not material.use_nodes or not material.node_tree:
+        return
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    if not (bsdf := next((node for node in nodes if node.bl_idname == "ShaderNodeBsdfPrincipled"), None)):
+        return  # No bsdf node found
+    if bsdf.inputs["Base Color"].is_linked:
+        return  # Base color is already linked, no need to add a texture node
+
+    try:
+        fs_data_dir = get_fs_data_path(as_path=True)
+        texture_path = fs_data_dir / "shared" / "white_diffuse.dds"
+        texture_path_str = texture_path.as_posix()
+    except Exception:
+        return
+    try:
+        image = bpy.data.images.load(texture_path_str, check_existing=True)
+    except Exception:
+        return
+    texture_node = nodes.new("ShaderNodeTexImage")
+    texture_node.image = image
+    texture_node.location = (bsdf.location.x - 400, bsdf.location.y + 400)
+    links.new(texture_node.outputs["Color"], bsdf.inputs["Base Color"])
+
+
+def should_be_wet(all_names: list[str], mat: bpy.types.Material) -> bool:
+    """
+    Determines if a material should receive the in-game wetness effect.
+
+    The decision is based on a set of rules, primarily by checking associated
+    object and material names against a list of keywords for parts that should
+    remain dry (e.g., interiors, windows). To handle naming inconsistencies, this
+    function uses a ratio. If the percentage of "dry" keywords in the names
+    meets a threshold, the material is designated as dry.
+
+    Returns:
+        bool: True if the material should be wet, False if it should be dry.
+    """
+    # 'staticLight' variation is a hard-coded exception and should always be wet.
+    if mat.i3d_attributes.shader_variation_name == "staticLight":
+        return True
+
+    if not all_names:
+        return True  # Default to wet if no names are available, as exterior parts are more common.
+
+    # Keywords indicating parts that should NOT receive rain/wetness effects.
+    DRY_KEYWORDS = (
+        "window", "glass", "winshield",
+        "interior", "seat", "dashboard", "steeringwheel", "pedal"
+    )
+
+    # Count how many of the provided names suggest the part should be dry.
+    names_lower = [n.lower() for n in all_names]
+    dry_matches = sum(1 for name in names_lower if any(keyword in name for keyword in DRY_KEYWORDS))
+
+    dry_ratio = dry_matches / len(names_lower)  # Calculate the ratio of names that imply a "dry" state.
+    threshold = 0.5  # If 50% or more of the names suggest a dry part, we classify it as dry.
+    # A low ratio of "dry" keywords means the material is likely exterior and should be wet.
+    return dry_ratio < threshold
+
+
+def remap_wetness_uvs(new_material_work_orders: dict) -> None:
+    """
+    Adjusts UV coordinates to enable or disable the FS25 wetness shader effect.
+
+    The game engine uses the V-axis of the UV map to control this feature:
+    - V >= 0: Enables the wetness effect (rain drops, darker surface, etc.).
+    - V <  0: Disables the wetness effect.
+
+    This function iterates through all processed material groups and moves their
+    UVs into the correct region based on whether they are for an interior/window
+    or an exterior part.
+    """
+    print("--- Starting Wetness UV Remapping ---")
+
+    for (old_mat, udim), work_order in new_material_work_orders.items():
+        new_mat = work_order['new_material']
+        obj_names = [obj.name for obj in work_order['objects']]
+
+        # Gather all relevant names to determine the desired state.
+        all_names = obj_names + [new_mat.name]
+        texture_node = next((n for n in old_mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image), None)
+        if texture_node:
+            all_names.append(texture_node.image.name)
+
+        # Determine the current state (based on UV position) and desired state (based on naming).
+        is_currently_in_wet_region = (udim >= 0)
+        is_desired_wet = should_be_wet(all_names, new_mat)  # Using the clearer function
+
+        print(f"Processing '{new_mat.name}' (UDIM {udim}): "
+              f"Currently in {'WET' if is_currently_in_wet_region else 'DRY'} region. "
+              f"Desired state: {'WET' if is_desired_wet else 'DRY'}.")
+
+        if is_desired_wet and not is_currently_in_wet_region:
+            # Move from DRY region (V < 0) to WET region (V >= 0).
+            print("  -> Action: Moving UVs UP into wet region.")
+
+            # Calculate how many full rows below V=0 the UVs are.
+            # e.g., UDIM -1 -> -8 are on row 0, -9 -> -16 are on row 1, etc.
+            rows_below_zero = (abs(udim) - 1) // UDIM_TILES_X
+            # The offset moves the UVs up by the number of rows plus one,
+            # placing them in the V=[0, 1] range.
+            offset = float(rows_below_zero + 1)
+
+            for obj, polys in work_order['objects'].items():
+                uv_layer = obj.data.uv_layers[0]
+                for _poly_idx, loop_indices in polys:
+                    for li in loop_indices:
+                        uv_layer.data[li].uv[1] += offset
+
+        elif not is_desired_wet and is_currently_in_wet_region:
+            # Move from WET region (V >= 0) to DRY region (V < 0).
+            print("  -> Action: Moving UVs DOWN into dry region.")
+
+            # Calculate the current UDIM tile row index (0 for UDIMs 0-7, 1 for 8-15, etc.).
+            rows_above_zero = udim // UDIM_TILES_X
+            # The offset moves the UVs down by the number of rows plus one,
+            # placing them in the V=[-1, 0] range.
+            offset = float(rows_above_zero + 1)
+
+            for obj, polys in work_order['objects'].items():
+                uv_layer = obj.data.uv_layers[0]
+                for _poly_idx, loop_indices in polys:
+                    for li in loop_indices:
+                        uv_layer.data[li].uv[1] -= offset
+        else:
+            # The UVs are already in the correct region. No action needed.
+            print("  -> Action: NONE. State is already correct.")
+
+    print("--- Finished Wetness UV Remapping ---")
+
+
 @register
 class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
     bl_idname = "i3dio.udim_to_mat_template"
@@ -154,7 +297,7 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
     bl_description = "Convert UDIM to material template"
     bl_options = {'INTERNAL', 'UNDO'}
 
-    def execute(self, _context):
+    def execute(self, context):
         """
         Convert legacy FS19/22 vehicleShader materials (UDIM-based) to FS25-style material templates and brand templates
 
@@ -163,10 +306,18 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
         - Each group is assigned a new converted Blender material using the FS25 template system.
         - UVs/indices are updated accordingly, and old materials are cleaned up.
         """
+
         mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH' and len(obj.data.uv_layers)]
         if not mesh_objects:
             self.report({'ERROR'}, "No mesh objects with UV layers found")
             return {'CANCELLED'}
+
+        active_object = context.view_layer.objects.active
+        original_mode = None
+        # Ensure we are in OBJECT mode before processing
+        if active_object and active_object.mode != 'OBJECT' and bpy.ops.object.mode_set.poll():
+            original_mode = active_object.mode
+            bpy.ops.object.mode_set(mode='OBJECT')
 
         # Previous game versions (FS19/22) used a "one material per mesh" rule, but in practice,
         # many user mods break this rule. We cannot assume that meshes have only one material,
@@ -197,7 +348,8 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
 
                     # Handle colorMat row (negative Y UDIM), fetch color/alpha if available
                     if udim < 0:
-                        colormat_slot = abs(udim) - 1  # Convert -1 -> 0, -2 -> 1, ...
+                        # Wrap to 0-7 for colorMatN, some variations have uv placed -2 on the Y axis
+                        colormat_slot = (abs(udim) - 1) % 8
                         param_name = f"colorMat{colormat_slot}"
                         work_order['param_name'] = param_name
 
@@ -226,6 +378,8 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
         # Convert to new materials for each unique (material, UDIM) combo
         for (old_mat, udim), work_order in new_material_work_orders.items():
             key = (old_mat, udim)
+            old_i3d_attrs = old_mat.i3d_attributes
+            old_variation_name = (old_i3d_attrs.get('temp_old_variation_name') or old_i3d_attrs.shader_variation_name)
 
             from_alpha = "template_idx_from_alpha" in work_order
             template_idx = work_order.get('template_idx_from_alpha', udim)
@@ -234,6 +388,9 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
             template_info = UDIM_TO_MAT_TEMPLATE.get(template_idx)
             template_name = (template_info[1 if from_alpha else 0]
                              if template_info else f"unknownTemplate_{template_idx}")
+
+            if "decal" in old_variation_name.lower() and udim == 0:
+                template_name = "decal"  # Special case for decals, use a generic decal template
 
             # Brand template, if color matches any known brand colorScale (from xml)
             brand_name = brand_name_from_color(work_order['color']) if work_order['color'] else None
@@ -249,7 +406,6 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
             # Copy the old material to preserve its node tree, textures, and properties
             new_mat = old_mat.copy()
             new_mat.name = final_name
-            old_i3d_attrs = old_mat.i3d_attributes
             new_i3d_attrs = new_mat.i3d_attributes
             params = new_i3d_attrs.shader_material_params
             textures = new_i3d_attrs.shader_material_textures
@@ -257,7 +413,6 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
             # Set shader and variation first to ensure material properties is "initialized" correctly
             new_i3d_attrs.shader_name = ""  # Clear before setting, avoids potential conflicts
             new_i3d_attrs.shader_name = 'vehicleShader'
-            old_variation_name = (old_i3d_attrs.get('temp_old_variation_name') or old_i3d_attrs.shader_variation_name)
             migrate_variation(new_i3d_attrs, old_variation_name, True)
 
             base_template = get_template_by_name(template_name)
@@ -284,6 +439,9 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                     new_i3d_attrs.shader_material_params['colorScale'] = work_order['color']
                 else:
                     print(f"WARNING: Could not find 'colorScale' on '{new_mat.name}' to apply color.")
+
+            # Ensure new material has a base color texture
+            ensure_base_color_texture(new_mat)
 
             # Remove any obsolete old keys from the new material
             for key in ['source', 'variation', 'variations', 'shader_parameters', 'shader_textures']:
@@ -341,7 +499,12 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                 if i not in used_slot_indices:
                     mesh.materials.pop(index=i)
 
+            mesh.update()  # Ensure the mesh is updated with new material assignments
+            obj.update_tag(refresh={'DATA'})
+
         print("Finished assigning materials to polygons.")
+
+        remap_wetness_uvs(new_material_work_orders)
 
         print("Unused material cleanup")
         for old_mat in processed_old_mats:
@@ -353,6 +516,10 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
             if 'temp_old_variation_name' in old_mat.i3d_attributes:
                 del old_mat.i3d_attributes['temp_old_variation_name']
 
+        if active_object and original_mode:
+            context.view_layer.objects.active = active_object
+            if bpy.ops.object.mode_set.poll():
+                bpy.ops.object.mode_set(mode=original_mode)
         self.report({'INFO'}, "UDIM converted to material template")
         return {'FINISHED'}
 

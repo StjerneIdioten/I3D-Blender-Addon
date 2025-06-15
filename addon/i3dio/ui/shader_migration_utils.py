@@ -124,8 +124,16 @@ def migrate_and_apply_parameters(new_mat_attrs, old_mat_attrs) -> None:
         new_name = OLD_TO_NEW_PARAMETERS.get(old_name, old_name)
         if new_name in new_params_collection:
             try:
-                new_params_collection[new_name] = list(old_value)
-            except (TypeError, ValueError, KeyError) as e:
+                target_param = new_params_collection[new_name]
+                expected_length = len(target_param)
+                value_to_assign = list(old_value)
+                sliced_value = value_to_assign[:expected_length]
+                print(f"[Migration] Migrating '{old_name}' -> '{new_name}'. "
+                      f"Original value: {value_to_assign} (len {len(value_to_assign)}), "
+                      f"Target length: {expected_length}, "
+                      f"Assigned: {sliced_value}")
+                new_params_collection[new_name] = sliced_value
+            except (TypeError, ValueError, KeyError, AttributeError) as e:
                 _print(f"[Migration] Could not apply param '{old_name}' as '{new_name}': {e}")
 
 
@@ -159,7 +167,11 @@ def migrate_material_parameters(target_attrs, source_attrs=None) -> None:
         if value is None:
             continue
         try:
-            new_params_collection[new_name] = value
+            target_param = new_params_collection[new_name]
+            expected_length = len(target_param)
+            value_to_assign = list(value)
+            sliced_value = value_to_assign[:expected_length]
+            new_params_collection[new_name] = sliced_value
         except (TypeError, ValueError, KeyError) as e:
             _print(f"[Migration] Could not set param '{new_name}': {e}")
     # Always remove the old collection after migration to prevent leftover legacy data.

@@ -239,7 +239,6 @@ class I3D_IO_PT_material_shader(Panel):
         material = context.material
         i3d_attributes = material.i3d_attributes
         data_path = get_fs_data_path()
-        print(f"[I3D_IO_PT_material_shader] Data path: {data_path}")
         game_version = detect_fs_version(data_path) or ""
 
         if game_version == "25":
@@ -408,13 +407,11 @@ def migrate_old_shader_format(file) -> None:
         elif old_shader_stem in get_shader_dict():  # Check if the shader name matches any of the game shaders
             # Special handling for incompatible vehicleShaders
             if old_shader_stem == "vehicleShader" and not version_compatible:
-                if old_variation_name and any(key in old_variation_name.lower() for key in COLOR_MASK_VARIATIONS):
-                    # vehicleShader with colorMask variations is handled by a separate operator
-                    _print(f"[ShaderUpgrade] Skipping vehicleShader with colorMask variation: {old_variation_name}")
-                    # Store old variation name to be handled later
-                    i3d_attr['temp_old_variation_name'] = old_variation_name
-                    continue
-            # For all other game shaders (or compatible vehicleShaders), proceed
+                _print("[ShaderUpgrade] Skipping vehicleShader")
+                # Store old variation name to be handled later
+                i3d_attr['temp_old_variation_name'] = old_variation_name
+                continue
+            # For all other game shaders, proceed
             _print(f"[ShaderUpgrade] Found game shader: {old_shader_stem} by name. Old variation: {old_variation_name}")
             i3d_attr.shader_name = old_shader_stem
         elif old_shader_path.exists():  # We have to assume this is a custom shader

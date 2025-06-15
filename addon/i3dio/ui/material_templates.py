@@ -176,7 +176,6 @@ def apply_template_to_material(params, textures, template,
             tex = next((t for t in textures if t.name == prop_name), None)
             if tex is not None and value and value != tex.default_source:
                 tex.source = value
-        print(f"    Applied template property: {prop_name} = {value}")
 
 
 classes = []
@@ -391,7 +390,7 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
             info_parts.append(f"Only set param: {self.single_param}")
         else:
             if (parent := getattr(template, 'parentTemplate', None)) is not None:
-                info_parts.append(f"Applied parent template: {parent.name}")
+                info_parts.append(f"Applied parent template: {parent}")
             apply_template_to_material(params, textures, template, allowed_params, allowed_textures)
 
         if context.area:

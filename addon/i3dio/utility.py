@@ -57,6 +57,11 @@ def as_fs_relative_path(filepath: str) -> str:
     """
     logger.debug(f"Original filepath: {filepath}")
 
+    # Early return if it's already a proper $data path
+    if filepath.startswith('$data'):
+        logger.debug("Filepath already starts with '$data'")
+        return filepath
+
     # Use strict=False to allow for non-existing paths
     filepath_clean = Path(bpy.path.abspath(filepath)).resolve(strict=False)
     logger.debug(f"Cleaned filepath: {filepath_clean}")

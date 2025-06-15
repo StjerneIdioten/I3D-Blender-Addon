@@ -186,6 +186,7 @@ class Material(Node):
             shader_path = str(shaders[shader_settings.shader_name].path)
             shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
+            self.logger.debug(f"Shader: '{shader_settings.shader_name}' with ID: {shader_file_id}")
 
             if shader_settings.shader_name == "mirrorShader":
                 params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
@@ -202,6 +203,7 @@ class Material(Node):
                         parameter_dict['value'] = f'{value[0]:.6f}'
                         xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
                 else:
+                    print(f"Processing parameter '{pname}' with value: {value}, default: {default}")
                     if not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default)):
                         parameter_dict['value'] = ' '.join(f'{v:.6f}' for v in value)
                         xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
