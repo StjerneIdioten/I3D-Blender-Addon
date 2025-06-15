@@ -23,6 +23,7 @@ class TemplateBase:
     smoothnessScale: float = 1.0
     metalnessScale: float = 1.0
     porosity: float = 0.0
+    from_moddesc: bool = False  # Indicates if the template was loaded from modDesc.xml
 
     def _initialize_from_elem(self, elem: xml_i3d.XML_Element):
         """Overwrites instance attributes with values explicitly defined in the provided XML element's attributes."""
@@ -115,6 +116,26 @@ def _parse_brand_material_templates(path: Path) -> dict[str, BrandMaterialTempla
     return templates
 
 
+def parse_brand_templates_from_moddesc() -> None:
+    path = bpy.context.scene.i3dio.moddesc_path
+    if not path or not Path(path).exists():
+        return
+    tree = xml_i3d.parse(path)
+    root = tree.getroot()
+    brand_templates = {}
+    if (mod_templates := root.find('.//materialTemplates')) is None:
+        return brand_templates
+    parent_default = mod_templates.attrib.get("parentTemplateDefault", "calibratedPaint")
+    for mod_tmpl in mod_templates.findall("template"):
+        if 'brand' not in mod_tmpl.attrib:
+            continue
+        template = BrandMaterialTemplate.from_elem(mod_tmpl, parent_default)
+        template.from_moddesc = True  # Mark as loaded from modDesc.xml
+        brand_templates[template.name] = template
+    global BRAND_MATERIAL_TEMPLATES
+    BRAND_MATERIAL_TEMPLATES.update(brand_templates)
+
+
 @bpy.app.handlers.persistent
 def parse_templates(_dummy) -> None:
     if not (data_path := get_fs_data_path(as_path=True)):
@@ -126,6 +147,7 @@ def parse_templates(_dummy) -> None:
     global MATERIAL_TEMPLATES, BRAND_MATERIAL_TEMPLATES
     MATERIAL_TEMPLATES = _parse_material_templates(material_tmpl_path)
     BRAND_MATERIAL_TEMPLATES = _parse_brand_material_templates(brand_tmpl_path)
+    parse_brand_templates_from_moddesc()
 
     if 'material_templates' in preview_collections:
         bpy.utils.previews.remove(preview_collections['material_templates'])
@@ -356,7 +378,7 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
 
     def enum_items(self, _context):
         templates = (BRAND_MATERIAL_TEMPLATES if self.is_brand else MATERIAL_TEMPLATES).values()
-        return [(item.name, item.name, "") for item in templates]
+        return [(item.name, f"{item.name} (modDesc)" if item.from_moddesc else item.name, "") for item in templates]
 
     template_name: bpy.props.EnumProperty(items=enum_items)
     is_brand: bpy.props.BoolProperty(default=False, options={'HIDDEN'})

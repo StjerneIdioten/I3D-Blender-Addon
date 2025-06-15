@@ -67,6 +67,18 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         default=''
     )
 
+    def update_moddesc_path(self, context):
+        from .material_templates import parse_brand_templates_from_moddesc
+        parse_brand_templates_from_moddesc()
+
+    moddesc_path: StringProperty(
+        name="ModDesc Path",
+        description="Path to the modDesc.xml file. If set, Brand Material Templates will be loaded from it",
+        subtype='FILE_PATH',
+        default='',
+        update=update_moddesc_path
+    )
+
     custom_shader_folders: CollectionProperty(
         type=I3DShaderFolderEntry,
         name="Extra Shader Search Paths",
@@ -435,6 +447,11 @@ class I3D_IO_PT_i3d_scene(Panel):
         header.label(text="I3D Mapping Options")
         if body:
             body.prop(scene_props, 'i3d_mapping_file_path')
+
+        header, body = layout.panel("i3d_moddesc_options", default_closed=False)
+        header.label(text="ModDesc Options")
+        if body:
+            body.prop(scene_props, 'moddesc_path')
 
         header, body = layout.panel("i3d_custom_shader_paths", default_closed=False)
         header.label(text="Custom Shader Folders")
