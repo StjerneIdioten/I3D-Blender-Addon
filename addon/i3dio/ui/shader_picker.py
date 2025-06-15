@@ -15,8 +15,7 @@ from bpy.app.handlers import (persistent, load_post)
 from ..utility import get_fs_data_path
 from .shader_parser import (get_shader_dict, ShaderParameter, ShaderTexture)
 from .helper_functions import (detect_fs_version, is_version_compatible, humanize_template)
-from .shader_migration_utils import (COLOR_MASK_VARIATIONS, migrate_variation,
-                                     migrate_material_parameters, migrate_material_textures)
+from .shader_migration_utils import (migrate_variation, migrate_material_parameters, migrate_material_textures)
 from .material_templates import TEMPLATES_GROUP_NAMES
 from .. import __package__ as base_package
 
