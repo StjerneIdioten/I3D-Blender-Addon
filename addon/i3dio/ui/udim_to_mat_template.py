@@ -499,9 +499,6 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                 if i not in used_slot_indices:
                     mesh.materials.pop(index=i)
 
-            mesh.update()  # Ensure the mesh is updated with new material assignments
-            obj.update_tag(refresh={'DATA'})
-
         print("Finished assigning materials to polygons.")
 
         remap_wetness_uvs(new_material_work_orders)
