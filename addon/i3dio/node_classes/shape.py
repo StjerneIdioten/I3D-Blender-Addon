@@ -396,9 +396,7 @@ class IndexedTriangleSet(Node):
         # Determine a fallback material for handling corrupt mesh data.
         # If the mesh has only one material, we'll use that. Otherwise, use the default.
         unique_mats = {mat for mat in mesh.materials if mat is not None}
-        fallback_material = (
-            next(iter(unique_mats), None) if len(unique_mats) == 1 else self.i3d.get_default_material().blender_material
-        )
+        fallback_material = (next(iter(unique_mats), None) if len(unique_mats) == 1 else None)
 
         has_warned_for_invalid_index = False
         has_warned_for_empty_slot = False
@@ -410,6 +408,8 @@ class IndexedTriangleSet(Node):
                 if not has_warned_for_invalid_index:
                     self.logger.warning("triangle(s) found with invalid material index, assigning fallback material")
                     has_warned_for_invalid_index = True
+                if fallback_material is None:
+                    fallback_material = self.i3d.get_default_material().blender_material
                 triangle_material = fallback_material
             else:
                 # Check if the slot assigned to this triangle is empty (None)
@@ -418,6 +418,8 @@ class IndexedTriangleSet(Node):
                     if not has_warned_for_empty_slot:
                         self.logger.warning("triangle(s) found with empty material slot, assigning fallback material")
                         has_warned_for_empty_slot = True
+                    if fallback_material is None:
+                        fallback_material = self.i3d.get_default_material().blender_material
                     triangle_material = fallback_material
                 else:
                     triangle_material = mat
