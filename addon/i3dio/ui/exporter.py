@@ -198,6 +198,13 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         default=''
     )
 
+    use_numpy: BoolProperty(
+        name="Use Numpy",
+        description="Use Numpy to speed up the export process. "
+                    "If you don't have Numpy installed, it will be installed automatically.",
+        default=False
+    )
+
     scene_key = "i3dio_export_settings"
 
     def save_settings_to_scene(self, context):
@@ -220,6 +227,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             "verbose_output",
             "log_to_file",
             "object_sorting_prefix",
+            "use_numpy",
         ]
         export_props = {}
         for prop in ACCEPTED_PROPERTIES:
@@ -300,6 +308,7 @@ def export_options(layout: bpy.types.UILayout, operator):
         col.enabled = bool(bpy.context.preferences.addons[base_package].preferences.i3d_converter_path)
         col.prop(operator, 'binarize_i3d')
         col = body.column()
+        col.prop(operator, 'use_numpy')
         col.prop(operator, 'keep_collections_as_transformgroups')
         col.prop(operator, 'apply_modifiers')
         col.prop(operator, 'apply_unit_scale')

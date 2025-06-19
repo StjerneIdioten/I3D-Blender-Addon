@@ -44,6 +44,7 @@ class I3D:
         self.materials: Dict[Union[str, int], Material] = {}
         self.files: Dict[Union[str, int], File] = {}
         self.merge_groups: Dict[int, MergeGroup] = {}
+        self.deferred_shapes_to_populate: list[IndexedTriangleSet] = []
         self.skinned_meshes: Dict[str, SkinnedMeshRootNode] = {}
 
         self.i3d_mapping: List[SceneGraphNode] = []

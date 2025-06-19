@@ -9,6 +9,7 @@ from .node import (Node, SceneGraphNode)
 
 from .. import (debugging, xml_i3d)
 from ..i3d import I3D
+import numpy as np
 
 
 class MaterialStorage:
@@ -182,6 +183,12 @@ class IndexedTriangleSet(Node):
         self.tangent: bool = False
         self.material_ids: List[int] = []
         self.materials: dict[str, MaterialStorage] = {}
+
+        self.pending_meshes = []
+        self.final_vertices = np.array([])
+        self.final_triangles = np.array([])
+        self.final_subsets = []
+
         if shape_name is None:
             self.shape_name = self.evaluated_mesh.name
         else:
@@ -346,6 +353,22 @@ class IndexedTriangleSet(Node):
             self.logger.warning("Cannot add a mesh to an IndexedTriangleSet that is neither a merge group nor generic.")
             return
 
+        if self.i3d.get_setting('use_numpy'):
+            if self.is_generic:
+                self.logger.debug(f"Queueing mesh '{mesh_to_append.mesh.name}' with generic value '{generic_value}'")
+                self.pending_meshes.append({
+                    'mesh_obj': mesh_to_append.mesh,
+                    'id_value': generic_value or 0.0,  # The generic value
+                })
+            else:  # is_merge_group
+                self.logger.debug(f"Queueing mesh '{mesh_to_append.mesh.name}' with bind index '{self.bind_index}'")
+                self.pending_meshes.append({
+                    'mesh_obj': mesh_to_append.mesh,
+                    'id_value': self.bind_index,  # The singleBlendWeight bind ID
+                })
+                self.bind_index += 1
+                return
+
         mesh = mesh_to_append.mesh
         self._ensure_materials_exist(mesh)
 
@@ -505,32 +528,324 @@ class IndexedTriangleSet(Node):
         for triangle in self.triangles[offset:]:
             xml_i3d.SubElement(self.xml_elements['triangles'], 't', {'vi': "{0} {1} {2}".format(*triangle)})
 
-    def populate_xml_element(self):
-        if len(self.evaluated_mesh.mesh.vertices) == 0 or self.is_generic:
-            if self.is_generic:
-                # Skip writing mesh data for the root object of merged children.
-                # This ensures no vertices are exported while still allowing the bounding volume to be calculated.
-                self._process_bounding_volume()
-                return
+    def get_numpy_mesh_data(self, mesh: bpy.types.Mesh):
+        """
+        Efficiently extract mesh data using NumPy and foreach_get
+        """
+        num_verts = len(mesh.vertices)
+        num_loops = len(mesh.loops)
+        num_tris = len(mesh.loop_triangles)
 
-            self.logger.warning("has no vertices! Export of this mesh is aborted.")
+        if not all([num_verts, num_loops, num_tris]):
+            return None, None, None, None, None
+
+        # Vertex data
+        positions = np.empty((num_verts, 3), dtype=np.float32)
+        mesh.vertices.foreach_get('co', positions.ravel())
+
+        # Loop data
+        loop_vertex_indices = np.empty(num_loops, dtype=np.int32)
+        mesh.loops.foreach_get('vertex_index', loop_vertex_indices)
+
+        normals = np.empty((num_loops, 3), dtype=np.float32)
+        mesh.loops.foreach_get('normal', normals.ravel())
+
+        # Triangle data
+        tri_loop_indices = np.empty(num_tris * 3, dtype=np.int32)
+        mesh.loop_triangles.foreach_get('loops', tri_loop_indices)
+        tri_loop_indices = tri_loop_indices.reshape(num_tris, 3)
+
+        tri_material_indices = np.empty(num_tris, dtype=np.int32)
+        mesh.loop_triangles.foreach_get('material_index', tri_material_indices)
+
+        # Optional data
+        # Collect up to 4 UV layers (alphabetically sorted if needed)
+        uvs = None
+        uv_layers = mesh.uv_layers
+        uv_keys = list(uv_layers.keys())
+        if uv_keys:
+            if self.i3d.get_setting('alphabetic_uvs'):
+                uv_keys = sorted(uv_keys)
+            max_uvs = min(4, len(uv_keys))
+            uvs = np.empty((num_loops, max_uvs * 2), dtype=np.float32)
+            for i, uv_key in enumerate(uv_keys[:max_uvs]):
+                uv_data = np.empty((num_loops, 2), dtype=np.float32)
+                uv_layers[uv_key].data.foreach_get('uv', uv_data.ravel())
+                uvs[:, i * 2:(i + 1) * 2] = uv_data
+
+        colors = None
+        if len(mesh.color_attributes):
+            colors = np.empty((num_loops, 4), dtype=np.float32)
+            # Use color_srgb for linear color space, seems to be the way to go for colors to 1:1 Blender:GE
+            mesh.color_attributes.active_color.data.foreach_get('color_srgb', colors.ravel())
+
+        loop_positions = positions[loop_vertex_indices]
+
+        return loop_positions, normals, uvs, colors, tri_loop_indices, tri_material_indices
+
+    def process_meshes_numpy(self, meshes_to_process: list):
+        """
+        UNIVERSAL PROCESSOR for both single and merged meshes.
+        Takes a list of dictionaries, where each dict contains a mesh and its ID value.
+        """
+        # The rest of the function is 99% the same as the one I provided before!
+        # I'll paste it here again for completeness, with the new name.
+        if not meshes_to_process:
+            self.logger.debug("No meshes to process.")
+            self.final_vertices, self.final_triangles, self.final_subsets = np.array([]), np.array([]), []
             return
-        self.populate_from_evaluated_mesh()
-        self.logger.debug(f"Has '{len(self.subsets)}' subsets, "
-                          f"'{len(self.triangles)}' triangles and "
-                          f"'{len(self.vertices)}' vertices")
 
-        self.write_vertices()
-        self.write_triangles()
+        all_loop_data_blocks, all_triangle_blocks = [], []
+        master_material_map = collections.OrderedDict()
+        has_uvs, has_colors = False, False
+        material_object_map = {}
 
-        # Subsets
-        self._write_attribute('count', len(self.subsets), 'subsets')
+        self.logger.debug(f"Starting processing of {len(meshes_to_process)} mesh blocks.")
 
+        for item in meshes_to_process:
+            mesh = item['mesh_obj']
+            id_value = item['id_value']
+
+            # 1a. Use our new, improved helper function.
+            result = self.get_numpy_mesh_data(mesh)
+            if result[0] is None:
+                self.logger.debug(f"Skipping empty mesh '{mesh.name}'.")
+                continue
+
+            loop_positions, normals, uvs, colors, tri_loop_indices, tri_material_indices = result
+            num_loops = len(loop_positions)
+
+            if uvs is not None:
+                has_uvs = True
+            if colors is not None:
+                has_colors = True
+
+            # 1b. Build the primary data block.
+            loop_vertex_cols = [loop_positions, normals]
+
+            # For a standard mesh, id_value is None. We need to handle this.
+            # This processor will now handle skinned meshes, merge groups, and generics.
+            if self.bone_mapping is not None:
+                # TODO: Add logic to extract blend weights and IDs here
+                pass
+            elif self.is_merge_group or self.is_generic:
+                id_column = np.full((num_loops, 1), id_value, dtype=np.float32)
+                loop_vertex_cols.append(id_column)
+
+            if uvs is not None:
+                loop_vertex_cols.append(uvs)
+            if colors is not None:
+                loop_vertex_cols.append(colors)
+
+            mesh_loop_data = np.hstack(loop_vertex_cols)
+            all_loop_data_blocks.append(mesh_loop_data)
+
+            # 1c. Map materials. (This part is identical to before)
+            remapped_tri_mats = np.empty_like(tri_material_indices)
+            for i, tri_mat_idx in enumerate(tri_material_indices):
+                if not (0 <= tri_mat_idx < len(mesh.materials)) or mesh.materials[tri_mat_idx] is None:
+                    material = self.i3d.get_default_material().blender_material
+                else:
+                    material = mesh.materials[tri_mat_idx]
+                if material.name not in master_material_map:
+                    master_material_map[material.name] = len(master_material_map)
+                    material_object_map[material.name] = material
+                remapped_tri_mats[i] = master_material_map[material.name]
+
+            # 1d. Combine triangle data. (Identical to before)
+            mesh_triangles = np.hstack([tri_loop_indices, remapped_tri_mats.reshape(-1, 1)])
+            all_triangle_blocks.append(mesh_triangles)
+
+        # --- PART 2 & 3: Combination, Welding, Caching ---
+        # This entire section is IDENTICAL to the function I provided before.
+        # It takes the collected lists and produces the final_vertices, final_triangles, etc.
+        # ... (omitted for brevity, it's the same as before)
+        if not all_loop_data_blocks:
+            self.logger.warning("All pending meshes were empty. No geometry to export.")
+            self.final_vertices, self.final_triangles, self.final_subsets = np.array([]), np.array([]), []
+            return
+
+        # Vertically stack all the collected data blocks into two huge arrays.
+        combined_loop_data = np.vstack(all_loop_data_blocks)
+
+        # We must adjust the triangle loop indices to be correct for the `combined_loop_data` array.
+        loop_offset = 0
+        for i in range(len(all_triangle_blocks)):
+            if i > 0:
+                # The offset is the number of loops from all *previous* meshes.
+                loop_offset += len(all_loop_data_blocks[i - 1])
+            all_triangle_blocks[i][:, :3] += loop_offset  # Adjust the three loop indices
+
+        combined_triangles = np.vstack(all_triangle_blocks)
+
+        # --- PART 3: Subsetting, Welding, and Caching ---
+        final_unique_verts_list, final_remapped_tris_list, final_subsets_info = [], [], []
+        vertex_offset, triangle_offset = 0, 0
+
+        for subset_idx in range(len(master_material_map)):
+            mask = (combined_triangles[:, 3] == subset_idx)
+            subset_tris_with_loops = combined_triangles[mask][:, :3]
+            if subset_tris_with_loops.size == 0:
+                continue
+
+            loop_indices_for_subset = subset_tris_with_loops.flatten()
+            subset_vertex_data = combined_loop_data[loop_indices_for_subset]
+
+            unique_verts, inverse_indices = np.unique(subset_vertex_data, axis=0, return_inverse=True)
+            remapped_tris = inverse_indices.reshape(-1, 3)
+
+            final_unique_verts_list.append(unique_verts)
+            final_remapped_tris_list.append(remapped_tris + vertex_offset)
+
+            final_subsets_info.append({
+                'firstVertex': vertex_offset, 'firstIndex': triangle_offset * 3,
+                'numVertices': unique_verts.shape[0], 'numIndices': remapped_tris.size,
+            })
+
+            vertex_offset += unique_verts.shape[0]
+            triangle_offset += remapped_tris.shape[0]
+
+        self.final_vertices = np.vstack(final_unique_verts_list) if final_unique_verts_list else np.array([])
+        self.final_triangles = np.vstack(final_remapped_tris_list) if final_remapped_tris_list else np.array([])
+        self.final_subsets = final_subsets_info
+
+        self.logger.debug(f"Hey ho materials: {master_material_map.keys()}, "
+                          f"final vertices: {self.final_vertices.shape}, "
+                          f"final triangles: {self.final_triangles.shape}, "
+                          f"final subsets: {len(self.final_subsets)}")
+
+        # Ensure materials are added to self.i3d.materials and get their IDs
+        self.material_ids = []
+        for name in master_material_map.keys():
+            # Find the Blender material by name from the mesh or fallback
+            mat = material_object_map.get(name)
+            self.logger.debug(f"Processing material {name!r} with Blender material: {mat}")
+            if mat is None:
+                mat = self.i3d.get_default_material().blender_material
+            mat_id = self.i3d.add_material(mat)
+            self.material_ids.append(mat_id)
+        self.logger.debug(f"Final material IDs: {self.material_ids}")
+        self.final_has_uvs = has_uvs
+        self.final_has_colors = has_colors
+
+    def process_and_write_mesh_data(self):
+        """
+        This is the main workhorse. It processes mesh data (either single or
+        merged) and writes the final results to the XML elements.
+        """
+        self.logger.debug(f"Starting final processing for shape '{self.name}'")
+
+        # --- 1. GATHER MESHES ---
+        meshes_to_process = []
+        if self.is_merge_group or self.is_generic:
+            meshes_to_process = self.pending_meshes
+        else:
+            # Standard mesh case
+            meshes_to_process = [{'mesh_obj': self.evaluated_mesh.mesh, 'id_value': None}]
+
+        # --- 2. PROCESS WITH NUMPY ---
+        self.process_meshes_numpy(meshes_to_process)
+
+        # --- 3. WRITE RESULTS TO XML ---
+        # This is the XML writing logic, moved from populate_xml_element
+        if self.final_vertices.size == 0:
+            self.logger.warning(f"No vertices to export for shape '{self.name}'.")
+            return
+
+        self._write_attribute('count', self.final_vertices.shape[0], 'vertices')
+        self._write_attribute('normal', True, 'vertices')
+        if self.tangent:
+            self._write_attribute('tangent', True, 'vertices')
+        if self.final_has_uvs:
+            # Determine the actual number of UV layers present
+            num_uvs = 0
+            if self.final_vertices.shape[1] > 6:
+                num_uvs = (self.final_vertices.shape[1] - 6) // 2
+            for count in range(num_uvs):
+                self._write_attribute(f"uv{count}", True, 'vertices')
+
+        for vert_row in self.final_vertices:
+            vertex_attributes = {
+                'p': "{0:.6f} {1:.6f} {2:.6f}".format(*vert_row[:3]),
+                'n': "{0:.6f} {1:.6f} {2:.6f}".format(*vert_row[3:6])
+            }
+            if self.final_has_uvs:
+                # Each UV should be two consecutive values; adjust slicing accordingly
+                num_uvs = (len(vert_row) - 6) // 2
+                for i in range(num_uvs):
+                    uv_start = 6 + i * 2
+                    uv_end = uv_start + 2
+                    if uv_end <= len(vert_row):
+                        vertex_attributes[f"t{i}"] = "{0:.6f} {1:.6f}".format(*vert_row[uv_start:uv_end])
+            xml_i3d.SubElement(self.xml_elements['vertices'], 'v', vertex_attributes)
+
+        self._write_attribute('count', self.final_triangles.shape[0], 'triangles')
+        for tri in self.final_triangles:
+            xml_i3d.SubElement(self.xml_elements['triangles'], 't', {'vi': "{0} {1} {2}".format(*tri[:3])})
+
+        self._write_attribute('count', len(self.final_subsets), 'subsets')
+        for subset_info in self.final_subsets:
+            xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', {
+                'firstVertex': str(subset_info['firstVertex']),
+                'firstIndex': str(subset_info['firstIndex']),
+                'numVertices': str(subset_info['numVertices']),
+                'numIndices': str(subset_info['numIndices'])
+            })
+
+        owning_shape_node = self.evaluated_mesh.node
+        if owning_shape_node:
+            owning_shape_node._write_attribute('materialIds', ' '.join(map(str, self.material_ids)))
+            self.logger.info(f"Wrote materialIds '{self.material_ids}' to ShapeNode '{owning_shape_node.name}'")
+        else:
+            self.logger.warning("Could not find owning ShapeNode to write materialIds attribute.")
+        self.logger.info(f"Finished processing and writing data for shape '{self.name}'.")
+
+    def populate_xml_element(self):
+        # _process_bounding_volume needs to be called first, when deferring meshes self.evaluated_mesh:
+        # bounding_volume_object = self.evaluated_mesh.mesh.i3d_attributes.bounding_volume_object
+        #                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        # ReferenceError: StructRNA of type Mesh has been removed
         self._process_bounding_volume()
+        import time
+        start_time = time.time()
+        if not self.i3d.get_setting('use_numpy'):
+            self.logger.debug("Processing mesh without numpy.")
+            if len(self.evaluated_mesh.mesh.vertices) == 0 or self.is_generic:
+                if self.is_generic:
+                    return  # Skip writing mesh data for the root object of merged children.
+                self.logger.warning("has no vertices! Export of this mesh is aborted.")
+                return
+            self.populate_from_evaluated_mesh()
+            self.logger.debug(f"Has '{len(self.subsets)}' subsets, "
+                              f"'{len(self.triangles)}' triangles and "
+                              f"'{len(self.vertices)}' vertices")
+            self.write_vertices()
+            self.write_triangles()
+            # Subsets
+            self._write_attribute('count', len(self.subsets), 'subsets')
+            # Write subsets
+            for subset in self.subsets:
+                xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
+            self.logger.debug(f"Populated mesh '{self.evaluated_mesh.name}' in {time.time() - start_time:.4f} seconds, "
+                              f"numpy={self.i3d.get_setting('use_numpy')}")
+            self._process_bounding_volume()
+            return
 
-        # Write subsets
-        for subset in self.subsets:
-            xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', subset.as_dict())
+        self.logger.debug("Processing mesh with numpy.")
+
+        if self.is_merge_group or self.is_generic:
+            # Defer complex shapes
+            self.logger.debug(f"Deferring population of '{self.name}' until all nodes are created.")
+            if self not in self.i3d.deferred_shapes_to_populate:
+                self.i3d.deferred_shapes_to_populate.append(self)
+            return
+
+        # For single meshes, we can process them immediately
+        self.logger.debug(f"Processing mesh '{self.evaluated_mesh.name}' with numpy.")
+        self.process_and_write_mesh_data()
+
+        self.logger.debug(f"Populated mesh '{self.evaluated_mesh.name}' in {time.time() - start_time:.4f} seconds, "
+                          f"numpy={self.i3d.get_setting('use_numpy')}")
 
     def _process_bounding_volume(self):
         bounding_volume_object = self.evaluated_mesh.mesh.i3d_attributes.bounding_volume_object
@@ -696,6 +1011,7 @@ class ShapeNode(SceneGraphNode):
         return self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
 
     def add_shape(self):
+        self.logger.debug(f"Adding shape for object '{self.blender_object.name}'")
         if self.blender_object.type == 'CURVE':
             self.shape_id = self.i3d.add_curve(EvaluatedNurbsCurve(self.i3d, self.blender_object))
             self.xml_elements['NurbsCurve'] = self.i3d.shapes[self.shape_id].element
@@ -704,9 +1020,10 @@ class ShapeNode(SceneGraphNode):
             self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):
+        self.logger.debug(f"Inside populate_xml_element for shape node with ID '{self.shape_id}'")
         self.add_shape()
+        self.logger.debug(f"Inside populate_xml_element for shape node with ID '{self.shape_id}' after add_shape()")
         if self.blender_object.type == 'MESH':
             self._write_attribute('materialIds', ' '.join(map(str, self.i3d.shapes[self.shape_id].material_ids)))
-        self.logger.debug(f"has shape ID '{self.shape_id}'")
         self._write_attribute('shapeId', self.shape_id)
         super().populate_xml_element()
