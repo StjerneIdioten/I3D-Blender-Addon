@@ -267,6 +267,14 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         return ExportHelper.invoke(self, context, event)
 
     def execute(self, context):
+        PROFILING = False
+        if PROFILING:
+            import cProfile
+            import pstats
+            import io
+
+            pr = cProfile.Profile()
+            pr.enable()
         # If not exporting a collection, save settings to scene props for file browser exports.
         # Also save i3d_mapping_file_path from context.scene.i3dio to avoid multiple checks later.
         if not self.collection:
@@ -290,6 +298,14 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                         "FS Data folder path is not set, "
                         "see https://stjerneidioten.github.io/"
                         "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder")
+
+        if PROFILING:
+            pr.disable()
+            s = io.StringIO()
+            sortby = pstats.SortKey.CUMULATIVE
+            ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+            ps.print_stats()
+            print(s.getvalue())
 
         return {'FINISHED'}
 
