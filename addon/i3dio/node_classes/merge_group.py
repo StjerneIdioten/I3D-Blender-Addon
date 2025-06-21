@@ -68,8 +68,8 @@ class MergeGroupRoot(ShapeNode):
         # Write the specific attribute for this node type.
         self._write_attribute('skinBindNodeIds', self.skin_bind_ids[:-1])
 
-        self.logger.debug(f"Checking materialIds: {self.i3d.shapes[self.shape_id].material_ids}")
-        self._write_attribute('materialIds', ' '.join(map(str, self.i3d.shapes[self.shape_id].material_ids)))
+        # self.logger.debug(f"Checking materialIds: {self.i3d.shapes[self.shape_id].material_ids}")
+        # self._write_attribute('materialIds', ' '.join(map(str, self.i3d.shapes[self.shape_id].material_ids)))
 
 
 class MergeGroup:

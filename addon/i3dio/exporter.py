@@ -92,8 +92,6 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
                 case 'SELECTED_OBJECTS':
                     _export_selected_objects(i3d)
 
-        logger.info("test")
-        logger.info(f"Exported {len(i3d.deferred_shapes_to_populate)} objects to I3D")
         if i3d.deferred_shapes_to_populate:
             logger.info(f"Processing {len(i3d.deferred_shapes_to_populate)} deferred shapes (Merge Groups / Generics)")
             for shape_to_process in i3d.deferred_shapes_to_populate:
