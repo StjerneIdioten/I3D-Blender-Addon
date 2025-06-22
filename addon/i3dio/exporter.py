@@ -243,6 +243,14 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                         "but has no child meshes. Exporting as regular Shape."
                     )
 
+            # Merge Groups take precedence over Skinned Meshes
+            elif 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group_index > -1:
+                blender_merge_group = bpy.context.scene.i3dio_merge_groups[obj.i3d_merge_group_index]
+                i3d.merge_groups.setdefault(
+                    obj.i3d_merge_group_index, MergeGroup(xml_i3d.merge_group_prefix + blender_merge_group.name)
+                )
+                node = i3d.add_merge_group_node(obj, _parent, blender_merge_group.root is obj)
+
             # Process Skinned Meshes if enabled and MergeChildren wasn't applied
             elif ('SKINNED_MESHES' in i3d.settings['features_to_export']
                   and 'ARMATURE' in i3d.settings['object_types_to_export']
@@ -262,14 +270,6 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                     # Armatures need to be exported and skinned meshes enabled to create a skinned mesh node
                     # We only need to find one armature to confirm it should be a skinned mesh
                     node = i3d.add_skinned_mesh_node(obj, _parent)
-
-            # Process Merge Groups if MergeChildren and SkinnedMesh are not used
-            elif 'MERGE_GROUPS' in i3d.settings['features_to_export'] and obj.i3d_merge_group_index > -1:
-                blender_merge_group = bpy.context.scene.i3dio_merge_groups[obj.i3d_merge_group_index]
-                i3d.merge_groups.setdefault(
-                    obj.i3d_merge_group_index, MergeGroup(xml_i3d.merge_group_prefix + blender_merge_group.name)
-                )
-                node = i3d.add_merge_group_node(obj, _parent, blender_merge_group.root is obj)
 
             # Default to a regular Shape if none of the special types applied
             else:

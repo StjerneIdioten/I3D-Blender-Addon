@@ -2,7 +2,7 @@ import logging
 import bpy
 
 from .node import (SceneGraphNode, TransformGroupNode)
-from .shape import (ShapeNode, EvaluatedMesh)
+from .shape import (ShapeNode, EvaluatedMesh, IndexedTriangleSet)
 
 from .. import debugging
 
@@ -21,18 +21,13 @@ class MergeGroupRoot(ShapeNode):
         super().__init__(id_=id_, shape_object=merge_group_object, i3d=i3d, parent=parent)
 
         self.add_shape()
-        its = self.i3d.shapes[self.shape_id]
-        if not hasattr(its, '_root_mesh_queued'):
-            its.append_from_evaluated_mesh(
-                EvaluatedMesh(self.i3d, self.blender_object, node=self)
-            )
-            its._root_mesh_queued = True
+        self.its: IndexedTriangleSet = self.i3d.shapes[self.shape_id]
+        if not hasattr(self.its, '_root_mesh_queued'):
+            self.its.append_from_evaluated_mesh(EvaluatedMesh(self.i3d, self.blender_object, node=self))
+            self.its._root_mesh_queued = True
 
     def add_shape(self):
-        """
-        Overrides the base add_shape. Its only job is to create the shape
-        with the correct name and flags. Safe to call multiple times.
-        """
+        """Overrides the base add_shape. Its only job is to create the shape with the correct name and flags."""
         if self.shape_id is not None:
             return
 
@@ -42,7 +37,7 @@ class MergeGroupRoot(ShapeNode):
             self.merge_group_name,
             is_merge_group=True
         )
-        self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
+        self.xml_elements['IndexedTriangleSet'] = self.its.element
 
     def add_mergegroup_child(self, child: MergeGroupChild):
         """
@@ -53,29 +48,23 @@ class MergeGroupRoot(ShapeNode):
         self.skin_bind_ids += f"{child.id:d} "
         # For each child, add skinBindNodeIds, or else we will end up with "root" as the only skin bind node.
         self._write_attribute('skinBindNodeIds', self.skin_bind_ids[:-1])
-        self.i3d.shapes[self.shape_id].append_from_evaluated_mesh(
+        self.its.append_from_evaluated_mesh(
             EvaluatedMesh(self.i3d, child.blender_object, reference_frame=self.blender_object.matrix_world)
         )
 
     def populate_xml_element(self):
         """
-        This is called during the main traversal. Because the ITS for merge groups
-        is deferred, this method only needs to handle the node-level attributes.
+        This is called during the main traversal. Because the IndexedTriangleSet for merge groups is deferred,
+        this method only needs to handle the node-level attributes.
         """
-        # The base class will call add_shape, which is fine.
-        # It will also write shapeId and materialIds.
         super().populate_xml_element()
-        # Write the specific attribute for this node type.
         self._write_attribute('skinBindNodeIds', self.skin_bind_ids[:-1])
-
-        # self.logger.debug(f"Checking materialIds: {self.i3d.shapes[self.shape_id].material_ids}")
-        # self._write_attribute('materialIds', ' '.join(map(str, self.i3d.shapes[self.shape_id].material_ids)))
 
 
 class MergeGroup:
     def __init__(self, name: str):
         self.name = name
-        self.root_node: [MergeGroupRoot, None] = None
+        self.root_node: MergeGroupRoot | None = None
         self.child_nodes: list[MergeGroupChild] = list()  # List of child nodes for the merge group
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': self.name})

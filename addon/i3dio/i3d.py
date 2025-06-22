@@ -1,6 +1,6 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, Dict, List, Type, OrderedDict, Optional, Tuple)
+from typing import (Union, Type)
 import logging
 from . import xml_i3d
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class I3D:
     """A special node which is the root node for the entire I3D file. It essentially represents the i3d file"""
     def __init__(self, name: str, i3d_file_path: str, conversion_matrix: mathutils.Matrix,
-                 depsgraph: bpy.types.Depsgraph, settings: Dict):
+                 depsgraph: bpy.types.Depsgraph, settings: dict):
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': name})
         self._ids = {
@@ -36,24 +36,24 @@ class I3D:
         self.xml_elements['UserAttributes'] = xml_i3d.SubElement(self.xml_elements['Root'], 'UserAttributes')
 
         self.scene_root_nodes = []
-        self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
+        self.processed_objects: dict[bpy.types.Object, SceneGraphNode] = {}
         self.deferred_constraints: list[tuple[SkinnedMeshBoneNode, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
 
-        self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
-        self.materials: Dict[Union[str, int], Material] = {}
-        self.files: Dict[Union[str, int], File] = {}
-        self.merge_groups: Dict[int, MergeGroup] = {}
+        self.shapes: dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
+        self.materials: dict[Union[str, int], Material] = {}
+        self.files: dict[Union[str, int], File] = {}
+        self.merge_groups: dict[int, MergeGroup] = {}
         self.deferred_shapes_to_populate: list[IndexedTriangleSet] = []
-        self.skinned_meshes: Dict[str, SkinnedMeshRootNode] = {}
+        self.skinned_meshes: dict[str, SkinnedMeshRootNode] = {}
 
-        self.i3d_mapping: List[SceneGraphNode] = []
+        self.i3d_mapping: list[SceneGraphNode] = []
 
         self.settings = settings
 
         self.depsgraph = depsgraph
 
-        self.all_objects_to_export: List[bpy.types.Object] = []
+        self.all_objects_to_export: list[bpy.types.Object] = []
 
     # Private Methods ##################################################################################################
     def _next_available_id(self, id_type: str) -> int:
@@ -84,8 +84,8 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(ShapeNode, mesh_object, parent)
 
-    def add_merge_group_node(self, merge_group_object: bpy.types.Object, parent: SceneGraphNode = None, is_root: bool = False) \
-            -> [SceneGraphNode, None]:
+    def add_merge_group_node(self, merge_group_object: bpy.types.Object,
+                             parent: SceneGraphNode | None = None, is_root: bool = False) -> SceneGraphNode | None:
         self.logger.debug("Adding merge group node")
         merge_group = self.merge_groups[merge_group_object.i3d_merge_group_index]
 
@@ -93,8 +93,8 @@ class I3D:
 
         if is_root:
             if merge_group.root_node is not None:
-                    self.logger.warning(f"Merge group '{merge_group.name}' already has a root node! "
-                                        f"The object '{merge_group_object.name}' will be ignored for export")
+                self.logger.warning(f"Merge group '{merge_group.name}' already has a root node! "
+                                    f"The object '{merge_group_object.name}' will be ignored for export")
             else:
                 node_to_return = self._add_node(MergeGroupRoot, merge_group_object, parent)
                 merge_group.set_root(node_to_return)
@@ -144,8 +144,8 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(CameraNode, camera_object, parent)
 
-    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=False,
-                  is_generic=False, bone_mapping: ChainMap = None) -> int:
+    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: str | None = None, is_merge_group: bool = False,
+                  is_generic: bool = False, bone_mapping: ChainMap | None = None) -> int:
         name = shape_name or evaluated_mesh.name
         if name not in self.shapes:
             shape_id = self._next_available_id('shape')
@@ -157,7 +157,7 @@ class I3D:
             return shape_id
         return self.shapes[name].id
 
-    def add_curve(self, evaluated_curve: EvaluatedNurbsCurve, curve_name: Optional[str] = None) -> int:
+    def add_curve(self, evaluated_curve: EvaluatedNurbsCurve, curve_name: str | None = None) -> int:
         name = curve_name or evaluated_curve.name
         if name not in self.shapes:
             curve_id = self._next_available_id('shape')
