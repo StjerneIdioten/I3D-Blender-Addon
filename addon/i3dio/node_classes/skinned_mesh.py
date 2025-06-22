@@ -162,18 +162,13 @@ class SkinnedMeshShapeNode(ShapeNode):
 
     def add_shape(self):
         # Combine multiple bone mappings while ensuring unique bone names are handled correctly
-        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object), self.skinned_mesh_name,
-                                           bone_mapping=self.bone_mapping)
+        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object, node=self),
+                                           self.skinned_mesh_name, bone_mapping=self.bone_mapping)
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):
         super().populate_xml_element()
-        vertex_group_binding = self.i3d.shapes[self.shape_id].vertex_group_ids
-        self.logger.debug(f"Skinned groups: {vertex_group_binding}")
 
-        skin_bind_ids = " ".join(
-            str(self.bone_mapping[self.blender_object.vertex_groups[vertex_group_id].name])
-            for vertex_group_id in sorted(vertex_group_binding, key=vertex_group_binding.get)
-        )
-
+        skin_bind_ids = " ".join(map(str, self.i3d.shapes[self.shape_id].final_skin_bind_node_ids))
+        self.logger.debug(f"Skin bind IDs: {skin_bind_ids}")
         self._write_attribute('skinBindNodeIds', skin_bind_ids)

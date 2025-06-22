@@ -4,12 +4,12 @@ import numpy as np
 import mathutils
 import collections
 import logging
-from typing import (OrderedDict, Optional, List, ChainMap)
+from typing import OrderedDict, ChainMap
 import bpy
 
-from .node import (Node, SceneGraphNode)
+from .node import Node, SceneGraphNode
 
-from .. import (debugging, xml_i3d)
+from .. import debugging, xml_i3d
 from ..i3d import I3D
 import time
 
@@ -68,6 +68,9 @@ class MeshExtraction:
     normals: np.ndarray
     uvs: np.ndarray | None
     colors: np.ndarray | None
+    loop_vertex_indices: np.ndarray
+    blend_indices: np.ndarray | None
+    blend_weights: np.ndarray | None
     tri_loops: np.ndarray
     tri_material_indices: np.ndarray
     materials: list
@@ -86,7 +89,7 @@ class IndexedTriangleSet(Node):
     NAME_FIELD_NAME = 'name'
     ID_FIELD_NAME = 'shapeId'
 
-    def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None,
+    def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, shape_name: str | None = None,
                  is_merge_group: bool = False, is_generic: bool = False, bone_mapping: ChainMap = None):
         self.id: int = id_
         self.i3d: I3D = i3d
@@ -101,8 +104,9 @@ class IndexedTriangleSet(Node):
         self.child_index: int = 0
         self.generic_values_by_child_index = {}
         self.vertex_group_ids = {}
+        self.final_skin_bind_node_ids: list[int] = []
         self.tangent: bool = False
-        self.material_ids: List[int] = []
+        self.material_ids: list[int] = []
 
         self.pending_meshes = []
         self.final_vertices = np.array([])
@@ -204,18 +208,125 @@ class IndexedTriangleSet(Node):
                 case _:
                     self.logger.warning(f"Unsupported color domain '{color_layer.domain}' for mesh '{mesh.name}'.")
 
+        # NOTE: Vertex groups are stored on the object and not the mesh
+        vert_bone_indices, vert_bone_weights = self._extract_skinning_data(mesh, self.evaluated_mesh.object)
+
         loop_positions = positions[loop_vertex_indices]
         return MeshExtraction(
             positions=loop_positions,
             normals=normals,
             uvs=uvs,
             colors=colors,
+            loop_vertex_indices=loop_vertex_indices,
+            blend_indices=vert_bone_indices,
+            blend_weights=vert_bone_weights,
             tri_loops=tri_loop_indices,
             tri_material_indices=tri_material_indices,
             materials=[mat for mat in mesh.materials if mat is not None]
         )
 
-    def _get_dot_dtype(self, num_uvs: int, has_id: bool, has_colors: bool) -> np.dtype:
+    def _extract_skinning_data(self,
+                               mesh: bpy.types.Mesh,
+                               mesh_object: bpy.types.Object) -> tuple[np.ndarray | None, np.ndarray | None]:
+        if not self.bone_mapping:
+            return None, None
+        if not mesh_object.vertex_groups:
+            self.logger.debug(f"Mesh '{mesh.name}' has no vertex groups. Skipping skinning data extraction.")
+            return None, None
+        num_verts = len(mesh.vertices)
+
+        # maps {blender_vg_index: internal_0_to_N_index}
+        self.vertex_group_ids = {}
+        # Map from blender vertex group index to the bone's node ID from the armature
+        vg_to_node_id_map = {}
+        for vg_idx, vg in enumerate(mesh_object.vertex_groups):
+            if vg.name in self.bone_mapping:
+                # Found a vertex group that corresponds to a bone in the armature
+                node_id = self.bone_mapping[vg.name]
+                vg_to_node_id_map[vg_idx] = node_id
+        if not vg_to_node_id_map:
+            self.logger.warning(f"Mesh '{mesh.name}' is skinned but has no vertex groups matching the armature bones.")
+            return None, None
+
+        # Need to create a new mapping to sure the skinBindNodeIds attribute is ordered correctly
+        sorted_node_ids = sorted(vg_to_node_id_map.values())
+        node_id_to_final_index = {node_id: i for i, node_id in enumerate(sorted_node_ids)}
+
+        # This is used to write the skinBindNodeIds attribute on the shape node
+        self.final_skin_bind_node_ids = sorted_node_ids
+
+        # Get the number of of weights per vertex
+        num_groups_per_vert = np.array([len(v.groups) for v in mesh.vertices], dtype=np.int32)
+        # Calc the total number of weight entries in the mesh
+        total_num_weights = num_groups_per_vert.sum()
+
+        if total_num_weights == 0:
+            self.logger.debug(f"Mesh '{mesh.name}' has no skinning weights. Skipping skinning data extraction.")
+            return None, None
+
+        # Since final size is known, pre-allocate lists (faster than appending)
+        all_weights_list = [0.0] * total_num_weights
+        all_group_indices_list = [0] * total_num_weights
+
+        cursor = 0
+        for i, vert in enumerate(mesh.vertices):
+            num_groups = num_groups_per_vert[i]
+            if num_groups == 0:
+                continue
+            vert_weights = np.empty(num_groups, dtype=np.float32)
+            vert.groups.foreach_get('weight', vert_weights)
+            vert_indices = np.empty(num_groups, dtype=np.int32)
+            vert.groups.foreach_get('group', vert_indices)
+            all_weights_list[cursor:cursor + num_groups] = vert_weights
+            all_group_indices_list[cursor:cursor + num_groups] = vert_indices
+            cursor += num_groups
+
+        # Convert lists to numpy arrays
+        all_weights = np.array(all_weights_list, dtype=np.float32)
+        all_group_indices = np.array(all_group_indices_list, dtype=np.int32)
+
+        final_indices = np.zeros((num_verts, 4), dtype=np.int32)
+        final_weights = np.zeros((num_verts, 4), dtype=np.float32)
+
+        weight_cursor = 0
+        for i in range(num_verts):
+            num_groups = num_groups_per_vert[i]
+            if num_groups == 0:
+                continue  # No weights for this vertex
+
+            vert_weights = all_weights[weight_cursor:weight_cursor + num_groups]
+            vert_group_indices = all_group_indices[weight_cursor:weight_cursor + num_groups]
+
+            valid_indices = []
+            valid_weights = []
+            for j in range(num_groups):
+                vg_idx = vert_group_indices[j]
+                if vg_idx in vg_to_node_id_map:
+                    node_id = vg_to_node_id_map[vg_idx]
+                    final_idx = node_id_to_final_index[node_id]
+                    valid_indices.append(final_idx)
+                    valid_weights.append(vert_weights[j])
+
+            # Sort by weight descending and take the top 4
+            if valid_weights:
+                sorted_pairs = sorted(zip(valid_weights, valid_indices), reverse=True)
+                num_to_take = min(4, len(sorted_pairs))
+                if num_to_take < len(sorted_pairs):
+                    self.logger.debug(f"Vertex {i} has more than 4 weights, truncating to {num_to_take}.")
+                for k in range(num_to_take):
+                    weight, index = sorted_pairs[k]
+                    final_weights[i, k] = weight
+                    final_indices[i, k] = index
+
+            weight_cursor += num_groups
+
+        # Normalize the weights to ensure they sum to 1
+        row_sums = final_weights.sum(axis=1, keepdims=True)
+        # Avoid division by zero for verts with no weights
+        np.divide(final_weights, row_sums, out=final_weights, where=row_sums != 0)
+        return final_indices, final_weights
+
+    def _get_dot_dtype(self, num_uvs: int, has_id: bool, has_colors: bool, has_skin: bool) -> np.dtype:
         fields = [
             ('px', 'f4'), ('py', 'f4'), ('pz', 'f4'),
             ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
@@ -226,19 +337,12 @@ class IndexedTriangleSet(Node):
             fields.extend([(f'u{i}', 'f4'), (f'v{i}', 'f4')])
         if has_colors:
             fields.extend([('r', 'f4'), ('g', 'f4'), ('b', 'f4'), ('a', 'f4')])
+        if has_skin:
+            fields.extend([
+                ('blend_indices', '(4,)i4'),  # Vector of 4 ints
+                ('blend_weights', '(4,)f4')  # Vector of 4 floats
+            ])
         return np.dtype(fields)
-
-    def _populate_dot_array(self, dot_array, positions, normals, uvs, colors, id_value, num_uvs, has_id, has_colors):
-        dot_array['px'], dot_array['py'], dot_array['pz'] = positions.T
-        dot_array['nx'], dot_array['ny'], dot_array['nz'] = normals.T
-        if has_id:
-            dot_array['id'] = id_value
-        if num_uvs and uvs is not None:
-            for i in range(min(num_uvs, uvs.shape[1] // 2)):
-                dot_array[f'u{i}'], dot_array[f'v{i}'] = uvs[:, i * 2: i * 2 + 2].T
-        if has_colors and colors is not None:
-            dot_array['r'], dot_array['g'], dot_array['b'], dot_array['a'] = colors.T
-        return dot_array
 
     def process_meshes_numpy(self, meshes_to_process: list):
         if not meshes_to_process:
@@ -248,14 +352,15 @@ class IndexedTriangleSet(Node):
             self.final_subsets = []
             return
 
-        self.logger.info(f"Starting V5 (Subset-by-Subset) processing of {len(meshes_to_process)} mesh blocks.")
+        self.logger.info(f"Starting Subset-by-Subset processing of {len(meshes_to_process)} mesh blocks.")
 
         # Max 4 UV layers allowed per mesh
         max_uvs = min(4, max((len(m['mesh_obj'].uv_layers)
                               for m in meshes_to_process if m['mesh_obj'].uv_layers), default=0))
         has_colors = any(m['mesh_obj'].color_attributes for m in meshes_to_process)
+        has_skin = self.bone_mapping is not None
         has_id = self.is_merge_group or self.is_generic
-        dot_dtype = self._get_dot_dtype(max_uvs, has_id, has_colors)
+        dot_dtype = self._get_dot_dtype(max_uvs, has_id, has_colors, has_skin)
         self.final_has_uvs = max_uvs > 0
         self.final_max_uv_layers = max_uvs
         self.final_has_colors = has_colors
@@ -309,7 +414,7 @@ class IndexedTriangleSet(Node):
             final_mesh_data: MeshExtraction = padded_mesh_data_cache[mesh_id]
 
             for i, mat_idx in enumerate(final_mesh_data.tri_material_indices):
-                # Gracefully handle out-of-bounds material indices
+                # Handle out-of-bounds material indices
                 if not (0 <= mat_idx < len(mesh_data.materials)):
                     self.logger.warning(f"Invalid material index {mat_idx} found. Using default material.")
                     material = self.i3d.get_default_material().blender_material
@@ -356,6 +461,7 @@ class IndexedTriangleSet(Node):
 
             write_idx = 0
             for mesh_data, tri_loops, id_value in tri_data_list:
+                mesh_data: MeshExtraction
                 mesh_data_id = id(mesh_data)
                 if mesh_data_id not in mesh_data_to_index:
                     mesh_data_to_index[mesh_data_id] = len(unique_mesh_datas)
@@ -390,6 +496,14 @@ class IndexedTriangleSet(Node):
                 if self.final_has_colors and mesh_data.colors is not None:
                     subset_dots['r'][mask], subset_dots['g'][mask], subset_dots['b'][mask], subset_dots['a'][mask] = \
                         mesh_data.colors[indices_for_this_mesh].T
+                if has_skin and mesh_data.blend_indices is not None:
+                    vertex_indices_for_loops = mesh_data.loop_vertex_indices[indices_for_this_mesh]
+                    loop_bone_indices = mesh_data.blend_indices[vertex_indices_for_loops]
+                    loop_bone_weights = mesh_data.blend_weights[vertex_indices_for_loops]
+
+                    # Assign the entire (num_loops, 4) array to the field
+                    subset_dots['blend_indices'][mask] = loop_bone_indices
+                    subset_dots['blend_weights'][mask] = loop_bone_weights
 
             self.logger.debug(f"Populated dots for material '{mat_name}' in {time.time() - start_time:.4f} seconds")
 
@@ -482,11 +596,16 @@ class IndexedTriangleSet(Node):
                     if f'u{i}' in final_verts.dtype.names:
                         vertex_attributes[f't{i}'] = f"{vert_row[f'u{i}']:.6g} {vert_row[f'v{i}']:.6g}"
 
+            # Cannot have merge groups or generic in combination with skinning
             if 'id' in final_verts.dtype.names:
-                if self.is_merge_group:
-                    vertex_attributes['bi'] = f"{int(vert_row['id'])}"
-                elif self.is_generic:
+                # According to Giants structure, gneric have priority over merge groups
+                if self.is_generic:
                     vertex_attributes['g'] = f"{vert_row['id']}"
+                elif self.is_merge_group:
+                    vertex_attributes['bi'] = f"{int(vert_row['id'])}"
+            elif self.bone_mapping is not None:
+                vertex_attributes['bw'] = " ".join(f"{w:.6g}" for w in vert_row['blend_weights'])
+                vertex_attributes['bi'] = " ".join(str(i) for i in vert_row['blend_indices'])
 
             if self.final_has_colors:
                 vertex_attributes['c'] = \
@@ -525,8 +644,6 @@ class IndexedTriangleSet(Node):
         # For single meshes, we can process them immediately
         self.logger.debug(f"Processing mesh '{self.evaluated_mesh.name}'")
         self.process_and_write_mesh_data()
-
-        self._process_bounding_volume()
 
         self.logger.debug(f"Populated mesh '{self.evaluated_mesh.name}' in {time.time() - start_time:.4f} seconds")
 
@@ -607,7 +724,7 @@ class NurbsCurve(Node):
     NAME_FIELD_NAME = 'name'
     ID_FIELD_NAME = 'shapeId'
 
-    def __init__(self, id_: int, i3d: I3D, evaluated_curve_data: EvaluatedNurbsCurve, shape_name: Optional[str] = None):
+    def __init__(self, id_: int, i3d: I3D, evaluated_curve_data: EvaluatedNurbsCurve, shape_name: str | None = None):
         self.id: int = id_
         self.i3d: I3D = i3d
         self.evaluated_curve_data: EvaluatedNurbsCurve = evaluated_curve_data

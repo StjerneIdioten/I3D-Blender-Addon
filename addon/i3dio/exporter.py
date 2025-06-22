@@ -92,14 +92,13 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
                 case 'SELECTED_OBJECTS':
                     _export_selected_objects(i3d)
 
+        if i3d.deferred_constraints:
+            _process_deferred_constraints(i3d)
+
         if i3d.deferred_shapes_to_populate:
             logger.info(f"Processing {len(i3d.deferred_shapes_to_populate)} deferred shapes (Merge Groups / Generics)")
             for shape_to_process in i3d.deferred_shapes_to_populate:
-                try:
-                    # Now we call the real processing function.
-                    shape_to_process.process_and_write_mesh_data()
-                except Exception as e:
-                    logger.error(f"Failed to populate deferred shape '{shape_to_process.name}': {e}", exc_info=True)
+                shape_to_process.process_and_write_mesh_data()
 
         i3d.export_to_i3d_file()
 
@@ -199,9 +198,6 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
 
     for blender_object in objects_to_export:
         _add_object_to_i3d(i3d, blender_object)
-
-    if i3d.deferred_constraints:
-        _process_deferred_constraints(i3d)
 
 
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
