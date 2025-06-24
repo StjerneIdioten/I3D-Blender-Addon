@@ -17,72 +17,69 @@ class MergeGroupRoot(ShapeNode):
     def __init__(self, id_: int, merge_group_object: bpy.types.Object, i3d: I3D,
                  parent: SceneGraphNode | None = None):
         self.merge_group_name = i3d.merge_groups[merge_group_object.i3d_merge_group_index].name
-        self.skin_bind_ids = f"{id_:d} "
+        self.skin_bind_node_ids: list[int] = []
+
         super().__init__(id_=id_, shape_object=merge_group_object, i3d=i3d, parent=parent)
 
-        self.add_shape()
         self.its: IndexedTriangleSet = self.i3d.shapes[self.shape_id]
-        if not hasattr(self.its, '_root_mesh_queued'):
-            self.its.append_from_evaluated_mesh(EvaluatedMesh(self.i3d, self.blender_object, node=self))
-            self.its._root_mesh_queued = True
+        # Explicitly add this root object's mesh to its own IndexedTriangleSet
+        self.its.append_from_evaluated_mesh(EvaluatedMesh(self.i3d, self.blender_object, node=self))
+        self.register_skin_bind_id(self.id)  # Always include the root node in the skin bind IDs
 
-    def add_shape(self):
-        """Overrides the base add_shape. Its only job is to create the shape with the correct name and flags."""
-        if self.shape_id is not None:
-            return
+    def _create_shape(self):
+        """Overrides the base _create_shape to create a deferred IndexedTriangleSet specifically for a merge group."""
+        self.logger.debug(f"Creating deferred shape for MergeGroupRoot '{self.merge_group_name}'")
+        dummy_mesh = EvaluatedMesh(self.i3d, self.blender_object, node=self)
+        self.shape_id = self.i3d.add_shape(dummy_mesh, self.merge_group_name, is_merge_group=True)
+        self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
-        self.logger.debug(f"Creating shape for MergeGroupRoot '{self.merge_group_name}'")
-        self.shape_id = self.i3d.add_shape(
-            EvaluatedMesh(self.i3d, self.blender_object, node=self),
-            self.merge_group_name,
-            is_merge_group=True
-        )
-        self.xml_elements['IndexedTriangleSet'] = self.its.element
+    def register_skin_bind_id(self, node_id: int):
+        """Adds a node ID to the list for skin bind nodes."""
+        if node_id not in self.skin_bind_node_ids:
+            self.skin_bind_node_ids.append(node_id)
+            self.skin_bind_node_ids.sort()
+            id_string = " ".join(map(str, self.skin_bind_node_ids))
+            self._write_attribute('skinBindNodeIds', id_string)
+            self.logger.debug(f"Registered skin bind ID {node_id} for MergeGroup '{self.merge_group_name}'")
 
-    def add_mergegroup_child(self, child: MergeGroupChild):
-        """
-        Adds a child mesh to the processing queue.
-        """
-        # The shape is guaranteed to exist because the root's __init__ called add_shape.
+    def add_child(self, child: MergeGroupChild):
+        """Adds a child mesh to the processing queue and registers its ID for skin binding."""
         self.logger.debug(f"Adding Child '{child.blender_object.name}' to MergeGroup '{self.merge_group_name}'")
-        self.skin_bind_ids += f"{child.id:d} "
-        # For each child, add skinBindNodeIds, or else we will end up with "root" as the only skin bind node.
-        self._write_attribute('skinBindNodeIds', self.skin_bind_ids[:-1])
+        self.register_skin_bind_id(child.id)
+        # Append the child's mesh data, transformed relative to this root's world matrix.
         self.its.append_from_evaluated_mesh(
             EvaluatedMesh(self.i3d, child.blender_object, reference_frame=self.blender_object.matrix_world)
         )
 
     def populate_xml_element(self):
-        """
-        This is called during the main traversal. Because the IndexedTriangleSet for merge groups is deferred,
-        this method only needs to handle the node-level attributes.
-        """
+        """Populates attributes known at creation time. `skinBindNodeIds` is handled by `register_skin_bind_id`"""
         super().populate_xml_element()
-        self._write_attribute('skinBindNodeIds', self.skin_bind_ids[:-1])
 
 
 class MergeGroup:
+    """Temporary collector to handle out-of-order processing of merge group nodes."""
     def __init__(self, name: str):
         self.name = name
         self.root_node: MergeGroupRoot | None = None
-        self.child_nodes: list[MergeGroupChild] = list()  # List of child nodes for the merge group
+        self.child_nodes: list[MergeGroupChild] = []
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': self.name})
-        self.logger.debug("Initialized merge group")
+        self.logger.debug("Initialized merge group collector")
 
     # Should only be run once, when the root node is found.
     def set_root(self, root_node: MergeGroupRoot):
+        """Assigns the root node and processes any children that were found before the root."""
         self.root_node = root_node
+        self.logger.debug(f"Root node '{root_node.name}' set for merge group '{self.name}'.")
+        # If there are any pre-existing children, register them with the root node.
         if self.child_nodes:
-            self.logger.debug(f"{len(self.child_nodes)} were added before the root node was found")
+            self.logger.debug(f"Registering {len(self.child_nodes)} pre-existing children with the root.")
             for child in self.child_nodes:
-                self.root_node.add_mergegroup_child(child)
-        else:
-            self.logger.debug("No pre-added children before root was found")
-        return self.root_node
+                self.root_node.add_child(child)
 
-    def add_child(self, child_node: MergeGroupChild):
+    def add_child(self, child_node: MergeGroupChild) -> None:
+        """Adds a child node to the collector and registers it with the root if the root already exists."""
         self.child_nodes.append(child_node)
+        # If the root node is already set, immediately register the new child.
         if self.root_node is not None:
-            self.root_node.add_mergegroup_child(self.child_nodes[-1])
-        return self.child_nodes[-1]
+            self.root_node.add_child(child_node)

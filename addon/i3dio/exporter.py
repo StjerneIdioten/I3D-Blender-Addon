@@ -249,7 +249,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 i3d.merge_groups.setdefault(
                     obj.i3d_merge_group_index, MergeGroup(xml_i3d.merge_group_prefix + blender_merge_group.name)
                 )
-                node = i3d.add_merge_group_node(obj, _parent, blender_merge_group.root is obj)
+                node = i3d.add_merge_group_node(obj, _parent)
 
             # Process Skinned Meshes if enabled and MergeChildren wasn't applied
             elif ('SKINNED_MESHES' in i3d.settings['features_to_export']

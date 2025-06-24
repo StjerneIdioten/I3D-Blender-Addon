@@ -87,7 +87,7 @@ class IndexedTriangleSet(Node):
     NAME_FIELD_NAME = 'name'
     ID_FIELD_NAME = 'shapeId'
 
-    def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh,
+    def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, *,
                  shape_name: str | None = None,
                  is_merge_group: bool = False,
                  is_generic: bool = False,
@@ -110,6 +110,10 @@ class IndexedTriangleSet(Node):
         self.material_ids: list[int] = []
         self.tangent: bool = False
         self.final_skin_bind_node_ids: list[int] = []
+
+        self.final_has_uvs: bool = False
+        self.final_max_uv_layers: int = 0
+        self.final_has_colors: bool = False
 
         # self.child_index: int = 0
         # self.generic_values_by_child_index = {}
@@ -148,6 +152,10 @@ class IndexedTriangleSet(Node):
         if not all([num_verts, num_loops, num_tris]):
             self.logger.warning(f"Mesh '{mesh.name}' has no vertices, loops, or triangles. Skipping extraction.")
             return None
+
+        if not len(mesh.materials):
+            self.logger.warning(f"Mesh '{mesh.name}' has no materials. Assigning default material for export.")
+            mesh.materials.append(self.i3d.get_default_material().blender_material)
 
         # Vertex positions
         positions = np.empty((num_verts, 3), dtype=np.float32)
@@ -213,9 +221,11 @@ class IndexedTriangleSet(Node):
                                mesh: bpy.types.Mesh,
                                mesh_object: bpy.types.Object) -> tuple[np.ndarray | None, np.ndarray | None]:
         """Extracts, processes, and normalizes skinning data for up to 4 bone influences."""
-        if not self.bone_mapping or not mesh_object.vertex_groups:
-            self.logger.debug(f"Mesh '{mesh.name}' has no vertex groups or armature. Skipping skinning.")
-            return None, None
+        if not self.bone_mapping:
+            return None, None  # Not a skinned mesh
+        if not mesh_object.vertex_groups:
+            self.logger.debug(f"Mesh '{mesh.name}' has no vertex groups. Skipping skinning.")
+            return None, None  # Was initialized as skinned mesh, but has no vertex groups
         num_verts = len(mesh.vertices)
 
         # Map Blenders vertex groups to the final bone indices for the i3d file
@@ -294,81 +304,88 @@ class IndexedTriangleSet(Node):
         np.divide(final_weights, row_sums, out=final_weights, where=row_sums != 0)
         return final_indices, final_weights
 
-    def _get_vertex_buffer_dtype(self, num_uvs: int, has_id: bool, has_colors: bool, has_skin: bool) -> np.dtype:
+    def _get_vertex_buffer_dtype(self) -> np.dtype:
         """Creates the numpy dtype for the final packed vertex buffer."""
         fields = [
             ('px', 'f4'), ('py', 'f4'), ('pz', 'f4'),
             ('nx', 'f4'), ('ny', 'f4'), ('nz', 'f4'),
         ]
-        if has_id:
+        if self.is_merge_group or self.is_generic:
             fields.append(('id', 'f4'))
-        for i in range(num_uvs):
+        for i in range(self.final_max_uv_layers):
             fields.extend([(f'u{i}', 'f4'), (f'v{i}', 'f4')])
-        if has_colors:
+        if self.final_has_colors:
             fields.extend([('r', 'f4'), ('g', 'f4'), ('b', 'f4'), ('a', 'f4')])
-        if has_skin:
+        if self.bone_mapping is not None:
             fields.extend([
                 ('blend_indices', '(4,)i4'),  # Vector of 4 ints
                 ('blend_weights', '(4,)f4')  # Vector of 4 floats
             ])
         return np.dtype(fields)
 
-    @staticmethod
-    def _pad_mesh_data(mesh_data: MeshExtraction, max_uvs: int, has_uvs: bool, has_colors: bool) -> MeshExtraction:
+    def _pad_mesh_data(self, mesh_data: MeshExtraction, source_mesh_name: str) -> MeshExtraction:
         """ Pads the mesh data to ensure it has the correct number of UVs and colors."""
+        group_type = "Shape"
+        if self.is_merge_group:
+            group_type = "Merge Group"
+        elif self.is_generic:
+            group_type = "Merge Children (generic)"
+
+        max_uvs = self.final_max_uv_layers
         padded_uvs = mesh_data.uvs
         padded_colors = mesh_data.colors
-        if has_uvs:
+
+        if self.final_has_uvs:
             if padded_uvs is None:
+                self.logger.warning(
+                    f"{group_type} Inconsistency: Mesh {source_mesh_name!r} has no UV layers, "
+                    f"but other meshes in the group do. Padding with defaults."
+                )
                 padded_uvs = np.zeros((len(mesh_data.positions), max_uvs * 2), dtype=np.float32)
             elif padded_uvs.shape[1] < max_uvs * 2:
+                self.logger.warning(
+                    f"{group_type} Inconsistency: Mesh {source_mesh_name!r} has fewer UVs than expected. "
+                    f"Padding with zeros to match {max_uvs} UV layers."
+                )
                 padding_shape = (padded_uvs.shape[0], max_uvs * 2 - padded_uvs.shape[1])
                 padded_uvs = np.hstack([padded_uvs, np.zeros(padding_shape, dtype=np.float32)])
 
-        if has_colors and padded_colors is None:
+        if self.final_has_colors and padded_colors is None:
+            self.logger.warning(
+                f"{group_type} Inconsistency: Mesh {source_mesh_name!r} has no color attributes, "
+                f"but other meshes in the group do. Padding with defaults."
+            )
             padded_colors = np.ones((len(mesh_data.positions), 4), dtype=np.float32)
         return dataclasses.replace(mesh_data, uvs=padded_uvs, colors=padded_colors)
 
     def append_from_evaluated_mesh(self, mesh_to_append: EvaluatedMesh, generic_value: float = None):
-        """Appends mesh data from another EvaluatedMesh to existing IndexedTriangleSet."""
-        if not (self.is_merge_group or self.is_generic):
-            self.logger.warning("Cannot add a mesh to an IndexedTriangleSet that is neither a merge group nor generic.")
-            return
+        """Appends mesh data from another EvaluatedMesh to the pending queue."""
         if self.is_generic:
-            self.logger.debug(f"Queueing mesh '{mesh_to_append.mesh.name}' with generic value '{generic_value}'")
+            self.logger.debug(f"Queueing mesh {mesh_to_append.mesh.name!r} with generic value '{generic_value}'")
             self.pending_meshes.append({
                 'mesh_obj': mesh_to_append.mesh,
                 'id_value': generic_value or 0.0,  # The generic value
             })
-        else:  # is_merge_group
-            self.logger.debug(f"Queueing mesh '{mesh_to_append.mesh.name}' with bind index '{self.bind_index}'")
+            return
+        if self.is_merge_group:
+            self.logger.debug(f"Queueing mesh {mesh_to_append.mesh.name!r} with bind index '{self.bind_index}'")
             self.pending_meshes.append({
                 'mesh_obj': mesh_to_append.mesh,
-                'id_value': self.bind_index,  # The singleBlendWeight bind ID
+                'id_value': self.bind_index,  # The index into the final skinBindNodeIds list
             })
             self.bind_index += 1
-
-    def process_meshes(self, meshes_to_process: list):
-        self.logger.info("Starting mesh processing...")
-        if not meshes_to_process:
-            self.logger.debug("No meshes to process.")
-            self.final_vertices = np.array([])
-            self.final_triangles = np.array([])
-            self.final_subsets = []
             return
+        self.logger.warning("Cannot add a mesh to an IndexedTriangleSet that is neither a merge group nor generic.")
 
+    def _process_meshes(self, meshes_to_process: list):
         self.logger.info(f"Starting Subset-by-Subset processing of {len(meshes_to_process)} mesh blocks.")
 
         # Max 4 UV layers allowed per mesh
-        max_uvs = min(4, max((len(m['mesh_obj'].uv_layers)
-                              for m in meshes_to_process if m['mesh_obj'].uv_layers), default=0))
-        has_colors = any(m['mesh_obj'].color_attributes for m in meshes_to_process)
-        has_skin = self.bone_mapping is not None
-        has_id = self.is_merge_group or self.is_generic
-        dot_dtype = self._get_vertex_buffer_dtype(max_uvs, has_id, has_colors, has_skin)
-        self.final_has_uvs = max_uvs > 0
-        self.final_max_uv_layers = max_uvs
-        self.final_has_colors = has_colors
+        self.final_max_uv_layers = min(4, max((len(m['mesh_obj'].uv_layers)
+                                               for m in meshes_to_process if m['mesh_obj'].uv_layers), default=0))
+        self.final_has_uvs = self.final_max_uv_layers > 0
+        self.final_has_colors = any(m['mesh_obj'].color_attributes for m in meshes_to_process)
+        dot_dtype = self._get_vertex_buffer_dtype()
 
         # Group ALL triangles from ALL meshes by material
         self.logger.debug("Grouping all triangles by final material subset...")
@@ -388,10 +405,9 @@ class IndexedTriangleSet(Node):
 
             mesh_id = id(mesh_data)
             if mesh_id not in padded_mesh_data_cache:
-                self.logger.debug(f"Padding mesh data for mesh ID {mesh_id}")
+                self.logger.debug(f"Padding mesh data for '{item['mesh_obj'].name}'")
                 # In case of multiple meshes, we need to ensure that all of them have same amount of uvs & colors
-                padded_mesh_data_cache[mesh_id] = self._pad_mesh_data(mesh_data, max_uvs,
-                                                                      self.final_has_uvs, self.final_has_colors)
+                padded_mesh_data_cache[mesh_id] = self._pad_mesh_data(mesh_data, item['mesh_obj'].name)
             final_mesh_data: MeshExtraction = padded_mesh_data_cache[mesh_id]
 
             for i, mat_idx in enumerate(final_mesh_data.tri_material_indices):
@@ -466,17 +482,17 @@ class IndexedTriangleSet(Node):
                 subset_dots['nx'][mask], subset_dots['ny'][mask], subset_dots['nz'][mask] = (
                     mesh_data.normals[indices_for_this_mesh].T
                 )
-                if has_id:
+                if self.is_merge_group or self.is_generic:
                     subset_dots['id'][mask] = ids_for_this_mesh
                 if self.final_has_uvs and mesh_data.uvs is not None:
                     num_uvs_in_mesh = mesh_data.uvs.shape[1] // 2
-                    for i in range(min(max_uvs, num_uvs_in_mesh)):
+                    for i in range(min(self.final_max_uv_layers, num_uvs_in_mesh)):
                         subset_dots[f'u{i}'][mask], subset_dots[f'v{i}'][mask] = \
                             mesh_data.uvs[indices_for_this_mesh, i * 2:i * 2 + 2].T
                 if self.final_has_colors and mesh_data.colors is not None:
                     subset_dots['r'][mask], subset_dots['g'][mask], subset_dots['b'][mask], subset_dots['a'][mask] = \
                         mesh_data.colors[indices_for_this_mesh].T
-                if has_skin and mesh_data.blend_indices is not None:
+                if self.bone_mapping is not None and mesh_data.blend_indices is not None:
                     vertex_indices_for_loops = mesh_data.loop_vertex_indices[indices_for_this_mesh]
                     loop_bone_indices = mesh_data.blend_indices[vertex_indices_for_loops]
                     loop_bone_weights = mesh_data.blend_weights[vertex_indices_for_loops]
@@ -520,8 +536,8 @@ class IndexedTriangleSet(Node):
 
     def process_and_write_mesh_data(self):
         """
-        This is the main workhorse. It processes mesh data (either single or
-        merged) and writes the final results to the XML elements.
+        This is the main workhorse. It processes mesh data (either single or merged)
+        and writes the final results to the XML elements.
         """
         self.logger.debug(f"Starting final processing for shape '{self.name}'")
 
@@ -529,11 +545,13 @@ class IndexedTriangleSet(Node):
         meshes_to_process = []
         if self.is_merge_group or self.is_generic:
             meshes_to_process = self.pending_meshes
-        else:
-            # Standard mesh case
+        else:  # Standard mesh case
             meshes_to_process = [{'mesh_obj': self.evaluated_mesh.mesh, 'id_value': None}]
 
-        self.process_meshes(meshes_to_process)
+        if not meshes_to_process:
+            self.logger.warning(f"No meshes to process for shape '{self.name}'.")
+            return
+        self._process_meshes(meshes_to_process)
 
         # Write the final mesh data to XML
         final_verts = self.final_vertices
@@ -554,13 +572,13 @@ class IndexedTriangleSet(Node):
                     self._write_attribute(f"uv{i}", True, 'vertices')
 
         if self.is_generic:
-            self.logger.debug(f"Writing generic values for shape '{self.name}'")
+            self.logger.debug(f"Setting generic to True for shape '{self.name}'")
             self._write_attribute('generic', True, 'vertices')
         elif self.is_merge_group:
-            self.logger.debug(f"Writing singleblendweights for merge group '{self.name}'")
+            self.logger.debug(f"Setting singleblendweights to True for merge group '{self.name}'")
             self._write_attribute('singleblendweights', True, 'vertices')
         elif self.bone_mapping is not None:
-            self.logger.debug(f"Writing blendweights for skinned shape '{self.name}'")
+            self.logger.debug(f"Setting blendweights to True for skinned shape '{self.name}'")
             self._write_attribute('blendweights', True, 'vertices')
 
         self._process_bounding_volume()
@@ -770,23 +788,29 @@ class ShapeNode(SceneGraphNode):
     ELEMENT_TAG = 'Shape'
 
     def __init__(self, id_: int, shape_object: bpy.types.Object | None, i3d: I3D, parent: SceneGraphNode | None = None):
-        self.shape_id = None
+        self.shape_id: int | None = None
         super().__init__(id_=id_, blender_object=shape_object, i3d=i3d, parent=parent)
+
+        self._create_shape()  # Create shape immediately upon initialization
+
+    def _create_shape(self) -> None:
+        """Creates the associated shape data (IndexTriangleSet or NurbsCurve) and stores its ID."""
+        self.logger.debug(f"Creating shape data for object {self.blender_object.name!r}")
+        if self.blender_object.type == 'CURVE':
+            # Create and add the NurbsCurve data object to the i3d file
+            self.shape_id = self.i3d.add_curve(EvaluatedNurbsCurve(self.i3d, self.blender_object))
+            # Keep reference to the NurbsCurve element
+            self.xml_elements['NurbsCurve'] = self.i3d.shapes[self.shape_id].element
+        else:
+            # Create and add the EvaluatedMesh data object to the i3d file
+            self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object, node=self))
+            # Keep reference to the IndexedTriangleSet element
+            self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
         return self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
 
-    def add_shape(self):
-        self.logger.debug(f"Adding shape for object '{self.blender_object.name}'")
-        if self.blender_object.type == 'CURVE':
-            self.shape_id = self.i3d.add_curve(EvaluatedNurbsCurve(self.i3d, self.blender_object))
-            self.xml_elements['NurbsCurve'] = self.i3d.shapes[self.shape_id].element
-        else:
-            self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object, node=self))
-            self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
-
-    def populate_xml_element(self):
-        self.add_shape()
+    def populate_xml_element(self) -> None:
         self._write_attribute('shapeId', self.shape_id)
         super().populate_xml_element()
