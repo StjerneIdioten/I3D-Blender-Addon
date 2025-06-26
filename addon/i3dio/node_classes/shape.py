@@ -447,14 +447,16 @@ class IndexedTriangleSet(Node):
             # Store both item and its mesh data for later use
             extracted_mesh_data.append((item, final_mesh_data))
 
-        # Build master list of unique materials from processed mesh data
+        # Build master list of unique materials from processed mesh data which have triangles assigned to them.
         globally_ordered_materials = []
         visited_materials = set()
         for _, mesh_data in extracted_mesh_data:
-            for mat in mesh_data.materials:
-                if mat and mat not in visited_materials:
-                    globally_ordered_materials.append(mat)
-                    visited_materials.add(mat)
+            for mat_idx in mesh_data.tri_material_indices:
+                if 0 <= mat_idx < len(mesh_data.materials):
+                    mat = mesh_data.materials[mat_idx]
+                    if mat and mat not in visited_materials:
+                        globally_ordered_materials.append(mat)
+                        visited_materials.add(mat)
 
         # Create final mapping based on the globally ordered materials
         master_material_map = OrderedDict({mat.name: i for i, mat in enumerate(globally_ordered_materials)})
@@ -660,7 +662,7 @@ class IndexedTriangleSet(Node):
             xml_i3d.SubElement(self.xml_elements['subsets'], 'Subset', attrs)
 
         self.evaluated_mesh.node._write_attribute('materialIds', ' '.join(map(str, self.material_ids)))
-        self.logger.debug(f"Written {len(self.material_ids)} material IDs for shape '{self.evaluated_mesh.node.name}'")
+        self.logger.debug(f"Added {len(self.material_ids)} material IDs for shape '{self.evaluated_mesh.node.name}'")
 
         self.logger.info(f"Exported {self.final_vertices.shape[0]} vertices, {self.final_triangles.shape[0]} triangles"
                          f" and {len(self.final_subsets)} subsets for shape '{self.name}'.")
