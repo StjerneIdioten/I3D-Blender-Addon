@@ -1,13 +1,19 @@
 import bpy
-
+import math
+import mathutils
+from dataclasses import dataclass
+from .. import utility, xml_i3d
+from ..i3d import I3D
+from ..ui.shader_picker import SHADER_DEFAULT
+from ..ui.shader_parser import get_shader_dict
 from .node import Node
 
-from .. import (
-    utility, xml_i3d
-)
-from ..ui import shader_picker
 
-from ..i3d import I3D
+@dataclass
+class SocketData:
+    texture_path: str | None
+    bump_depth: float | None
+    color: list[float] | None
 
 
 class Material(Node):
@@ -31,147 +37,139 @@ class Material(Node):
     def element(self, value):
         self.xml_elements['node'] = value
 
-    def is_normalmapped(self):
+    def is_normalmapped(self) -> bool:
         return 'Normalmap' in self.xml_elements
 
-    def populate_xml_element(self):
-        if self.blender_material.use_nodes:
+    def populate_xml_element(self) -> None:
+        material = self.blender_material
+        if material.use_nodes:
             self._resolve_with_nodes()
         else:
-            self._resolve_without_nodes()
+            self._write_color(material.diffuse_color, 'diffuseColor')
+            self._write_color([1.0 - material.roughness, 1, material.metallic], 'specularColor')
+            self.logger.debug("Does not use nodes")
+
         self._export_shader_settings()
         self._write_properties()
 
-    def _resolve_with_nodes(self):
-        main_node = self.blender_material.node_tree.nodes.get('Principled BSDF')
-        if main_node is not None:
-            self._diffuse_from_nodes(main_node)
-            self._normal_from_nodes(main_node)
-            self._specular_from_nodes(main_node)
-            self._emissive_from_nodes(main_node)
-        else:
-            self.logger.warning(f"Uses nodes but Principled BSDF node is not found!")
+    def _resolve_with_nodes(self) -> None:
+        if (bsdf := next((node for node in self.blender_material.node_tree.nodes
+                          if node.bl_idname == "ShaderNodeBsdfPrincipled"), None)) is None:
+            self.logger.warning("Uses nodes but Principled BSDF node is not found!")
+            return
+        self.logger.debug("Uses nodes and has Principled BSDF node")
 
-        gloss_node = self.blender_material.node_tree.nodes.get('Glossmap')
-        specular_socket = main_node.inputs['Specular IOR Level']
-        if gloss_node is not None:
+        self.skip_diffuse = False
+        self.has_emission_texture = False
+        self.has_glossmap = False
+
+        # Process emission first, since it influences diffuse color
+        self._process_material_input('Emission Color', 'Emissivemap', bsdf, use_emission=True)
+        # Only export diffuse if Emission Color has no input node
+        if not self.has_emission_texture:
+            self._process_material_input('Base Color', 'Texture', bsdf)
+        self._process_material_input('Normal', 'Normalmap', bsdf)
+        self._glossmap_from_nodes(bsdf)
+        if not self.has_glossmap:
+            self._write_color([1.0 - bsdf.inputs['Roughness'].default_value,
+                               bsdf.inputs['Specular IOR Level'].default_value,
+                               bsdf.inputs['Metallic'].default_value], 'specularColor')
+
+    def _process_material_input(self, socket_name: str, xml_key: str, node, use_emission=False) -> None:
+        """Processes a material property and exports texture or color data."""
+        if (socket := node.inputs.get(socket_name)) is None:
+            return
+        socket_data = self._extract_socket_data(socket)
+
+        # If Emission has no texture and Emission Strength is 0, skip exporting
+        if use_emission and not socket_data.texture_path and node.inputs['Emission Strength'].default_value == 0:
+            self.logger.debug("Ignoring Emission Color because Emission Strength == 0")
+            return
+
+        if socket_data.texture_path:  # Export texture if present
+            self._write_texture_to_xml(socket_data.texture_path, xml_key, socket_data.bump_depth)
+            if use_emission:
+                self.skip_diffuse = True  # If emission has a texture, skip exporting diffuse color
+                self.has_emission_texture = True
+
+        elif socket_data.color:  # Export color if no texture is present
+            if use_emission:
+                self.skip_diffuse = True  # If emission has a color, skip exporting diffuse color
+                self._write_color(socket_data.color, 'emissiveColor')
+            elif not self.skip_diffuse and xml_key == 'Texture':
+                self._write_color(socket_data.color, 'diffuseColor')
+
+    def _extract_socket_data(self, socket: bpy.types.NodeSocket) -> SocketData:
+        """Extracts texture path or color data from a given BSDF socket."""
+        texture_path = None
+        bump_depth = None  # Only used for Normal Map textures
+        color = None
+        if socket.is_linked:
             try:
-                if gloss_node.type == "SEPARATE_COLOR":
-                    gloss_image_path = gloss_node.inputs['Color'].links[0].from_node.image.filepath
-                elif gloss_node.type == "TEX_IMAGE":
-                    gloss_image_path = gloss_node.image.filepath
-                else:
-                    raise AttributeError(f"Has an improperly setup Glossmap")
-            except (AttributeError, IndexError, KeyError):
-                self.logger.exception(f"Has an improperly setup Glossmap")
-            else:
-                self.logger.debug(f"Has Glossmap '{utility.as_fs_relative_path(gloss_image_path)}'")
-                file_id = self.i3d.add_file_image(gloss_image_path)
-                self.xml_elements['Glossmap'] = xml_i3d.SubElement(self.element, 'Glossmap')
-                self._write_attribute('fileId', file_id, 'Glossmap')
-        elif specular_socket.is_linked:
-            connected_node = specular_socket.links[0].from_node
-            if connected_node.type == "TEX_IMAGE":
-                if connected_node.image is None:
-                    self.logger.error(f"Specular node has no image")
-                else:
-                    self.logger.debug(f"Has Glossmap '{utility.as_fs_relative_path(connected_node.image.filepath)}'")
-                    file_id = self.i3d.add_file_image(connected_node.image.filepath)
-                    self.xml_elements['Glossmap'] = xml_i3d.SubElement(self.element, 'Glossmap')
-                    self._write_attribute('fileId', file_id, 'Glossmap')
-            else:
-                self.logger.debug(f"Specular node is not a TEX_IMAGE node")
+                connected_node = socket.links[0].from_node
+                # Texture node directly connected to BSDF
+                if connected_node.bl_idname == "ShaderNodeTexImage" and connected_node.image:
+                    texture_path = connected_node.image.filepath
+
+                # Normal Map node (ShaderNodeTexImage → ShaderNodeNormalMap → BSDF Input)
+                if connected_node.bl_idname == "ShaderNodeNormalMap" and connected_node.inputs['Color'].is_linked:
+                    normal_map_input = connected_node.inputs['Color'].links[0].from_node
+                    if normal_map_input.bl_idname == "ShaderNodeTexImage" and normal_map_input.image:
+                        texture_path = normal_map_input.image.filepath
+                        if (strength := connected_node.inputs['Strength'].default_value) != 1.0:
+                            bump_depth = strength
+
+                # Color sockets can have a ShaderNodeRGB connected to them for color input
+                if connected_node.bl_idname == "ShaderNodeRGB":
+                    color = connected_node.outputs['Color'].default_value
+
+            except (AttributeError, IndexError, KeyError) as e:
+                self.logger.exception(f"Failed to extract socket data for {socket.name}: {e}")
+        # If no texture path or color was found, use the default value of the socket
+        if not (texture_path or color):
+            self.logger.debug(f"Has no texture or color for {socket.name}, using default value")
+            color = socket.default_value
+        return SocketData(texture_path, bump_depth, color)
+
+    def _find_node_by_name(self, name: str) -> bpy.types.Node:
+        return next((node for node in self.blender_material.node_tree.nodes
+                     if node.name.lower() == name or node.label.lower() == name), None)
+
+    def _extract_glossmap_data(self, gloss_node: bpy.types.Node) -> SocketData | None:
+        """Extracts texture data from a detected glossmap node."""
+        if gloss_node.bl_idname == "ShaderNodeTexImage" and gloss_node.image:
+            return SocketData(gloss_node.image.filepath, None, None)
+        if gloss_node.bl_idname == "ShaderNodeSeparateColor":
+            return self._extract_socket_data(gloss_node.inputs.get('Color'))
+        return None
+
+    def _glossmap_from_nodes(self, bsdf: bpy.types.ShaderNodeBsdfPrincipled) -> None:
+        """Handles special glossmap node lookup and extraction."""
+        gloss_node = self._find_node_by_name('glossmap')
+        gloss_socket_data = self._extract_glossmap_data(gloss_node) if gloss_node else None
+
+        # If no named Glossmap node was found, check the Specular IOR Level input
+        if not (gloss_socket_data and gloss_socket_data.texture_path):
+            gloss_socket_data = self._extract_socket_data(bsdf.inputs.get("Specular IOR Level"))
+
+        if gloss_socket_data and gloss_socket_data.texture_path:
+            self._write_texture_to_xml(gloss_socket_data.texture_path, 'Glossmap')
+            self.has_glossmap = True
         else:
-            self.logger.debug(f"Has no Glossmap")
+            self.logger.debug("Has no Glossmap")
 
-    def _specular_from_nodes(self, node):
-        specular = [1.0 - node.inputs['Roughness'].default_value,
-                    node.inputs['Specular IOR Level'].default_value,
-                    node.inputs['Metallic'].default_value]
-        self._write_specular(specular)
+    def _write_texture_to_xml(self, texture_path: str, xml_key: str, bump_depth: float = None) -> None:
+        """Handles writing texture file references to XML."""
+        if texture_path:
+            self.logger.debug(f"Has {xml_key}: '{utility.as_fs_relative_path(texture_path)}'")
+            file_id = self.i3d.add_file_image(texture_path)
+            self.xml_elements[xml_key] = xml_i3d.SubElement(self.element, xml_key)
+            self._write_attribute('fileId', file_id, xml_key)
+            if bump_depth is not None:
+                self._write_attribute('bumpDepth', "{0:.6f}".format(bump_depth), xml_key)
 
-    def _normal_from_nodes(self, node):
-        normal_node_socket = node.inputs['Normal']
-        if normal_node_socket.is_linked:
-            try:
-                normal_image_path = normal_node_socket.links[0].from_node.inputs['Color'].links[0] \
-                    .from_node.image.filepath
-            except (AttributeError, IndexError, KeyError):
-                self.logger.exception(f"Has an improperly setup Normalmap")
-            else:
-                self.logger.debug(f"Has Normalmap '{utility.as_fs_relative_path(normal_image_path)}'")
-                file_id = self.i3d.add_file_image(normal_image_path)
-                self.xml_elements['Normalmap'] = xml_i3d.SubElement(self.element, 'Normalmap')
-                self._write_attribute('fileId', file_id, 'Normalmap')
-        else:
-            self.logger.debug(f"Has no Normalmap")
-
-    def _diffuse_from_nodes(self, node):
-        color_socket = node.inputs['Base Color']
-        diffuse = color_socket.default_value
-        if color_socket.is_linked:
-            try:
-                color_connected_node = color_socket.links[0].from_node
-                if color_connected_node.bl_idname == 'ShaderNodeRGB':
-                    diffuse = color_connected_node.outputs[0].default_value
-                    diffuse_image_path = None
-                else:
-                    diffuse_image_path = color_connected_node.image.filepath
-            except (AttributeError, IndexError, KeyError):
-                self.logger.exception(f"Has an improperly setup Texture")
-            else:
-                if diffuse_image_path is not None:
-                    self.logger.debug(f"Has diffuse texture '{utility.as_fs_relative_path(diffuse_image_path)}'")
-                    file_id = self.i3d.add_file_image(diffuse_image_path)
-                    self.xml_elements['Texture'] = xml_i3d.SubElement(self.element, 'Texture')
-                    self._write_attribute('fileId', file_id, 'Texture')
-        else:
-            # Write the diffuse colors
-            emission_socket = node.inputs['Emission Color']
-            if not emission_socket.is_linked:
-                self._write_diffuse(diffuse)
-
-    def _emissive_from_nodes(self, node):
-        emission_socket = node.inputs['Emission Color']
-        emission_c = emission_socket.default_value
-        emissive_path = None
-        if emission_socket.is_linked:
-            try:
-                color_connected_node = emission_socket.links[0].from_node
-                if color_connected_node.bl_idname == 'ShaderNodeRGB':
-                    emission_c = color_connected_node.outputs[0].default_value
-                else:
-                    emissive_path = emission_socket.links[0].from_node.image.filepath
-            except (AttributeError, IndexError, KeyError):
-                self.logger.exception(f"Has an improperly setup Texture")
-            else:
-                if emissive_path is not None:
-                    self.logger.info("Has Emissivemap")
-                    file_id = self.i3d.add_file_image(emissive_path)
-                    self.xml_elements['Emissive'] = xml_i3d.SubElement(self.element, 'Emissivemap')
-                    self._write_attribute('fileId', file_id, 'Emissive')
-                    return
-            self.logger.debug("Has no Emissivemap")
-
-        has_emission = node.inputs['Emission Strength'].default_value == 0.0
-        if not has_emission:
-            self.logger.debug("Write emissiveColor")
-            self._write_emission(emission_c)
-
-    def _resolve_without_nodes(self):
-        material = self.blender_material
-        self._write_diffuse(material.diffuse_color)
-        self._write_specular([1.0 - material.roughness, 1, material.metallic])
-        self.logger.debug(f"Does not use nodes")
-
-    def _write_diffuse(self, diffuse_color):
-        self._write_attribute('diffuseColor', "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*diffuse_color))
-
-    def _write_specular(self, specular_color):
-        self._write_attribute('specularColor', "{0:.6f} {1:.6f} {2:.6f}".format(*specular_color))
-
-    def _write_emission(self, emission_color):
-        self._write_attribute('emissiveColor', "{0:.6f} {1:.6f} {2:.6f} {3:.6f}".format(*emission_color))
+    def _write_color(self, color: list[float], xml_key: str) -> None:
+        self._write_attribute(xml_key, " ".join(map('{0:.6f}'.format, color)))
 
     def _write_properties(self):
         # Alpha blending
@@ -183,34 +181,34 @@ class Material(Node):
 
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes
-        if shader_settings.source != shader_picker.shader_unselected_default_text:
-            shader_file_id = self.i3d.add_file_shader(shader_settings.source)
+        if shader_settings.shader_name != SHADER_DEFAULT:
+            shaders = get_shader_dict(shader_settings.use_custom_shaders)
+            shader_path = str(shaders[shader_settings.shader_name].path)
+            shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
-            if shader_settings.source.endswith("mirrorShader.xml"):
+            self.logger.debug(f"Shader: '{shader_settings.shader_name}' with ID: {shader_file_id}")
+
+            if shader_settings.shader_name == "mirrorShader":
                 params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
                 xml_i3d.SubElement(self.element, 'Reflectionmap', params)
 
-            if shader_settings.variation != shader_picker.shader_no_variation:
-                self._write_attribute('customShaderVariation', shader_settings.variation)
-            for parameter in shader_settings.shader_parameters:
-                parameter_dict = {'name': parameter.name}
-                if parameter.type == 'float':
-                    value = [parameter.data_float_1]
-                elif parameter.type == 'float2':
-                    value = parameter.data_float_2
-                elif parameter.type == 'float3':
-                    value = parameter.data_float_3
-                elif parameter.type == 'float4':
-                    value = parameter.data_float_4
+            if shader_settings.shader_variation_name != SHADER_DEFAULT:
+                self._write_attribute('customShaderVariation', shader_settings.shader_variation_name)
+            for pname in shader_settings.shader_material_params.keys():
+                parameter_dict = {'name': pname}
+                value = shader_settings.shader_material_params[pname]
+                default = shader_settings.shader_material_params.id_properties_ui(pname).as_dict().get('default')
+                if len(value) == 1:
+                    if not math.isclose(value[0], default[0], abs_tol=1e-7):
+                        parameter_dict['value'] = f'{value[0]:.6f}'
+                        xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
                 else:
-                    value = []
+                    print(f"Processing parameter '{pname}' with value: {value}, default: {default}")
+                    if not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default)):
+                        parameter_dict['value'] = ' '.join(f'{v:.6f}' for v in value)
+                        xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
 
-                value = ' '.join(map('{0:.6f}'.format, value))
-                parameter_dict['value'] = value
-
-                xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
-
-            for texture in shader_settings.shader_textures:
+            for texture in shader_settings.shader_material_textures:
                 self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")
                 if '' != texture.source != texture.default_source:
                     texture_dict = {'name': texture.name}

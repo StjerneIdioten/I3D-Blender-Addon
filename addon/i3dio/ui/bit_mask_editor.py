@@ -14,7 +14,7 @@ def register(cls):
     return cls
 
 
-VISIBILITY_CONDITION_FLAGS: dict[str, dict[str, str]] = {}  # category: {bit: name}
+BITMASK_FLAGS: dict[str, dict[str, str]] = {}  # category: {bit: name}
 
 
 def hex_to_binary(hex_str: str) -> str:
@@ -74,16 +74,26 @@ def set_i3d_attribute(obj: bpy.types.Object, target_prop: str, value: str) -> No
         setattr(attr_source.i3d_attributes, target_prop, value)
 
 
-def get_bit_names(target_prop: str) -> list[str]:  # No flag files for collision_mask etc in FS22
-    category_map = {"weather_required_mask": "weatherFlags", "weather_prevent_mask": "weatherFlags",
-                    "viewer_spaciality_required_mask": "viewerSpatialityFlags",
-                    "viewer_spaciality_prevent_mask": "viewerSpatialityFlags"}
+def get_bit_names(target_prop: str) -> list[str]:
+    """Retrieve bit names based on the target property."""
+    category_map = {
+        "weather_required_mask": "weatherFlags",
+        "weather_prevent_mask": "weatherFlags",
+        "viewer_spaciality_required_mask": "viewerSpatialityFlags",
+        "viewer_spaciality_prevent_mask": "viewerSpatialityFlags",
+        "object_mask": "objectMaskFlags",
+        # For FS25
+        # "collision_filter_group": COLLISIONS['flags'],  # Reuse the cached collision data
+        # "collision_filter_mask": COLLISIONS['flags']
+    }
     category = category_map.get(target_prop)
-    return [name for _bit, name in VISIBILITY_CONDITION_FLAGS.get(category, {}).items()] if category else []
+    if isinstance(category, dict):  # Handling COLLISIONS['flags']
+        return {bit: name for name, bit in category.items()}
+    return {int(bit): name for bit, name in BITMASK_FLAGS.get(category, {}).items()} if category else {}
 
 
 def message_box(message: str, title: str = "Info", icon: str = 'INFO') -> None:
-    def draw(self, context):
+    def draw(self, _context):
         self.layout.label(text=message)
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
@@ -95,25 +105,26 @@ class I3D_IO_OT_handle_invalid_bit_mask(bpy.types.Operator):
     bl_description = "Handles invalid bit mask input by resetting to default value and reopening the editor"
     bl_options = {'INTERNAL'}
 
-    target: bpy.props.StringProperty(default="")
-    used_bits: bpy.props.IntProperty(default=32)
+    args: bpy.props.StringProperty(default="")
 
     def execute(self, _context):
-        if is_data_attribute(bpy.context.object, self.target):
-            default_prop_val = I3DNodeShapeAttributes.i3d_map.get(self.target).get("default", "0")
+        import json
+        args = json.loads(self.args)
+        if is_data_attribute(bpy.context.object, args["target_prop"]):
+            default_prop_val = I3DNodeShapeAttributes.i3d_map.get(args["target_prop"], {}).get("default", "0")
         else:
-            default_prop_val = I3DNodeObjectAttributes.i3d_map.get(self.target).get("default", "0")
+            default_prop_val = I3DNodeObjectAttributes.i3d_map.get(args["target_prop"], {}).get("default", "0")
+        args["internal_value"] = str(default_prop_val)
         # Hacky way to open the bit mask editor again with the appropriate values
-        bpy.ops.i3dio.bit_mask_editor('INVOKE_DEFAULT', target_prop=self.target, used_bits=self.used_bits,
-                                      internal_value=str(default_prop_val))
+        bpy.ops.i3dio.bit_mask_editor('INVOKE_DEFAULT', **args)
         return {'FINISHED'}
 
-    def invoke(self, context, event):
+    def invoke(self, context, _event):
         return context.window_manager.invoke_props_dialog(self, width=300, confirm_text="Continue")
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
-        layout.label(text=f"Invalid Hex Value from {self.target}.", icon='ERROR')
+        layout.label(text="Invalid Hex Value.", icon='ERROR')
         layout.label(text="Click 'Continue' to use default value and open the editor.")
 
 
@@ -126,7 +137,15 @@ class I3D_IO_OT_bit_mask_editor(bpy.types.Operator):
 
     internal_value: bpy.props.StringProperty(default="")
     target_prop: bpy.props.StringProperty(default="")
+    dialog_width: bpy.props.IntProperty(default=400)
     used_bits: bpy.props.IntProperty(default=32)
+    layout_mode: bpy.props.EnumProperty(
+        items=[
+            ("HORIZONTAL", "Horizontal Rows", "Arrange bits in horizontal rows (default)"),
+            ("VERTICAL", "Vertical Columns", "Arrange bits in vertical columns"),
+        ],
+        default="HORIZONTAL"
+    )
 
     def update_placeholder(self, _context):
         hex_value = self.placeholder
@@ -206,24 +225,31 @@ class I3D_IO_OT_bit_mask_editor(bpy.types.Operator):
 
         if not is_valid_hex(hex_value):
             # Open a dialog to continue with default prop value & to let user know their input was invalid
-            bpy.ops.i3dio.handle_invalid_bit_mask('INVOKE_DEFAULT', target=self.target_prop, used_bits=self.used_bits)
+            import json
+            include = {"internal_value", "target_prop", "dialog_width", "used_bits", "layout_mode"}
+            filtered_args = {k: v for k, v in self.as_keywords().items() if k in include}
+            bpy.ops.i3dio.handle_invalid_bit_mask('INVOKE_DEFAULT', args=json.dumps(filtered_args))
             return {"CANCELLED"}
         self.placeholder = hex_value
         title = f"Bit Mask Editor - {' '.join(word.capitalize() for word in self.target_prop.split('_'))}"
-
-        width = {"weather_required_mask": 750, "weather_prevent_mask": 750, "viewer_spaciality_required_mask": 950,
-                 "viewer_spaciality_prevent_mask": 950}.get(self.target_prop, 400)
-        return context.window_manager.invoke_props_dialog(self, width=width, title=title)
+        return context.window_manager.invoke_props_dialog(self, width=self.dialog_width, title=title)
 
     def draw(self, _context):
         layout = self.layout
         bit_names = get_bit_names(self.target_prop)
 
-        grid = layout.grid_flow(row_major=True, columns=8, even_columns=True, even_rows=True, align=True)
-        for i in range(31, -1, -1):  # 31 to 0 NOTE: seems to be layed out a bit different for most bit editors in GE10
+        columns = 8 if self.layout_mode == "HORIZONTAL" else 4  # Horizontal: 8 cols, Vertical: 4 cols
+        grid = layout.grid_flow(row_major=(self.layout_mode == "HORIZONTAL"),
+                                columns=columns, even_columns=True, even_rows=True, align=True)
+        for i in range(32):
+            if self.layout_mode == "VERTICAL":
+                bit_index = (i % 8) + (i // 8) * 8  # Vertical order
+            else:
+                bit_index = 31 - i  # Default horizontal order
             row = grid.row(align=True)
-            row.enabled = i < self.used_bits or self.target_prop != "nav_mesh_mask"
-            row.prop(self, "bits", index=i, text=f"{i} {bit_names[i] if i < len(bit_names) else ''}")
+            row.enabled = bit_index < self.used_bits or self.target_prop != "nav_mesh_mask"
+            bit_name = f": {bit_names[bit_index]}" if bit_index in bit_names else ""
+            row.prop(self, "bits", index=bit_index, text=f"{bit_index}{bit_name}")
 
         layout.separator(factor=2, type='LINE')
         layout.prop(self, "bit_mask_binary", text="Binary")
@@ -241,31 +267,54 @@ class I3D_IO_OT_bit_mask_editor(bpy.types.Operator):
         return {"FINISHED"}
 
 
-def parse_flags_from_xml(file_path: Path, categories: list[str]) -> dict:
-    if not file_path.exists():
-        return {}
+def parse_flags_from_xml(file_paths: list[Path], categories: list[str]) -> dict:
+    flags = {}
+    for file_path in file_paths:
+        if not file_path.exists():
+            continue
+        tree = xml_i3d.parse(file_path)
+        if not tree:
+            continue
+        root = tree.getroot()
+        # If the root itself is a valid category (e.g., objectMaskFlags)
+        if root.tag in categories:
+            if root.tag not in flags:
+                flags[root.tag] = {}
+            for flag in root.findall('flag'):  # Extract flags directly under the root
+                bit = flag.get('bit')
+                name = flag.get('name')
+                if bit and name:
+                    flags[root.tag][bit] = name
+        # If the file contains nested categories (like weatherFlags), parse them
+        for category in root:
+            if category.tag in categories:
+                if category.tag not in flags:
+                    flags[category.tag] = {}
+                for flag in category.findall('flag'):
+                    bit = flag.get('bit')
+                    name = flag.get('name')
+                    if bit and name:
+                        flags[category.tag][bit] = name
+    return flags
 
-    tree = xml_i3d.parse(file_path)
-    if not tree:
-        return {}
 
-    root = tree.getroot()
-    return {category.tag: {flag.get('bit'): flag.get('name') for flag in category.findall('flag')
-                           if flag.get('bit') and flag.get('name')} for category in root if category.tag in categories}
-
-
-def get_visibility_condition_flags():
+def get_bitmask_flags():
     data_path = Path(bpy.context.preferences.addons[base_package].preferences.fs_data_path)
     shared_dir = data_path.parent / "shared"
-    vis_con_flags_path = shared_dir / "visibilityConditionFlags.xml"
+    xml_files = [
+        shared_dir / "visibilityConditionFlags.xml",
+        shared_dir / "objectMaskFlags.xml",
+    ]
 
-    global VISIBILITY_CONDITION_FLAGS
-    VISIBILITY_CONDITION_FLAGS = parse_flags_from_xml(vis_con_flags_path, ["weatherFlags", "viewerSpatialityFlags"])
-    return VISIBILITY_CONDITION_FLAGS
+    global BITMASK_FLAGS
+    BITMASK_FLAGS = parse_flags_from_xml(
+        xml_files, ["weatherFlags", "viewerSpatialityFlags", "objectMaskFlags"]
+    )
+    return BITMASK_FLAGS
 
 
 def register():
-    get_visibility_condition_flags()
+    get_bitmask_flags()
     for cls in classes:
         bpy.utils.register_class(cls)
 

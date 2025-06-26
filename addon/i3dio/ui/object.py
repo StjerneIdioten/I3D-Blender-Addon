@@ -461,29 +461,29 @@ class I3DMergeChildren(bpy.types.PropertyGroup):
     enabled: BoolProperty(
         name="Enable Merge Children",
         description=(
-            "Enable this object to act as the merge root for exporting its child objects. "
-            "During export, all child objects will be combined into a single merged object."
+            "Marks this object as the Merge Children Root, defining the group of child objects to be merged. "
+            "Only the child meshes will be included in the final merged Shape. "
+            "The root object's mesh data (vertices, triangles, materials, etc.) will NOT be exported, "
+            "but its shape attributes (e.g., cast shadows) and object attributes will still be used."
         ),
         default=False
     )
     apply_transforms: bpy.props.BoolProperty(
         name="Apply Transforms",
         description=(
-            "Bake location, rotation, and scale into each child mesh. When enabled, child meshes retain their "
-            "current position and orientation relative to the root (merge root object). "
-            "When disabled, child meshes will be transformed to align directly with the root object, "
-            "removing their individual offsets and placing them at the root's location."
+            "Controls whether child meshes apply their transforms before merging. "
+            "When enabled, each child mesh keeps its relative position, rotation, and scale. "
+            "When disabled, all child meshes are transformed to match the root object's location and orientation, "
+            "removing their individual offsets."
         ),
         default=False
     )
     interpolation_steps: bpy.props.IntProperty(
         name="Interpolation Steps",
         description=(
-            "Number of additional interpolation steps inserted between merged child objects. "
-            "This is useful for creating smoother animations or transitions in shaders "
-            "that utilize array textures (e.g., for motion paths). "
-            "Make sure the corresponding texture accounts for the same number of steps to "
-            "avoid unexpected offsets in the animation or effect."
+            "Sets the number of interpolation steps for smoother transitions in shaders. "
+            "This affects effects like motion paths that use array textures. "
+            "Ensure the corresponding texture supports the same step count to prevent animation misalignment."
         ),
         default=1,
         min=1,
@@ -608,7 +608,10 @@ class I3D_IO_PT_object_attributes(Panel):
         i3d_property(layout, i3d_attributes, 'min_clip_distance', obj)
         row = layout.row(align=True)
         i3d_property(row, i3d_attributes, 'object_mask', obj)
-        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'object_mask'
+        op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+        op.target_prop = 'object_mask'
+        op.layout_mode = 'HORIZONTAL'
+        op.dialog_width = 400
 
         layout.separator(type='LINE')
         box = layout.box()
@@ -620,12 +623,12 @@ class I3D_IO_PT_object_attributes(Panel):
 
         if obj.type == 'EMPTY':
             draw_level_of_detail_attributes(layout, obj, i3d_attributes)
-            draw_merge_children_attributes(layout, obj.i3d_merge_children)
             draw_reference_file_attributes(layout, obj.i3d_reference)
             draw_joint_attributes(layout, i3d_attributes)
 
         elif obj.type == 'MESH':
             draw_rigid_body_attributes(layout, i3d_attributes)
+            draw_merge_children_attributes(layout, obj.i3d_merge_children)
             draw_merge_group_attributes(layout, context)
 
         draw_visibility_condition_attributes(layout, i3d_attributes)
@@ -702,14 +705,19 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
     # layout.use_property_split = False
     header, panel = layout.panel('i3d_visibility_condition_panel', default_closed=True)
     header.use_property_split = False
-    header.prop(i3d_attributes, 'use_parent', text="Visibility Condition")
+    header.prop(i3d_attributes, 'use_parent', text="")
+    header.label(text="Visibility Condition")
     if panel:
         panel.use_property_split = True
         for prop in PROPS:
             row = panel.row()
             row.prop(i3d_attributes, prop)
             if prop.endswith('_mask'):
-                row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = prop
+                op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+                op.target_prop = prop
+                op.layout_mode = 'HORIZONTAL'  # Vertical in FS25
+                # 375 and 677 for FS25
+                op.dialog_width = 750 if prop.startswith("weather_") else 950
 
             row.enabled = not use_parent
 
@@ -724,7 +732,8 @@ def draw_joint_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.types.
 
     header, panel = layout.panel('i3d_joint_panel', default_closed=True)
     header.use_property_split = False
-    header.prop(i3d_attributes, 'joint')
+    header.prop(i3d_attributes, 'joint', text="")
+    header.label(text="Joint")
     if panel:
         panel.enabled = i3d_attributes.joint
         for prop in PROPS:
@@ -759,30 +768,31 @@ def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.C
     header, panel = layout.panel('i3d_merge_group_panel', default_closed=False)
     header.label(text="Merge Group")
     if panel:
+        panel.enabled = not obj.i3d_merge_children.enabled
         row = panel.row(align=True)
         row.operator('i3dio.choose_merge_group', text="", icon='DOWNARROW_HLT')
 
-        col = row.column(align=True)
+        merge_groups = context.scene.i3dio_merge_groups
         merge_group_index = obj.i3d_merge_group_index
-        if merge_group_index == -1:
-            col.operator("i3dio.new_merge_group", text="New", icon="ADD")
+        if merge_group_index == -1 or merge_group_index >= len(merge_groups):
+            row.operator('i3dio.new_merge_group', text="New Merge Group", icon='ADD')
+            if merge_group_index >= len(merge_groups):
+                # Unset merge group index if out of range (e.g., after copy/paste between scenes)
+                obj.property_unset('i3d_merge_group_index')
         else:
             merge_group = context.scene.i3dio_merge_groups[merge_group_index]
-            col.prop(merge_group, "name", text="")
-            col = row.column(align=True)
-            col.operator('i3dio.select_merge_group_root', text="", icon="COLOR_RED")
-            col = row.column(align=True)
-            col.operator('i3dio.select_mg_objects', text="", icon='GROUP_VERTEX')
-            col = row.column(align=True)
-            col.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
-            col = row.column(align=True)
-            col.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
+            row.prop(merge_group, "name", text="")
+            row.operator('i3dio.select_merge_group_root', text="", icon="COLOR_RED")
+            row.operator('i3dio.select_mg_objects', text="", icon='GROUP_VERTEX')
+            row.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
+            row.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
 
 
 def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_children: bpy.types.PropertyGroup) -> None:
     header, panel = layout.panel('i3d_merge_children_panel', default_closed=True)
     header.use_property_split = False
-    header.prop(i3d_merge_children, 'enabled', text="Merge Children")
+    header.prop(i3d_merge_children, 'enabled', text="")
+    header.label(text="Merge Children")
     if panel:
         panel.enabled = i3d_merge_children.enabled
         panel.prop(i3d_merge_children, 'apply_transforms')
@@ -899,7 +909,7 @@ class I3D_IO_OT_select_merge_group_root(bpy.types.Operator):
     bl_idname = "i3dio.select_merge_group_root"
     bl_label = "Select Merge Group Root"
     bl_description = "When greyed out it means that the current object is the merge group root"
-    bl_options = {'INTERNAL'}
+    bl_options = {'INTERNAL', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
@@ -915,7 +925,7 @@ class I3D_IO_OT_select_mg_objects(bpy.types.Operator):
     bl_idname = "i3dio.select_mg_objects"
     bl_label = "Select Objects in MG"
     bl_description = "Select all objects in the same merge group"
-    bl_options = {'UNDO'}
+    bl_options = {'INTERNAL', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
