@@ -438,7 +438,7 @@ class IndexedTriangleSet(Node):
         padded_mesh_data_cache = {}
         extracted_mesh_data: list[tuple[dict, MeshExtraction]] = []
         for item in meshes_to_process:
-            mesh_data = self._extract_mesh_data(item['mesh_obj'])
+            mesh_data = self._extract_mesh_data(item['mesh_obj'], item['object'])
             object_name = item['mesh_obj'].name
             if not mesh_data:
                 self.logger.warning(f"Object {object_name!r} (mesh {item['mesh_obj'].name!r}) "
