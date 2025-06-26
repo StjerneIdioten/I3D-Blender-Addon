@@ -680,8 +680,8 @@ class IndexedTriangleSet(Node):
 
     def populate_xml_element(self):
         if self.is_merge_group or self.is_generic:
-            # Defer merge groups and generic shapes until all nodes are created
-            self.logger.debug(f"Deferring population of '{self.name}' until all nodes are created.")
+            # Defer merge groups and generic shapes until children are appended
+            self.logger.debug(f"Deferring population of {self.name!r} until all meshes are appended.")
             if self not in self.i3d.deferred_shapes_to_populate:
                 self.i3d.deferred_shapes_to_populate.append(self)
             return

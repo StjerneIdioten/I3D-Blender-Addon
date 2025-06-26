@@ -40,11 +40,11 @@ class MergeGroupRoot(ShapeNode):
             self.skin_bind_node_ids.sort()
             id_string = " ".join(map(str, self.skin_bind_node_ids))
             self._write_attribute('skinBindNodeIds', id_string)
-            self.logger.debug(f"Registered skin bind ID {node_id} for MergeGroup '{self.merge_group_name}'")
+            self.logger.debug(f"Registered skin bind ID {node_id} for MergeGroup {self.merge_group_name!r}")
 
     def add_child(self, child: MergeGroupChild):
         """Adds a child mesh to the processing queue and registers its ID for skin binding."""
-        self.logger.debug(f"Adding Child '{child.blender_object.name}' to MergeGroup '{self.merge_group_name}'")
+        self.logger.debug(f"Adding Child {child.blender_object.name!r} to MergeGroup {self.merge_group_name!r}")
         self.register_skin_bind_id(child.id)
         # Append the child's mesh data, transformed relative to this root's world matrix.
         self.its.append_from_evaluated_mesh(
@@ -70,7 +70,7 @@ class MergeGroup:
     def set_root(self, root_node: MergeGroupRoot):
         """Assigns the root node and processes any children that were found before the root."""
         self.root_node = root_node
-        self.logger.debug(f"Root node '{root_node.name}' set for merge group '{self.name}'.")
+        self.logger.debug(f"Root node {root_node.name!r} set for merge group {self.name!r}.")
         # If there are any pre-existing children, register them with the root node.
         if self.child_nodes:
             self.logger.debug(f"Registering {len(self.child_nodes)} pre-existing children with the root.")

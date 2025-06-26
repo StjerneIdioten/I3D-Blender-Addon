@@ -1,5 +1,5 @@
-import bpy
 import mathutils
+import bpy
 
 from .node import SceneGraphNode
 from .shape import (ShapeNode, EvaluatedMesh)
@@ -12,14 +12,18 @@ from ..i3d import I3D
 # NOTE: The value must match the expected range in the shaders (e.g., [0..32767]).
 MERGE_CHILDREN_MAX_INDEX = 32767
 
+# Difference between Merge Group and Merge Children:
+# Merge Group collect multiple meshes which are all referenced (and keeps its location) in the scene graph
+# Merge Children collects the children meshes of the "root" and "root" mesh is not included in the IndexedTriangleSet.
+# Merge Children is used to merge all children meshes of a single object, which are not referenced in the scene graph.
+
 
 class MergeChildrenRoot(ShapeNode):
     def __init__(self, id_: int, merge_child_root: bpy.types.Object, i3d: I3D, parent: SceneGraphNode | None = None):
         super().__init__(id_=id_, shape_object=merge_child_root, i3d=i3d, parent=parent)
-
         self._add_children_meshes()
 
-    def add_shape(self) -> None:
+    def _create_shape(self) -> None:
         """Override to prevent adding any data from the root object to the shape."""
         self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object, node=self), is_generic=True)
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
@@ -32,7 +36,7 @@ class MergeChildrenRoot(ShapeNode):
         - Non-mesh objects act as interpolation steps but are otherwise ignored.
         """
         if obj.type == 'MESH':
-            self.logger.debug(f"Processing mesh: '{obj.name}', g_value: {g_value}")
+            self.logger.debug(f"Merging child: '{obj.name}', g_value: {g_value} (root: {self.blender_object.name!r})")
             self.i3d.shapes[self.shape_id].append_from_evaluated_mesh(
                 EvaluatedMesh(self.i3d, obj, reference_frame=reference_frame),
                 g_value
@@ -46,7 +50,7 @@ class MergeChildrenRoot(ShapeNode):
         Merges all child meshes of `merge_child_root`. Each *top-level child* (and its descendants)
         is assigned the same normalized `generic_value`, which is used in shaders.
 
-        If `apply_transforms` is True, local transforms are baked into the root’s transform.
+        If `apply_transforms` is True, local transforms are baked into the root's transform.
         Otherwise, each mesh preserves its own local transform.
         """
         root_obj = self.blender_object
@@ -68,5 +72,4 @@ class MergeChildrenRoot(ShapeNode):
             g_value_index += interpolation_steps
 
     def populate_xml_element(self) -> None:
-        self.logger.debug("Populating XML")
         super().populate_xml_element()
