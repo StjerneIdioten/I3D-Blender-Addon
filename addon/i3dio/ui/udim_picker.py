@@ -125,7 +125,7 @@ class I3D_IO_OT_udim_mover(Operator):
     bl_idname = 'i3dio.udim_mover'
     bl_label = "Move UV's"
     bl_description = "Move UV's to a specific position or by an offset if relative is true"
-    bl_options = {'INTERNAL'}
+    bl_options = {'INTERNAL', 'UNDO'}
 
     uv_offset: IntVectorProperty(default=(0, 0), size=2)
     mode: EnumProperty(
@@ -142,7 +142,7 @@ class I3D_IO_OT_udim_mover(Operator):
         # Grab the current sync setting, instead of looking it up all the time
         sync_enabled = bpy.context.scene.tool_settings.use_uv_select_sync
         if not sync_enabled and 'UV Editing' not in [screen.name for screen in context.workspace.screens]:
-            self.report({'INFO'}, f"UDIM Picker was used within mesh editor, but UV sync is disabled!")
+            self.report({'INFO'}, "UDIM Picker was used within mesh editor, but UV sync is disabled!")
             # Technically I could return the operator, but I will allow it to run just in case someone has some
             # other way of selecting uv's outside of the uv-editor screen
 
@@ -163,7 +163,7 @@ class I3D_IO_OT_udim_mover(Operator):
                 faces_to_verts = defaultdict(set)
                 verts_to_faces = defaultdict(set)
                 for face in [face for face in bm.faces if face.select]:
-                    #print(f"Face {face.index}")
+                    # print(f"Face {face.index}")
                     # Calculate lists of unique vert uv's and make a reverse lookup between faces and verts
                     for loop in face.loops:
                         loop_uv = loop[uv_layer]
@@ -171,7 +171,7 @@ class I3D_IO_OT_udim_mover(Operator):
                             unique_uv_id = loop_uv.uv.to_tuple(5), loop.vert.index
                             faces_to_verts[face.index].add(unique_uv_id)
                             verts_to_faces[unique_uv_id].add(face.index)
-                            #print(f"\tUV: {unique_uv_id}")
+                            # print(f"\tUV: {unique_uv_id}")
 
                 uv_islands = []
                 # A list of all the selected faces
@@ -205,13 +205,24 @@ class I3D_IO_OT_udim_mover(Operator):
         return {'FINISHED'}
 
     def parse_island(self, bm, face_idx, faces_left, island, faces_to_verts, verts_to_faces):
-        if face_idx in faces_left:
-            faces_left.remove(face_idx)
-            island.append(bm.faces[face_idx])
-            for v in faces_to_verts[face_idx]:
+        faces_to_visit = [face_idx]
+
+        # Use iterative stack to avoid recursion errors on dense meshes
+        while faces_to_visit:
+            current_face_idx = faces_to_visit.pop()
+
+            if current_face_idx not in faces_left:
+                continue
+
+            faces_left.remove(current_face_idx)
+            island.append(bm.faces[current_face_idx])
+
+            # Find all faces connected through the shared vertices
+            for v in faces_to_verts[current_face_idx]:
                 connected_faces = verts_to_faces[v]
-                for face in connected_faces:
-                    self.parse_island(bm, face, faces_left, island, faces_to_verts, verts_to_faces)
+                for connected_face_idx in connected_faces:
+                    if connected_face_idx in faces_left:
+                        faces_to_visit.append(connected_face_idx)
 
 
 @register
@@ -409,4 +420,3 @@ def unregister():
         bpy.utils.previews.remove(preview_collection)
         preview_collection.udim_previews.clear()
     preview_collections.clear()
-

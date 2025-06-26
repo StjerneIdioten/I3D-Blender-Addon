@@ -705,7 +705,8 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
     # layout.use_property_split = False
     header, panel = layout.panel('i3d_visibility_condition_panel', default_closed=True)
     header.use_property_split = False
-    header.prop(i3d_attributes, 'use_parent', text="Visibility Condition")
+    header.prop(i3d_attributes, 'use_parent', text="")
+    header.label(text="Visibility Condition")
     if panel:
         panel.use_property_split = True
         for prop in PROPS:
@@ -731,7 +732,8 @@ def draw_joint_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.types.
 
     header, panel = layout.panel('i3d_joint_panel', default_closed=True)
     header.use_property_split = False
-    header.prop(i3d_attributes, 'joint')
+    header.prop(i3d_attributes, 'joint', text="")
+    header.label(text="Joint")
     if panel:
         panel.enabled = i3d_attributes.joint
         for prop in PROPS:
@@ -770,27 +772,27 @@ def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.C
         row = panel.row(align=True)
         row.operator('i3dio.choose_merge_group', text="", icon='DOWNARROW_HLT')
 
-        col = row.column(align=True)
+        merge_groups = context.scene.i3dio_merge_groups
         merge_group_index = obj.i3d_merge_group_index
-        if merge_group_index == -1:
-            col.operator("i3dio.new_merge_group", text="New", icon="ADD")
+        if merge_group_index == -1 or merge_group_index >= len(merge_groups):
+            row.operator('i3dio.new_merge_group', text="New Merge Group", icon='ADD')
+            if merge_group_index >= len(merge_groups):
+                # Unset merge group index if out of range (e.g., after copy/paste between scenes)
+                obj.property_unset('i3d_merge_group_index')
         else:
             merge_group = context.scene.i3dio_merge_groups[merge_group_index]
-            col.prop(merge_group, "name", text="")
-            col = row.column(align=True)
-            col.operator('i3dio.select_merge_group_root', text="", icon="COLOR_RED")
-            col = row.column(align=True)
-            col.operator('i3dio.select_mg_objects', text="", icon='GROUP_VERTEX')
-            col = row.column(align=True)
-            col.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
-            col = row.column(align=True)
-            col.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
+            row.prop(merge_group, "name", text="")
+            row.operator('i3dio.select_merge_group_root', text="", icon="COLOR_RED")
+            row.operator('i3dio.select_mg_objects', text="", icon='GROUP_VERTEX')
+            row.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
+            row.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
 
 
 def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_children: bpy.types.PropertyGroup) -> None:
     header, panel = layout.panel('i3d_merge_children_panel', default_closed=True)
     header.use_property_split = False
-    header.prop(i3d_merge_children, 'enabled', text="Merge Children")
+    header.prop(i3d_merge_children, 'enabled', text="")
+    header.label(text="Merge Children")
     if panel:
         panel.enabled = i3d_merge_children.enabled
         panel.prop(i3d_merge_children, 'apply_transforms')
@@ -907,7 +909,7 @@ class I3D_IO_OT_select_merge_group_root(bpy.types.Operator):
     bl_idname = "i3dio.select_merge_group_root"
     bl_label = "Select Merge Group Root"
     bl_description = "When greyed out it means that the current object is the merge group root"
-    bl_options = {'INTERNAL'}
+    bl_options = {'INTERNAL', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
@@ -923,7 +925,7 @@ class I3D_IO_OT_select_mg_objects(bpy.types.Operator):
     bl_idname = "i3dio.select_mg_objects"
     bl_label = "Select Objects in MG"
     bl_description = "Select all objects in the same merge group"
-    bl_options = {'UNDO'}
+    bl_options = {'INTERNAL', 'UNDO'}
 
     @classmethod
     def poll(cls, context):

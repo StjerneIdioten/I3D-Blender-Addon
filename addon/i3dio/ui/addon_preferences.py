@@ -5,6 +5,8 @@ import bpy
 from bpy.types import AddonPreferences
 from bpy.props import (StringProperty, EnumProperty, BoolProperty)
 from .. import __package__ as base_package
+from .shader_parser import populate_game_shaders
+from .material_templates import parse_templates
 
 
 def show_popup(title: str, message: str, icon: str = 'ERROR', units: int = 10):
@@ -18,19 +20,34 @@ def show_popup(title: str, message: str, icon: str = 'ERROR', units: int = 10):
     wm.popover(draw_popup, ui_units_x=units)
 
 
-def update_fs_data_path(self, _context):
-    if not (path := pathlib.Path(self.fs_data_path).resolve()).exists():
-        show_popup("Invalid Path", "The provided path does not exist", units=9)
+def update_fs_data_path(self, context: bpy.types.Context) -> None:
+    wm = context.window_manager
+    if getattr(wm, "skip_fs_update_once", False):
+        wm.skip_fs_update_once = False
         return
+    path = pathlib.Path(self.fs_data_path).resolve()
+    wm.fs_last_data_path = self.fs_data_path
+
+    if not path.exists():
+        show_popup("Invalid Path", "The provided path does not exist", units=9)
+        wm.skip_fs_update_once = True
+        self.fs_data_path = ""
+        return
+
     if path.name.lower() != "data":  # Try to append "data" folder if not already present
         data_path = path / "data"
         if not data_path.exists():  # Check if "data" actually exists inside the given folder
             show_popup("Invalid Path", "Could not find 'data' folder inside provided path", units=13)
+            wm.skip_fs_update_once = True
+            self.fs_data_path = ""
             return
         path = data_path  # Append "data" if valid
+
     corrected_path = str(path) + ('\\' if path.drive else '/')
-    if corrected_path != self.fs_data_path:  # Prevent infinite recursion by only updating if different
+    if corrected_path != getattr(wm, "fs_last_data_path", ""):  # Prevent infinite recursion, only update if different
         self.fs_data_path = corrected_path
+        populate_game_shaders()
+        parse_templates(None)
 
 
 class I3D_IO_AddonPreferences(AddonPreferences):
@@ -225,6 +242,8 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
 
 
 def register():
+    bpy.types.WindowManager.fs_last_data_path = StringProperty()
+    bpy.types.WindowManager.skip_fs_update_once = BoolProperty(default=False)
     bpy.utils.register_class(I3D_IO_OT_reset_i3d_converter_path)
     bpy.utils.register_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
     bpy.utils.register_class(I3D_IO_OT_download_i3d_converter)
@@ -236,3 +255,5 @@ def unregister():
     bpy.utils.unregister_class(I3D_IO_OT_download_i3d_converter)
     bpy.utils.unregister_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
     bpy.utils.unregister_class(I3D_IO_OT_reset_i3d_converter_path)
+    del bpy.types.WindowManager.skip_fs_update_once
+    del bpy.types.WindowManager.fs_last_data_path
