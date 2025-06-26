@@ -199,6 +199,12 @@ def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = Tr
     for blender_object in objects_to_export:
         _add_object_to_i3d(i3d, blender_object)
 
+    if i3d.deferred_constraints:
+        _process_deferred_constraints(i3d)
+
+    if i3d.anim_links:
+        i3d.add_animations()
+
 
 def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = None) -> None:
     # Collections are checked first since these are always exported in some form

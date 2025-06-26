@@ -137,7 +137,8 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                                                  "the armature and bone structure will still be exported, "
                                                  "but the meshes wont be bound to it"),
             ('MERGE_CHILDREN', "Merge Children", "Merge the child objects of empties with Merge Children enabled "
-                                                 "into a single exported mesh")
+                                                 "into a single exported mesh"),
+            ('ANIMATIONS', "Animations", "Export animations"),
         ),
         options={'ENUM_FLAG'},
         default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN'},
@@ -279,7 +280,12 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         else:
             settings = self.as_keywords(ignore=("filepath", "filter_glob"))
 
+        original_frame = context.scene.frame_current
+        context.scene.frame_set(0)
+
         status = exporter.export_blend_to_i3d(self, self.filepath, self.axis_forward, self.axis_up, settings)
+
+        context.scene.frame_set(original_frame)
 
         if status['success']:
             self.report({'INFO'}, f"I3D Export Successful! It took {status['time']:.3f} seconds")
