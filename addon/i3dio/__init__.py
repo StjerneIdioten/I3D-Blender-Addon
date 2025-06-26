@@ -32,7 +32,7 @@ bl_info = {
     "description": "Exports blender projects into GIANTS I3D format for use in Giants Engine based games such as "
                    "Farming Simulator",
     "version": (0, 0, 0),  # Always (0, 0, 0) since versioning is controlled by the CI
-    "blender": (4, 2, 0),
+    "blender": (4, 4, 0),
     "location": "File > Import-Export",
     "warning": "First Unofficial Alpha Version",
     "support": "COMMUNITY",
@@ -45,7 +45,10 @@ def register():
     ui.helper_functions.register()
     ui.addon_preferences.register()
     ui.udim_picker.register()
+    ui.shader_parser.register()
+    ui.material_templates.register()
     ui.shader_picker.register()
+    ui.udim_to_mat_template.register()
     ui.exporter.register()
     ui.collision_data.register()
     ui.bit_mask_editor.register()
@@ -67,7 +70,10 @@ def unregister():
     ui.collision_data.unregister()
     ui.mesh.unregister()
     ui.light.unregister()
+    ui.udim_to_mat_template.unregister()
     ui.shader_picker.unregister()
+    ui.shader_parser.unregister()
+    ui.material_templates.unregister()
     ui.udim_picker.unregister()
     ui.addon_preferences.unregister()
     ui.helper_functions.unregister()

@@ -39,6 +39,7 @@ class I3D:
         self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
         self.deferred_constraints: list[tuple[SkinnedMeshBoneNode, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
+        self.conversion_matrix_inv = conversion_matrix.inverted_safe()
 
         self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
         self.materials: Dict[Union[str, int], Material] = {}
@@ -53,6 +54,7 @@ class I3D:
         self.depsgraph = depsgraph
 
         self.all_objects_to_export: List[bpy.types.Object] = []
+        self.anim_links: dict[bpy.types.Action, list[tuple[SceneGraphNode, bpy.types.ActionSlot]]] = {}
 
     # Private Methods ##################################################################################################
     def _next_available_id(self, id_type: str) -> int:
@@ -103,58 +105,9 @@ class I3D:
 
         return node_to_return
 
-    def add_merge_children_node(self, empty_object: bpy.types.Object,
-                                parent: Optional[SceneGraphNode] = None) -> SceneGraphNode:
-        self.logger.debug(f"Adding MergeChildrenRoot: {empty_object.name}")
-
-        materials_from_children = set()
-
-        def collect_materials_recursive(obj):
-            for child in obj.children:
-                if child.type == 'MESH':
-                    materials_from_children.update(child.data.materials)
-                collect_materials_recursive(child)
-
-        collect_materials_recursive(empty_object)
-
-        if not materials_from_children:
-            self.logger.warning(f"No materials found in children of {empty_object.name}. "
-                                f"MergeChildrenRoot will not be created.")
-            return None
-
-        # Create a merged mesh object to act as a container for the children
-        # This is necessary to utilize the ShapeNode class and include materials
-        dummy_mesh_data = bpy.data.meshes.new(f"MergeChildren_{empty_object.name}")
-        for material in materials_from_children:
-            dummy_mesh_data.materials.append(material)
-        dummy_mesh_object = bpy.data.objects.new(f"{empty_object.name}_dummy", dummy_mesh_data)
-
-        # Match the transformation of the original empty object
-        dummy_mesh_object.matrix_world = empty_object.matrix_world
-        if empty_object.parent is not None:
-            dummy_mesh_object.parent = empty_object.parent
-            dummy_mesh_object.matrix_parent_inverse = empty_object.matrix_world.inverted()
-
-        first_mesh_child = next(child for child in empty_object.children if child.type == 'MESH')
-
-        def copy_custom_properties(source, target):
-            for key in source.keys():
-                self.logger.debug(f"Copying custom property: {key}")
-                target[key] = source[key]
-
-        copy_custom_properties(first_mesh_child, dummy_mesh_object)
-        copy_custom_properties(first_mesh_child.data.i3d_attributes, dummy_mesh_data.i3d_attributes)
-
-        # Initialize the root node with the dummy mesh object
-        merge_children_root = self._add_node(MergeChildrenRoot, dummy_mesh_object, parent)
-        # Add the children meshes to the root node
-        merge_children_root.add_children_meshes(empty_object)
-
-        # Cleanup the temporary dummy object after processing
-        bpy.data.objects.remove(dummy_mesh_object, do_unlink=True)
-        bpy.data.meshes.remove(dummy_mesh_data, do_unlink=True)
-        self.logger.info(f"Finished merging children into root: {empty_object.name}")
-        return merge_children_root
+    def add_merge_children_node(self, merge_children_object: bpy.types.Object,
+                                parent: SceneGraphNode | None = None) -> SceneGraphNode:
+        return self._add_node(MergeChildrenRoot, merge_children_object, parent)
 
     def add_bone(self, bone_object: bpy.types.Bone, parent: SceneGraphNode | None,
                  root_node: SkinnedMeshRootNode) -> SceneGraphNode:
@@ -229,6 +182,14 @@ class I3D:
             attrib = {'name': attribute.name, 'type': attribute.type.replace('data_', '')}
             attribute_element = xml_i3d.SubElement(node_attribute_element, 'Attribute', attrib=attrib)
             xml_i3d.write_attribute(attribute_element, 'value', getattr(attribute, attribute.type))
+
+    def collect_animation_link(self, node: SceneGraphNode) -> None:
+        if not (animation_data := node.blender_object.animation_data) or not animation_data.action:
+            return
+        self.anim_links.setdefault(animation_data.action, []).append((node, animation_data.action_slot))
+
+    def add_animations(self) -> None:
+        Animation(self)
 
     def add_material(self, blender_material: bpy.types.Material) -> int:
         name = blender_material.name
@@ -383,3 +344,4 @@ from i3dio.node_classes.merge_children import *
 from i3dio.node_classes.skinned_mesh import *
 from i3dio.node_classes.material import *
 from i3dio.node_classes.file import *
+from i3dio.node_classes.animation import *
