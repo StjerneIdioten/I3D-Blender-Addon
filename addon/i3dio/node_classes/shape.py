@@ -18,6 +18,7 @@ class EvaluatedMesh:
         self.node = node
         self.name = name or mesh_object.data.name
         self.i3d = i3d
+        self.source_object = mesh_object
         self.object = None
         self.mesh = None
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
@@ -109,7 +110,7 @@ class IndexedTriangleSet(Node):
         self.evaluated_mesh: EvaluatedMesh = evaluated_mesh
         self.shape_name: str = shape_name or self.evaluated_mesh.name
         self.bounding_volume_object: bpy.types.Object | None = \
-            self.evaluated_mesh.mesh.i3d_attributes.bounding_volume_object
+            self.evaluated_mesh.source_object.data.i3d_attributes.bounding_volume_object
 
         self.is_generic: bool = is_generic
         self.is_generic_from_geometry_nodes: bool = False

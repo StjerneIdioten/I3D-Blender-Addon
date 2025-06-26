@@ -772,21 +772,20 @@ def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.C
         row = panel.row(align=True)
         row.operator('i3dio.choose_merge_group', text="", icon='DOWNARROW_HLT')
 
-        col = row.column(align=True)
+        merge_groups = context.scene.i3dio_merge_groups
         merge_group_index = obj.i3d_merge_group_index
-        if merge_group_index == -1:
-            col.operator("i3dio.new_merge_group", text="New", icon="ADD")
+        if merge_group_index == -1 or merge_group_index >= len(merge_groups):
+            row.operator('i3dio.new_merge_group', text="New Merge Group", icon='ADD')
+            if merge_group_index >= len(merge_groups):
+                # Unset merge group index if out of range (e.g., after copy/paste between scenes)
+                obj.property_unset('i3d_merge_group_index')
         else:
             merge_group = context.scene.i3dio_merge_groups[merge_group_index]
-            col.prop(merge_group, "name", text="")
-            col = row.column(align=True)
-            col.operator('i3dio.select_merge_group_root', text="", icon="COLOR_RED")
-            col = row.column(align=True)
-            col.operator('i3dio.select_mg_objects', text="", icon='GROUP_VERTEX')
-            col = row.column(align=True)
-            col.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
-            col = row.column(align=True)
-            col.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
+            row.prop(merge_group, "name", text="")
+            row.operator('i3dio.select_merge_group_root', text="", icon="COLOR_RED")
+            row.operator('i3dio.select_mg_objects', text="", icon='GROUP_VERTEX')
+            row.operator('i3dio.new_merge_group', text="", icon='DUPLICATE')
+            row.operator('i3dio.remove_from_merge_group', text="", icon='PANEL_CLOSE')
 
 
 def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_children: bpy.types.PropertyGroup) -> None:
