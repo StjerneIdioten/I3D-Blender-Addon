@@ -122,12 +122,6 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         poll=lambda self, obj: obj.type == 'MESH' and obj is not bpy.context.object
     )
 
-    use_vertex_colors: BoolProperty(
-        name="Use Vertex Colors",
-        description="Enable to export vertex colors for this object",
-        default=False
-    )
-
 
 @register
 class I3D_IO_PT_Mesh_Presets(presets.PresetPanel, Panel):
@@ -187,7 +181,6 @@ class I3D_IO_PT_shape_attributes(Panel):
         op.used_bits = 8
         layout.prop(mesh.i3d_attributes, "decal_layer")
         layout.prop(mesh.i3d_attributes, 'fill_volume')
-        layout.prop(mesh.i3d_attributes, 'use_vertex_colors')
 
         header, panel = layout.panel('i3d_bounding_volume', default_closed=False)
         header.label(text="I3D Bounding Volume")
