@@ -159,6 +159,7 @@ class IndexedTriangleSet(Node):
             self.logger.debug(f"Queueing mesh {mesh_to_append.mesh.name!r} with generic value '{generic_value}'")
             self.pending_meshes.append({
                 'mesh_obj': mesh_to_append.mesh,
+                'object': mesh_to_append.object,
                 'id_value': generic_value or 0.0,  # The generic value
             })
             return
@@ -166,26 +167,27 @@ class IndexedTriangleSet(Node):
             self.logger.debug(f"Queueing mesh {mesh_to_append.mesh.name!r} with bind index '{self.bind_index}'")
             self.pending_meshes.append({
                 'mesh_obj': mesh_to_append.mesh,
+                'object': mesh_to_append.object,
                 'id_value': self.bind_index,  # The index into the final skinBindNodeIds list
             })
             self.bind_index += 1
             return
         self.logger.warning("Cannot add a mesh to an IndexedTriangleSet that is neither a merge group nor generic.")
 
-    def _extract_mesh_data(self, mesh: bpy.types.Mesh) -> MeshExtraction | None:
-        """
-        Extracts mesh data from a Blender mesh object and returns it in a structured format.
-        """
+    def _extract_mesh_data(self, mesh: bpy.types.Mesh, obj: bpy.types.Object) -> MeshExtraction | None:
+        """Extracts mesh data from a Blender mesh object and returns it in a structured format."""
         num_verts = len(mesh.vertices)
         num_loops = len(mesh.loops)
         num_tris = len(mesh.loop_triangles)
 
         if not all([num_verts, num_loops, num_tris]):
-            self.logger.warning(f"Mesh {mesh.name!r} has no vertices, loops, or triangles. Skipping extraction.")
+            self.logger.warning(f"Object {obj.name!r} (mesh {mesh.name!r}) has no vertices, loops, or triangles. "
+                                "Skipping extraction.")
             return None
 
         if not len(mesh.materials):
-            self.logger.warning(f"Mesh {mesh.name!r} has no materials. Assigning default material for export.")
+            self.logger.warning(f"Object {obj.name!r} (mesh {mesh.name!r}) has no materials. "
+                                "Assigning default material for export.")
             mesh.materials.append(self.i3d.get_default_material().blender_material)
         else:
             # Fill empty material slots with single valid material (if exactly one), otherwise use default
@@ -194,8 +196,10 @@ class IndexedTriangleSet(Node):
                                  else self.i3d.get_default_material().blender_material)
             for i, mat in enumerate(mesh.materials):
                 if mat is None:
-                    self.logger.warning(f"Mesh {mesh.name!r} has an empty material slot at index {i}. "
-                                        f"Assigning fallback/default material {fallback_material.name!r} for export.")
+                    self.logger.warning(
+                        f"Object {obj.name!r} (mesh {mesh.name!r}) has an empty material slot at index {i}. "
+                        f"Assigning fallback/default material {fallback_material.name!r} for export."
+                    )
                     mesh.materials[i] = fallback_material
 
         # Vertex positions
@@ -239,7 +243,7 @@ class IndexedTriangleSet(Node):
                     self.logger.warning(f"Unsupported color domain '{color_layer.domain}' for mesh '{mesh.name}'.")
 
         # NOTE: Vertex groups are stored on the object and not the mesh
-        vert_bone_indices, vert_bone_weights = self._extract_skinning_data(mesh, self.evaluated_mesh.object)
+        vert_bone_indices, vert_bone_weights = self._extract_skinning_data(mesh, obj)
 
         return MeshExtraction(
             loop_positions=positions[loop_vertex_indices],
@@ -261,7 +265,9 @@ class IndexedTriangleSet(Node):
         if not self.bone_mapping:
             return None, None  # Not a skinned mesh
         if not mesh_object.vertex_groups:
-            self.logger.debug(f"Mesh '{mesh.name}' has no vertex groups. Skipping skinning.")
+            self.logger.debug(
+                f"Object {mesh_object.name!r} (mesh {mesh.name!r}) has no vertex groups. Skipping skinning."
+            )
             return None, None  # Was initialized as skinned mesh, but has no vertex groups
         num_verts = len(mesh.vertices)
 
@@ -269,7 +275,8 @@ class IndexedTriangleSet(Node):
         vg_map = {vg.index: self.bone_mapping[vg.name]
                   for vg in mesh_object.vertex_groups if vg.name in self.bone_mapping}
         if not vg_map:
-            self.logger.warning(f"Mesh '{mesh.name}' is skinned but has no vertex groups matching the armature bones.")
+            self.logger.warning(f"Object {mesh_object.name!r} (mesh {mesh.name!r}) is skinned "
+                                "but has no vertex groups matching the armature bones.")
             return None, None
 
         # The 'skinBindNodeIds' attribute must be sorted by node ID. This creates the final mapping.
@@ -279,7 +286,8 @@ class IndexedTriangleSet(Node):
         # Extract all raw weight data from the mesh vertices
         groups_per_vert = np.array([len(v.groups) for v in mesh.vertices], dtype=np.int32)
         if (total_weights_count := groups_per_vert.sum()) == 0:
-            self.logger.debug(f"Mesh '{mesh.name}' has no skinning weights. Skipping skinning data extraction.")
+            self.logger.debug(f"Object {mesh_object.name!r} (mesh {mesh.name!r}) has no skinning weights. "
+                              "Skipping skinning data extraction.")
             return None, None
 
         # Pre-allocate lists and fill them with zeros
@@ -396,18 +404,18 @@ class IndexedTriangleSet(Node):
         return dataclasses.replace(mesh_data, uvs=padded_uvs, colors=padded_colors)
 
     def _get_safe_material(self, mesh_data: MeshExtraction, mat_idx: int, fallback_material: bpy.types.Material | None,
-                           mesh_name: str, warned: set) -> bpy.types.Material:
+                           obj_name: str, warned: set) -> bpy.types.Material:
         """Safely retrieves a material by index from the mesh data."""
         if 0 <= mat_idx < len(mesh_data.materials):
             return mesh_data.materials[mat_idx]
         # Out of bounds
-        if mesh_name not in warned:
-            self.logger.warning(f"Mesh {mesh_name!r} has a triangle referencing a non-existent material slot "
+        if obj_name not in warned:
+            self.logger.warning(f"Object {obj_name!r} has a triangle referencing a non-existent material slot "
                                 f"(index {mat_idx}). Using fallback/default material.")
-            warned.add(mesh_name)
+            warned.add(obj_name)
         return fallback_material or self.i3d.get_default_material().blender_material
 
-    def _process_meshes(self, meshes_to_process: list):
+    def _process_meshes(self, meshes_to_process: list[dict]) -> None:
         """
         Processes all meshes and groups triangles by final material subset,
         producing packed, unique vertices and triangle indices for export.
@@ -431,14 +439,16 @@ class IndexedTriangleSet(Node):
         extracted_mesh_data: list[tuple[dict, MeshExtraction]] = []
         for item in meshes_to_process:
             mesh_data = self._extract_mesh_data(item['mesh_obj'])
+            object_name = item['mesh_obj'].name
             if not mesh_data:
-                self.logger.warning(f"Skipping mesh '{item['mesh_obj'].name}' due to missing data.")
+                self.logger.warning(f"Object {object_name!r} (mesh {item['mesh_obj'].name!r}) "
+                                    "has no valid mesh data. Skipping.")
                 continue
             mesh_name = item['mesh_obj'].name
             if needs_padding:
                 mesh_id = id(mesh_data)
                 if mesh_id not in padded_mesh_data_cache:
-                    self.logger.debug(f"Padding mesh data for '{mesh_name}'")
+                    self.logger.debug(f"Padding mesh data for {object_name!r} (mesh {mesh_name!r})")
                     # In case of multiple meshes, we need to ensure that all of them have same amount of uvs & colors
                     padded_mesh_data_cache[mesh_id] = self._pad_mesh_data(mesh_data, mesh_name)
                 final_mesh_data = padded_mesh_data_cache[mesh_id]
@@ -467,12 +477,12 @@ class IndexedTriangleSet(Node):
         # Assign triangles to subsets by material
         subset_data_to_process = defaultdict(list)
         for item, mesh_data in extracted_mesh_data:
-            mesh_name = item['mesh_obj'].name
+            obj_name = item['object'].name
             unique_mats_in_mesh = {mat for mat in mesh_data.materials}
             fallback_material = next(iter(unique_mats_in_mesh), None) if len(unique_mats_in_mesh) == 1 else None
             warned = set()  # Track warnings per mesh to avoid duplicates
             for i, mat_idx in enumerate(mesh_data.tri_material_indices):
-                material = self._get_safe_material(mesh_data, mat_idx, fallback_material, mesh_name, warned)
+                material = self._get_safe_material(mesh_data, mat_idx, fallback_material, obj_name, warned)
                 subset_data_to_process[material.name].append(
                     TriangleAssignment(
                         mesh_data=mesh_data,
@@ -591,7 +601,8 @@ class IndexedTriangleSet(Node):
         if self.is_merge_group or self.is_generic:
             meshes_to_process = self.pending_meshes
         else:  # Standard mesh case
-            meshes_to_process = [{'mesh_obj': self.evaluated_mesh.mesh, 'id_value': None}]
+            meshes_to_process = [{'mesh_obj': self.evaluated_mesh.mesh,
+                                  'object': self.evaluated_mesh.object, 'id_value': None}]
 
         if not meshes_to_process:
             self.logger.warning(f"No meshes to process for shape '{self.name}'.")
