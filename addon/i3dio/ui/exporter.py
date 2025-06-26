@@ -251,11 +251,14 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         if settings:
             for key, value in settings.items():
                 if hasattr(self, key):
-                    current_value = getattr(self, key)
-                    if isinstance(current_value, set) and isinstance(value, list):
-                        setattr(self, key, set(value))
-                    else:
-                        setattr(self, key, value)
+                    try:
+                        current_value = getattr(self, key)
+                        if isinstance(current_value, set) and isinstance(value, list):
+                            setattr(self, key, set(value))
+                        else:
+                            setattr(self, key, value)
+                    except Exception:
+                        pass
         return ExportHelper.invoke(self, context, event)
 
     def execute(self, context):
