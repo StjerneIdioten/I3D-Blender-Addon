@@ -1,8 +1,11 @@
 import bpy
+import math
+import mathutils
 from dataclasses import dataclass
 from .. import utility, xml_i3d
 from ..i3d import I3D
-from ..ui import shader_picker
+from ..ui.shader_picker import SHADER_DEFAULT
+from ..ui.shader_parser import get_shader_dict
 from .node import Node
 
 
@@ -178,34 +181,34 @@ class Material(Node):
 
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes
-        if shader_settings.source != shader_picker.shader_unselected_default_text:
-            shader_file_id = self.i3d.add_file_shader(shader_settings.source)
+        if shader_settings.shader_name != SHADER_DEFAULT:
+            shaders = get_shader_dict(shader_settings.use_custom_shaders)
+            shader_path = str(shaders[shader_settings.shader_name].path)
+            shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
-            if shader_settings.source.endswith("mirrorShader.xml"):
+            self.logger.debug(f"Shader: '{shader_settings.shader_name}' with ID: {shader_file_id}")
+
+            if shader_settings.shader_name == "mirrorShader":
                 params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
                 xml_i3d.SubElement(self.element, 'Reflectionmap', params)
 
-            if shader_settings.variation != shader_picker.shader_no_variation:
-                self._write_attribute('customShaderVariation', shader_settings.variation)
-            for parameter in shader_settings.shader_parameters:
-                parameter_dict = {'name': parameter.name}
-                if parameter.type == 'float':
-                    value = [parameter.data_float_1]
-                elif parameter.type == 'float2':
-                    value = parameter.data_float_2
-                elif parameter.type == 'float3':
-                    value = parameter.data_float_3
-                elif parameter.type == 'float4':
-                    value = parameter.data_float_4
+            if shader_settings.shader_variation_name != SHADER_DEFAULT:
+                self._write_attribute('customShaderVariation', shader_settings.shader_variation_name)
+            for pname in shader_settings.shader_material_params.keys():
+                parameter_dict = {'name': pname}
+                value = shader_settings.shader_material_params[pname]
+                default = shader_settings.shader_material_params.id_properties_ui(pname).as_dict().get('default')
+                if len(value) == 1:
+                    if not math.isclose(value[0], default[0], abs_tol=1e-7):
+                        parameter_dict['value'] = f'{value[0]:.6f}'
+                        xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
                 else:
-                    value = []
+                    print(f"Processing parameter '{pname}' with value: {value}, default: {default}")
+                    if not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default)):
+                        parameter_dict['value'] = ' '.join(f'{v:.6f}' for v in value)
+                        xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
 
-                value = ' '.join(map('{0:.6f}'.format, value))
-                parameter_dict['value'] = value
-
-                xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
-
-            for texture in shader_settings.shader_textures:
+            for texture in shader_settings.shader_material_textures:
                 self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")
                 if '' != texture.source != texture.default_source:
                     texture_dict = {'name': texture.name}
