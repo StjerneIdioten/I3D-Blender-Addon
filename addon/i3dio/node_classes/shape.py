@@ -12,13 +12,13 @@ from ..i3d import I3D
 
 
 class MaterialStorage:
-    triangles: List = None
-
-    def __init__(self):
-        self.triangles = []
+    def __init__(self, triangles: list = None, material_slot_name: str = None):
+        self.material_slot_name = material_slot_name
+        self.triangles = triangles or []
 
     def __str__(self):
-        return f"triangles={len(self.triangles)}-{self.triangles}"
+        return f"triangles={len(self.triangles)}-{self.triangles} " \
+               f"material_slot_name={self.material_slot_name}"
 
     def __repr__(self):
         return self.__str__()
@@ -31,12 +31,15 @@ class SubSet:
         self.number_of_indices = 0
         self.number_of_vertices = 0
         self.triangles = []
+        self.material_slot_name = None
 
     def as_dict(self):
         subset_attributes = {'firstIndex': f"{self.first_index}",
                              'firstVertex': f"{self.first_vertex}",
                              'numIndices': f"{self.number_of_indices}",
                              'numVertices': f"{self.number_of_vertices}"}
+        if self.material_slot_name is not None:
+            subset_attributes['materialSlotName'] = self.material_slot_name
         return subset_attributes
 
     def __str__(self):
@@ -378,6 +381,12 @@ class IndexedTriangleSet(Node):
             mesh.materials.append(self.i3d.get_default_material().blender_material)
             self.logger.info(f"Assigned default material '{mesh.materials[-1].name}'")
 
+    def _get_material_slot_name(self, _material: bpy.types.Material) -> str | None:
+        """Returns the material slot name of the given material if set, otherwise None."""
+        if _material.i3d_attributes.use_material_slot_name:
+            return _material.i3d_attributes.material_slot_name or _material.name
+        return None
+
     def _process_mesh_triangles(self, mesh: bpy.types.Mesh, index: int = None, append: bool = False) -> None:
         """
         Processes triangles of the given mesh and assigns them to materials.
@@ -462,18 +471,21 @@ class IndexedTriangleSet(Node):
                 triangles_for_mat = material_to_triangles_map[mat]
                 storage_entry = self.materials.setdefault(mat.name, MaterialStorage())
                 storage_entry.triangles.extend(triangles_for_mat)
+                storage_entry.material_slot_name = self._get_material_slot_name(mat)
 
             # Rebuild subsets from the now-updated self.materials dictionary
             self.subsets.clear()
             for mat_name, storage in self.materials.items():
                 subset = SubSet()
                 subset.triangles = storage.triangles
+                subset.material_slot_name = storage.material_slot_name
                 self.subsets.append(subset)
 
         else:  # For single meshes, directly create subsets from the ordered list of materials
             self.subsets.clear()
             for mat in ordered_used_materials:
                 subset = SubSet()
+                subset.material_slot_name = self._get_material_slot_name(mat)
                 subset.triangles = material_to_triangles_map[mat]
                 self.subsets.append(subset)
 
