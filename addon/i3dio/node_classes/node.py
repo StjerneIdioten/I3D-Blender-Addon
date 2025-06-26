@@ -88,9 +88,9 @@ class SceneGraphNode(Node):
     ID_FIELD_NAME = 'nodeId'
 
     def __init__(self, id_: int,
-                 blender_object: [bpy.types.Object, bpy.types.Collection, None],
+                 blender_object: bpy.types.Object | bpy.types.Collection | None,
                  i3d: I3D,
-                 parent: Union[SceneGraphNode, None] = None,
+                 parent: SceneGraphNode | None = None,
                  ):
         self.children = []
         self.blender_object = blender_object
@@ -109,6 +109,9 @@ class SceneGraphNode(Node):
             self.parent.add_child(self)
         except AttributeError:
             pass
+
+        if "ANIMATIONS" in i3d.settings['features_to_export'] and isinstance(self.blender_object, bpy.types.Object):
+            self.i3d.collect_animation_link(self)
 
         self.add_i3d_mapping_to_xml()
 

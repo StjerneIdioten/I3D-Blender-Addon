@@ -39,6 +39,7 @@ class I3D:
         self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
         self.deferred_constraints: list[tuple[SkinnedMeshBoneNode, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
+        self.conversion_matrix_inv = conversion_matrix.inverted_safe()
 
         self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
         self.materials: Dict[Union[str, int], Material] = {}
@@ -53,6 +54,7 @@ class I3D:
         self.depsgraph = depsgraph
 
         self.all_objects_to_export: List[bpy.types.Object] = []
+        self.anim_links: dict[bpy.types.Action, list[tuple[SceneGraphNode, bpy.types.ActionSlot]]] = {}
 
     # Private Methods ##################################################################################################
     def _next_available_id(self, id_type: str) -> int:
@@ -180,6 +182,14 @@ class I3D:
             attrib = {'name': attribute.name, 'type': attribute.type.replace('data_', '')}
             attribute_element = xml_i3d.SubElement(node_attribute_element, 'Attribute', attrib=attrib)
             xml_i3d.write_attribute(attribute_element, 'value', getattr(attribute, attribute.type))
+
+    def collect_animation_link(self, node: SceneGraphNode) -> None:
+        if not (animation_data := node.blender_object.animation_data) or not animation_data.action:
+            return
+        self.anim_links.setdefault(animation_data.action, []).append((node, animation_data.action_slot))
+
+    def add_animations(self) -> None:
+        Animation(self)
 
     def add_material(self, blender_material: bpy.types.Material) -> int:
         name = blender_material.name
@@ -334,3 +344,4 @@ from i3dio.node_classes.merge_children import *
 from i3dio.node_classes.skinned_mesh import *
 from i3dio.node_classes.material import *
 from i3dio.node_classes.file import *
+from i3dio.node_classes.animation import *
