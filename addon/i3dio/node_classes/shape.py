@@ -391,69 +391,97 @@ class IndexedTriangleSet(Node):
             index (int, optional): The index used when appending a new mesh.
             append (bool, optional): If True, appends triangles to an existing set.
         """
-        unique_mats = {mat for mat in mesh.materials if mat is not None}  # Ignore empty material slots
-        fallback_material = next(iter(unique_mats), None) if len(unique_mats) == 1 else None
+        # Group triangles by material in a temporary dictionary, order here does not matter
+        material_to_triangles_map = {}
+
+        # Determine a fallback material for handling corrupt mesh data.
+        # If the mesh has only one material, we'll use that. Otherwise, use the default.
+        unique_mats = {mat for mat in mesh.materials if mat is not None}
+        fallback_material = (next(iter(unique_mats), None) if len(unique_mats) == 1 else None)
+
         has_warned_for_invalid_index = False
         has_warned_for_empty_slot = False
-        used_materials = set()
-        material_to_subset = {} if not append else None  # Only used when creating new subsets
 
         for triangle in mesh.loop_triangles:
-            # A triangle's material index may be invalid (out of range) if the mesh contains
-            # corrupted or mismatched 'material_index' data. If detected, we assign a fallback material.
-            if triangle.material_index >= len(mesh.materials) or triangle.material_index < 0:
+            triangle_material = None
+            if not (0 <= triangle.material_index < len(mesh.materials)):
+                # Check if the triangle's material index is within the bounds for the slots list
                 if not has_warned_for_invalid_index:
                     self.logger.warning("triangle(s) found with invalid material index, assigning fallback material")
                     has_warned_for_invalid_index = True
-                # If the mesh has exactly one valid material, use it as fallback. Otherwise, use the default material.
-                triangle_material = fallback_material or self.i3d.get_default_material().blender_material
+                if fallback_material is None:
+                    fallback_material = self.i3d.get_default_material().blender_material
+                triangle_material = fallback_material
             else:
-                triangle_material = mesh.materials[triangle.material_index]
-                # In Blender, it's possible to assign triangles to material slots that have no material. These show up
-                # as `None` in the material list. If used, they are replaced with a fallback material during export.
-                if triangle_material is None:
+                # Check if the slot assigned to this triangle is empty (None)
+                mat = mesh.materials[triangle.material_index]
+                if mat is None:
                     if not has_warned_for_empty_slot:
                         self.logger.warning("triangle(s) found with empty material slot, assigning fallback material")
                         has_warned_for_empty_slot = True
-                    triangle_material = fallback_material or self.i3d.get_default_material().blender_material
-
-            used_materials.add(triangle_material)
-
-            if append:
-                material_entry = self.materials.setdefault(triangle_material.name, MaterialStorage())
-                material_entry.triangles.append((triangle, index, mesh))
-            else:
-                # If not appending, we need to determine whether to create a new subset
-                if triangle_material not in material_to_subset:
-                    material_to_subset[triangle_material] = SubSet()
-                    self.subsets.append(material_to_subset[triangle_material])
-
-                # Handle merging logic (merge groups store materials separately)
-                if self.is_merge_group:
-                    if triangle_material.name not in self.materials:
-                        self.materials[triangle_material.name] = MaterialStorage()
-                    self.materials[triangle_material.name].triangles.append((triangle, self.bind_index, mesh))
+                    if fallback_material is None:
+                        fallback_material = self.i3d.get_default_material().blender_material
+                    triangle_material = fallback_material
                 else:
-                    # Assign triangle to the appropriate subset
-                    material_to_subset[triangle_material].add_triangle(triangle)
+                    triangle_material = mat
 
-        unused_materials = set(mesh.materials) - set(used_materials)
-        for mat in (m for m in unused_materials if m is not None):
-            self.logger.warning(f"Material '{mat.name}' is not used by any triangle, material will be ignored!")
+            # Add the triangle to the list for its assigned material
+            triangles_list = material_to_triangles_map.setdefault(triangle_material, [])
 
-        self.material_ids = [self.i3d.add_material(m) for m in used_materials]
+            # For merge/append operations, we must also store the mesh and its bind index
+            if append or self.is_merge_group:
+                triangles_list.append((triangle, index or self.bind_index, mesh))
+            else:
+                triangles_list.append(triangle)
+
+        if not material_to_triangles_map:
+            self.logger.warning("No used materials found on mesh.")
+            return
+
+        # Build the final list of materials in the correct order. Important for preventing material mix-ups.
+        # We loop through the mesh's material slots (which have the right order) and create a new list containing
+        # only the materials that are actually used. This guarantees that the order stays consistent.
+        ordered_used_materials = [mat for mat in mesh.materials if mat in material_to_triangles_map]
+
+        # Very unlikely, but could happen on a mesh with all empty slots or fully corrupted indices
+        if fallback_material and fallback_material not in ordered_used_materials \
+                and fallback_material in material_to_triangles_map:
+            self.logger.debug(f"Adding fallback material '{fallback_material.name}' to the ordered list.")
+            ordered_used_materials.append(fallback_material)
+
+        self.logger.debug(f"Material slot order being processed: {', '.join(m.name for m in ordered_used_materials)}")
+
+        # Build the final export data using the ordered list
+        self.material_ids = [self.i3d.add_material(m) for m in ordered_used_materials]
         self.tangent = self.tangent or any(self.i3d.materials[m_id].is_normalmapped() for m_id in self.material_ids)
-        # Only clear and rebuild subsets when appending or using merge groups
+
+        # If appending, we add to the existing self.materials dictionary. Otherwise, we create new subsets.
         if append or self.is_merge_group:
-            # Since a default processed shape has no node yet, restrict materialIds writing to append or merge groups
-            ids = [self.i3d.materials[m].id for m in self.materials]
-            self.evaluated_mesh.node._write_attribute('materialIds', ' '.join(map(str, ids)))
-            # Rebuild subsets to ensure correct material assignment
+            # Add the newly collected triangles to the `self.materials` storage
+            for mat in ordered_used_materials:
+                triangles_for_mat = material_to_triangles_map[mat]
+                storage_entry = self.materials.setdefault(mat.name, MaterialStorage())
+                storage_entry.triangles.extend(triangles_for_mat)
+
+            # Rebuild subsets from the now-updated self.materials dictionary
             self.subsets.clear()
-            for _key, mat in self.materials.items():
+            for mat_name, storage in self.materials.items():
                 subset = SubSet()
-                subset.triangles = mat.triangles
+                subset.triangles = storage.triangles
                 self.subsets.append(subset)
+
+        else:  # For single meshes, directly create subsets from the ordered list of materials
+            self.subsets.clear()
+            for mat in ordered_used_materials:
+                subset = SubSet()
+                subset.triangles = material_to_triangles_map[mat]
+                self.subsets.append(subset)
+
+        # Warn about any materials in slots that were not used
+        all_slot_mats = {mat for mat in mesh.materials if mat is not None}
+        used_mats = set(material_to_triangles_map.keys())
+        for mat in all_slot_mats - used_mats:
+            self.logger.warning(f"Material '{mat.name}' is not used by any triangle, it will be ignored.")
 
     def write_vertices(self, offset=0):
         # Vertices
