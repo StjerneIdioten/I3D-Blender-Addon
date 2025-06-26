@@ -452,7 +452,14 @@ class IndexedTriangleSet(Node):
         self.logger.debug(f"Material slot order being processed: {', '.join(m.name for m in ordered_used_materials)}")
 
         # Build the final export data using the ordered list
-        self.material_ids = [self.i3d.add_material(m) for m in ordered_used_materials]
+        # Combine existing material_ids with new ones, preserving order and uniqueness
+        new_material_ids = [self.i3d.add_material(m) for m in ordered_used_materials]
+        # Preserve order: existing first, then new ones not already present
+        combined_ids = list(self.material_ids) if append or self.is_merge_group else []
+        for matid in new_material_ids:
+            if matid not in combined_ids:
+                combined_ids.append(matid)
+        self.material_ids = combined_ids
         self.tangent = self.tangent or any(self.i3d.materials[m_id].is_normalmapped() for m_id in self.material_ids)
 
         # If appending, we add to the existing self.materials dictionary. Otherwise, we create new subsets.

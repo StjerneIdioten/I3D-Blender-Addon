@@ -18,6 +18,7 @@ class MergeChildrenRoot(ShapeNode):
         super().__init__(id_=id_, shape_object=merge_child_root, i3d=i3d, parent=parent)
 
         self._add_children_meshes()
+        self._write_attribute('materialIds', self.i3d.shapes[self.shape_id].material_ids)
 
     def add_shape(self) -> None:
         """Override to prevent adding any data from the root object to the shape."""
