@@ -1,0 +1,292 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Getting the Exporter &mdash; I3D Addon for Blender 1.1.3 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Setup the Exporter" href="../setup/setup.html" />
+    <link rel="prev" title="Installation" href="../../installation.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> I3D Addon for Blender
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Documentation:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../../installation.html">Installation</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Getting the Exporter</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#download">Download</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#installation-in-blender">Installation in Blender</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#verify-installation">Verify Installation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#what-s-next">What’s Next?</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../setup/setup.html">Setup the Exporter</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../features.html">Features</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">For Developers:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developers/guidelines/guidelines.html">Guidelines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developers/toolchain/toolchain.html">Toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developers/software_structure/software_structure.html">Software Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developers.html">Code Reference</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">I3D Addon for Blender</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../installation.html">Installation</a> &raquo;</li>
+        
+      <li>Getting the Exporter</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../../_sources/installation/exporter/exporter.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="getting-the-exporter">
+<span id="installation-exporter"></span><h1>Getting the Exporter<a class="headerlink" href="#getting-the-exporter" title="Permalink to this heading">¶</a></h1>
+<p>The exporter is to be installed in the same way as any <a class="reference external" href="https://docs.blender.org/manual/en/latest/editors/preferences/addons.html#rd-party-add-ons">blender addon</a>, but here is a follow along guide to double
+check that everything has been done correctly.</p>
+<div class="section" id="download">
+<h2>Download<a class="headerlink" href="#download" title="Permalink to this heading">¶</a></h2>
+<p>The current place to get the exporter is from the <a class="reference external" href="https://github.com/StjerneIdioten/I3D-Blender-Addon">github repository</a>. Here you can also find the sourcecode if that
+interests you. In the right side of the github page you will find a link to the <a class="reference external" href="https://github.com/StjerneIdioten/I3D-Blender-Addon/releases">releases</a>, which will get you to a
+page that looks similar to this:</p>
+<div class="figure align-default" id="id1">
+<img alt="../../_images/releases.png" src="../../_images/releases.png" />
+<p class="caption"><span class="caption-text">This is currently the ONLY place from where you should download the exporter!</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</div>
+<p>Each release has notes attached, which explains what is new/changed in this release.
+As blender gets new versions the exporter will move along with it and versions for older versions of blender will be
+kept here for compatibility reasons, but they will not be updated with new features!</p>
+<div class="admonition caution">
+<p class="admonition-title">Caution</p>
+<p>If a release has the label <strong>Pre-release</strong> or a hypen in the version name with some text after, then this
+is an experimental build! This is where new features are pushed for testing, so make sure to keep a backup of your
+blend file if using these versions. If any bugs are encountered please report them on the <a class="reference external" href="https://github.com/StjerneIdioten/I3D-Blender-Addon/issues">issue tracker</a>.</p>
+</div>
+<p>To actually get the .zip file needed one should expand the <span class="guilabel">Assets</span> and click <span class="guilabel">I3D Exporter</span>,
+which should net you a file called <span class="guilabel">i3d_exporter.zip</span></p>
+<div class="figure align-default" id="id2">
+<img alt="../../_images/releases_pick.png" src="../../_images/releases_pick.png" />
+<p class="caption"><span class="caption-text">This is the file you should download to get the exporter (This is just a random release and might not be the newest
+one available, when you read this)</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</div>
+</div>
+<div class="section" id="installation-in-blender">
+<h2>Installation in Blender<a class="headerlink" href="#installation-in-blender" title="Permalink to this heading">¶</a></h2>
+<p>To install the addon go into blender and goto <span class="menuselection">Edit ‣ Preferences ‣ Add-ons</span> here you should find a
+button named <span class="guilabel">Install</span>, which will give you a filebrowser to select the zip file you downloaded in the previous
+section.</p>
+<div class="figure align-default" id="id3">
+<img alt="../../_images/install_browser.png" src="../../_images/install_browser.png" />
+<p class="caption"><span class="caption-text">Click install to get a filebrowser to select the zip</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>While it is possible to extract the zip manually into the blender addon folder, it is recommended to use the
+install button within blender itself to do it. This is due to the addon needing a specific naming of the folder in
+which it resides to work!</p>
+</div>
+</div>
+<div class="section" id="verify-installation">
+<h2>Verify Installation<a class="headerlink" href="#verify-installation" title="Permalink to this heading">¶</a></h2>
+<p>You should now be able to find <span class="guilabel">Unofficial GIANTS I3D Exporter Tools</span> in your list of addons. Make sure that
+you have toggled on the <em>Community</em> category!</p>
+<div class="figure align-default" id="id4">
+<img alt="../../_images/verify_install.png" src="../../_images/verify_install.png" />
+<p class="caption"><span class="caption-text">Here I have searched specifically for <em>i3d</em> to only show the exporter addon</span><a class="headerlink" href="#id4" title="Permalink to this image">¶</a></p>
+</div>
+<p>If for some reason you choose to unpack the addon into the folder yourself, then make sure you have this exact
+structure:</p>
+<div class="figure align-default" id="id5">
+<img alt="../../_images/correct_folder_structure.png" src="../../_images/correct_folder_structure.png" />
+<p class="caption"><span class="caption-text">Of course with your own username and whatever blender version you are installing the addon to. The important part
+is that the code files resides in a folder called <em>i3dio</em> within <em>addons</em></span><a class="headerlink" href="#id5" title="Permalink to this image">¶</a></p>
+</div>
+</div>
+<div class="section" id="what-s-next">
+<h2>What’s Next?<a class="headerlink" href="#what-s-next" title="Permalink to this heading">¶</a></h2>
+<p>Now that you have the addon install you should proceed to next next section which describes how to setup a few things
+required for the addon to work in an optimal way.</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../setup/setup.html" class="btn btn-neutral float-right" title="Setup the Exporter" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../../installation.html" class="btn btn-neutral float-left" title="Installation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2025, StjerneIdioten
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

@@ -1,0 +1,313 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Setup the Exporter &mdash; I3D Addon for Blender 1.1.3 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+        <script data-url_root="../../" id="documentation_options" src="../../_static/documentation_options.js"></script>
+        <script src="../../_static/jquery.js"></script>
+        <script src="../../_static/underscore.js"></script>
+        <script src="../../_static/_sphinx_javascript_frameworks_compat.js"></script>
+        <script src="../../_static/doctools.js"></script>
+        <script src="../../_static/sphinx_highlight.js"></script>
+    
+    <script type="text/javascript" src="../../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../../_static/css/theme.css" type="text/css" />
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="Features" href="../../features.html" />
+    <link rel="prev" title="Getting the Exporter" href="../exporter/exporter.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../../index.html" class="icon icon-home"> I3D Addon for Blender
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption" role="heading"><span class="caption-text">Documentation:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../../installation.html">Installation</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../exporter/exporter.html">Getting the Exporter</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Setup the Exporter</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#fs-data-folder">FS Data Folder</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#what-if-i-don-t">What if I don’t?</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#xml-library">XML Library</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#internet-connection">Internet Connection</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#administrative-privileges">Administrative Privileges</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#verify">Verify</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#what-if-this-is-not-possible">What If this is not possible?</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../../features.html">Features</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">For Developers:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../developers/guidelines/guidelines.html">Guidelines</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developers/toolchain/toolchain.html">Toolchain</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developers/software_structure/software_structure.html">Software Structure</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../developers.html">Code Reference</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">I3D Addon for Blender</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="../../installation.html">Installation</a> &raquo;</li>
+        
+      <li>Setup the Exporter</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../../_sources/installation/setup/setup.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="setup-the-exporter">
+<span id="installation-setup"></span><h1>Setup the Exporter<a class="headerlink" href="#setup-the-exporter" title="Permalink to this heading">¶</a></h1>
+<p>Once you have downloaded and verified the exporter according to the previous section found
+<a class="reference internal" href="../exporter/exporter.html#installation-exporter"><span class="std std-ref">here</span></a>, then there are a few steps left to make the exporter give you the best results.</p>
+<p>These options can be found in the <span class="guilabel">Addon Preferences</span> of the exporter addon and will be explained individually
+below.</p>
+<div class="figure align-default" id="id1">
+<img alt="../../_images/verify_install.png" src="../../_images/verify_install.png" />
+<p class="caption"><span class="caption-text">The addon preferences are found in the same place as where we verified that the addon had been installed properly</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</div>
+<div class="admonition caution">
+<p class="admonition-title">Caution</p>
+<p>Although these steps aren’t strictly necessary to make the exporter do it’s job, it is strongly advised
+to follow them to make sure you get the most possible value out of the exporter!</p>
+</div>
+<div class="section" id="fs-data-folder">
+<h2>FS Data Folder<a class="headerlink" href="#fs-data-folder" title="Permalink to this heading">¶</a></h2>
+<p>The exporter has the ability to automatically resolve paths to files you use from the Farming Simulator data directory.
+So if you are eg. using some shared texture or maybe using one of the shaders, then the exporter will correctly replace
+the absolute path to your specific directory, with the general format of <code class="xref py py-class docutils literal notranslate"><span class="pre">$data\some\shared\resource</span></code></p>
+<p>To do this the exporter needs to know where your FS Data directory is located and due to there being several different
+folder names depending on where you got the game from, it is easiest if you select this yourself. You use the filepicker
+to select the data folder from within your Farming Simulator folder.</p>
+<div class="section" id="what-if-i-don-t">
+<h3>What if I don’t?<a class="headerlink" href="#what-if-i-don-t" title="Permalink to this heading">¶</a></h3>
+<p>The exporter will just export all files/references with absolute paths. Which means that the mod will only work on your
+own pc, unless you manually edit all of the references to be relative to the data folder. You will also receive a
+warning in the blender info console everytime you export.</p>
+</div>
+</div>
+<div class="section" id="xml-library">
+<span id="installation-setup-xml-library"></span><h2>XML Library<a class="headerlink" href="#xml-library" title="Permalink to this heading">¶</a></h2>
+<p>The exporter does a lot of xml parsing and writing, since FS mods use a combination of <em>.i3d</em> and <em>.xml</em> files, where
+the <em>.i3d</em> files are actually just <em>.xml</em> files with a specific format.</p>
+<p>The version of python that blender addons are written in comes with a builtin library for handling xml-files, but it
+has some quirks that has had to be worked around for certain features in the addon to function correctly
+(eg. <a class="reference internal" href="../../features/i3d_mapping/i3d_mapping.html#i3d-mapping"><span class="std std-ref">i3d-mapping</span></a>). This is actually mostly Giants fault, since they don’t follow the xml-standards
+exactly and use certain things that aren’t allowed in normal xml.</p>
+<p>Anyway, to work around this the addon will try to use another xml-library called <cite>lxml</cite>, which is way more powerful, but
+it does not come with blender per default.</p>
+<p>So to install this library two things need to be present:</p>
+<ul class="simple">
+<li><p>An active internet connection</p></li>
+<li><p>Blender needs to be run with administrator privileges</p></li>
+</ul>
+<p>And to install you just run blender with these two things present and the addon does it automatically, it also selects
+<cite>lxml</cite> as the preferred library once installed.</p>
+<div class="section" id="internet-connection">
+<h3>Internet Connection<a class="headerlink" href="#internet-connection" title="Permalink to this heading">¶</a></h3>
+<p>The library/module needs to be fetched from <strong>The Python Package Index</strong>, which the addon can do automatically. This
+is a one time thing so you don’t need an active internet connection going forward after <cite>lxml</cite> has been installed.</p>
+</div>
+<div class="section" id="administrative-privileges">
+<h3>Administrative Privileges<a class="headerlink" href="#administrative-privileges" title="Permalink to this heading">¶</a></h3>
+<p>Blender does not allow the addon to modify it’s python installation without having administrative privileges.</p>
+<div class="figure align-default" id="id2">
+<img alt="../../_images/run_as_admin.png" src="../../_images/run_as_admin.png" />
+<p class="caption"><span class="caption-text"><kbd class="kbd compound docutils literal notranslate"><kbd class="kbd docutils literal notranslate">Right</kbd>-<kbd class="kbd docutils literal notranslate">click</kbd></kbd> on blender and select <span class="guilabel">Run as administrator</span> or whatever the equivalent is in your
+language</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</div>
+<p>Again this only needs to be done once and afterwards you don’t have to run blender with administrative privileges.</p>
+</div>
+<div class="section" id="verify">
+<h3>Verify<a class="headerlink" href="#verify" title="Permalink to this heading">¶</a></h3>
+<p>To verify that <cite>lxml</cite> has actually been installed, you can go to the addon preferences and see that it is present in
+the dropdown-menu. If not, then look in the <a class="reference external" href="https://docs.blender.org/manual/en/latest/advanced/command_line/launch/windows.html#details">blender system console</a> for a reason why the installation of <cite>lxml</cite>
+failed.</p>
+<div class="figure align-default" id="id3">
+<img alt="../../_images/verify.png" src="../../_images/verify.png" />
+<p class="caption"><span class="caption-text"><cite>LXML</cite> should be in the dropdown list and automatically selected as the currently used library, if you only see
+<cite>ElementTree</cite> then something went wrong with the installation of <cite>lxml</cite></span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+</div>
+</div>
+<div class="section" id="what-if-this-is-not-possible">
+<h3>What If this is not possible?<a class="headerlink" href="#what-if-this-is-not-possible" title="Permalink to this heading">¶</a></h3>
+<p>If it is not possible for you, for one reason or the other, to have an internet connection or administrative rights.
+Then the exporter will still work, but it will default to use the builtin library which has limited functionality.
+Currently the only feature affected is <a class="reference internal" href="../../features/i3d_mapping/i3d_mapping.html#i3d-mapping"><span class="std std-ref">i3d-mapping</span></a>, which you can read more about in the docs
+for that specific feature. But there might be more features affected in the future.</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../../features.html" class="btn btn-neutral float-right" title="Features" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../exporter/exporter.html" class="btn btn-neutral float-left" title="Getting the Exporter" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2025, StjerneIdioten
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
