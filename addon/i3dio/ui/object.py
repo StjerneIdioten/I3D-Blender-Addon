@@ -21,12 +21,20 @@ from .helper_functions import i3d_property
 from ..xml_i3d import i3d_max
 from . import (presets, mesh, light)
 
+from .collision_data import COLLISIONS
+
 classes = []
 
 
 def register(cls):
     classes.append(cls)
     return cls
+
+
+def validate_collision_filter(value: str, allowed_values: list[str]) -> bool:
+    """Validate if the given value exists in the allowed_values list."""
+    print(f"Validating collision filter group: {value}")
+    return value in allowed_values
 
 
 @register
@@ -43,6 +51,8 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'lod_distances': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0), 'preset_group': 'EMPTY'},
         'lod_blending': {'name': 'lodBlending', 'default': True, 'preset_group': 'EMPTY'},
         'collision': {'name': 'collision', 'default': True, 'preset_group': 'MESH'},
+        'collision_filter_group': {'name': 'collisionFilterGroup', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
+        'collision_filter_mask': {'name': 'collisionFilterMask', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
         'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
         'compound': {'name': 'compound', 'default': False, 'preset_group': 'MESH'},
         'trigger': {'name': 'trigger', 'default': False, 'preset_group': 'MESH'},
@@ -163,10 +173,16 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         default=i3d_map['collision']['default']
     )
 
-    collision_mask: StringProperty(
-        name="Collision Mask",
-        description="The objects collision mask as a hexadecimal value",
-        default=i3d_map['collision_mask']['default']
+    collision_filter_group: StringProperty(
+        name="Collision Filter Group",
+        description="The objects collision filter group as a hexadecimal value",
+        default=i3d_map['collision_filter_group']['default']
+    )
+
+    collision_filter_mask: StringProperty(
+        name="Collision Filter Mask",
+        description="The objects collision filter mask as a hexadecimal value",
+        default=i3d_map['collision_filter_mask']['default']
     )
 
     compound: BoolProperty(
@@ -516,6 +532,51 @@ class I3DReferenceData(bpy.types.PropertyGroup):
     )
 
 
+@register
+class I3D_IO_OT_set_collision_preset(bpy.types.Operator):
+    bl_idname = 'i3dio.set_collision_preset'
+    bl_label = 'Set Collision Preset'
+    bl_options = {'INTERNAL'}
+    preset: StringProperty()
+
+    @classmethod
+    def description(cls, _context, properties):
+        return f"Set the collision preset to {properties.preset}"
+
+    def execute(self, context):
+        preset = COLLISIONS['presets'].get(self.preset, {})
+        i3d_attributes = context.object.i3d_attributes
+
+        if preset:
+            i3d_attributes.collision_filter_group = preset.group_hex
+            i3d_attributes.collision_filter_mask = preset.mask_hex
+        else:
+            i3d_attributes.collision_filter_group = i3d_attributes.i3d_map['collision_filter_group']['default']
+            i3d_attributes.collision_filter_mask = i3d_attributes.i3d_map['collision_filter_mask']['default']
+        return {'FINISHED'}
+
+
+@register
+class I3D_IO_MT_collision_presets(bpy.types.Menu):
+    bl_idname = "I3D_IO_MT_collision_presets"
+    bl_label = "Collision Presets"
+
+    def draw(self, _context):
+        layout = self.layout
+        presets = list(COLLISIONS['presets'].keys())
+
+        if not presets:
+            layout.label(text="No Presets Available")
+            return
+
+        grid = layout.grid_flow(columns=2, even_columns=True, even_rows=True)
+        for preset in presets:
+            text = preset.title().replace('_', ' ')
+            grid.operator(I3D_IO_OT_set_collision_preset.bl_idname, text=text).preset = preset
+        layout.separator()
+        layout.operator(I3D_IO_OT_set_collision_preset.bl_idname, text="None").preset = "NONE"
+
+
 SPLIT_TYPE_PRESETS = {
     "Spruce": {'split_type': 1, 'support_wood_harvester': True},
     "Pine": {'split_type': 2, 'support_wood_harvester': True},
@@ -610,8 +671,8 @@ class I3D_IO_PT_object_attributes(Panel):
         i3d_property(row, i3d_attributes, 'object_mask', obj)
         op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
         op.target_prop = 'object_mask'
-        op.layout_mode = 'HORIZONTAL'
-        op.dialog_width = 400
+        op.layout_mode = 'VERTICAL'
+        op.dialog_width = 1000
 
         layout.separator(type='LINE')
         box = layout.box()
@@ -640,9 +701,9 @@ def unset_properties(i3d_attributes: bpy.types.PropertyGroup, props: tuple) -> N
 
 
 def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.types.PropertyGroup) -> None:
-    UNSET_PROPS = ('compound', 'collision', 'collision_mask', 'trigger', 'restitution', 'static_friction',
-                   'dynamic_friction', 'linear_damping', 'angular_damping', 'density', 'solver_iteration_count',
-                   'split_type', 'split_uvs')
+    UNSET_PROPS = ('compound', 'collision', 'collision_filter_group', 'collision_filter_mask', 'trigger',
+                   'restitution', 'static_friction', 'dynamic_friction', 'linear_damping', 'angular_damping',
+                   'density', 'solver_iteration_count', 'split_type', 'split_uvs')
 
     is_static = i3d_attributes.rigid_body_type == 'static'
     header, panel = layout.panel('i3d_rigid_body_panel', default_closed=False)
@@ -661,10 +722,26 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
             i3d_attributes.property_unset('compound')
 
         panel.prop(i3d_attributes, 'collision')
-        row = panel.row(align=True)
-        row.prop(i3d_attributes, 'collision_mask')
-        row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS').target_prop = 'collision_mask'
         panel.prop(i3d_attributes, 'trigger')
+
+        col_filter_header, col_filter_panel = layout.panel('i3d_collision_filter', default_closed=False)
+        col_filter_header.label(text="Collision Filter")
+        col_filter_header.emboss = 'NONE'
+        col_filter_header.menu(I3D_IO_MT_collision_presets.bl_idname, icon='PRESET', text="")
+        if col_filter_panel:
+            row = col_filter_panel.row()
+            row.prop(i3d_attributes, 'collision_filter_group')
+            op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+            op.target_prop = 'collision_filter_group'
+            op.layout_mode = 'VERTICAL'
+            op.dialog_width = 890
+            row = col_filter_panel.row()
+            row.prop(i3d_attributes, 'collision_filter_mask')
+            op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
+            op.target_prop = 'collision_filter_mask'
+            op.layout_mode = 'VERTICAL'
+            op.dialog_width = 890
+
         panel.prop(i3d_attributes, 'restitution')
         panel.prop(i3d_attributes, 'static_friction')
         panel.prop(i3d_attributes, 'dynamic_friction')
@@ -715,9 +792,8 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
             if prop.endswith('_mask'):
                 op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')
                 op.target_prop = prop
-                op.layout_mode = 'HORIZONTAL'  # Vertical in FS25
-                # 375 and 677 for FS25
-                op.dialog_width = 750 if prop.startswith("weather_") else 950
+                op.layout_mode = 'VERTICAL'
+                op.dialog_width = 375 if prop.startswith("weather_") else 677
 
             row.enabled = not use_parent
 
