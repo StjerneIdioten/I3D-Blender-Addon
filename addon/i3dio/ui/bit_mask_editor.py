@@ -4,6 +4,7 @@ from .. import __package__ as base_package
 from .. import xml_i3d
 from .object import I3DNodeObjectAttributes
 from .mesh import I3DNodeShapeAttributes
+from .collision_data import COLLISIONS
 
 
 classes = []
@@ -82,9 +83,8 @@ def get_bit_names(target_prop: str) -> list[str]:
         "viewer_spaciality_required_mask": "viewerSpatialityFlags",
         "viewer_spaciality_prevent_mask": "viewerSpatialityFlags",
         "object_mask": "objectMaskFlags",
-        # For FS25
-        # "collision_filter_group": COLLISIONS['flags'],  # Reuse the cached collision data
-        # "collision_filter_mask": COLLISIONS['flags']
+        "collision_filter_group": COLLISIONS['flags'],  # Reuse the cached collision data
+        "collision_filter_mask": COLLISIONS['flags']
     }
     category = category_map.get(target_prop)
     if isinstance(category, dict):  # Handling COLLISIONS['flags']
