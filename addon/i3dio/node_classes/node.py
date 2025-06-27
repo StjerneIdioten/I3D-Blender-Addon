@@ -265,6 +265,11 @@ class TransformGroupNode(SceneGraphNode):
             return
         self.logger.debug(f"Reference path: {reference_path!r}")
         self._write_attribute('referenceId', self.i3d.add_file_reference(reference_path))
+        if not (runtime_loaded := self.blender_object.i3d_reference.runtime_loaded):
+            # Default is True so only write if False
+            self._write_attribute('referenceRuntimeLoaded', runtime_loaded)
+        if (child_path := self.blender_object.i3d_reference.child_path):
+            self._write_attribute('referenceChildPath', child_path)
 
     def populate_xml_element(self):
         super().populate_xml_element()
