@@ -517,6 +517,9 @@ class IndexedTriangleSet(Node):
                     )
                 )
 
+        self.material_ids = [self.i3d.add_material(material_object_map[name]) for name in master_material_map.keys()]
+        self.tangent = self.tangent or any(self.i3d.materials[mat_id].is_normalmapped() for mat_id in self.material_ids)
+
         # Process material subsets to create contiguous buffers
         self.logger.debug("Processing subsets one by one to create contiguous vertex buffer...")
 
@@ -594,12 +597,18 @@ class IndexedTriangleSet(Node):
             final_vertices_list.append(unique_verts_in_subset)
             final_triangles_list.append(new_triangles + vertex_offset)
 
-            final_subsets_info.append({
+            subsets_info = {
                 'firstIndex': triangle_offset,
                 'numVertices': len(unique_verts_in_subset),
                 'firstVertex': vertex_offset,
                 'numIndices': len(new_triangles) * 3,
-            })
+            }
+
+            if slot_name := self.i3d.materials[material_object_map[mat_name].name].get_slot_name():
+                self.logger.debug(f"Subset for {mat_name!r} have slot name: {slot_name!r}")
+                subsets_info['materialSlotName'] = slot_name
+
+            final_subsets_info.append(subsets_info)
 
             vertex_offset += len(unique_verts_in_subset)
             triangle_offset += len(new_triangles) * 3
@@ -614,9 +623,6 @@ class IndexedTriangleSet(Node):
         self.final_triangles = np.concatenate(final_triangles_list) if final_triangles_list else np.array([])
         self.final_subsets = final_subsets_info
 
-        self.material_ids = [self.i3d.add_material(material_object_map.get(name))
-                             for name in master_material_map.keys()]
-        self.tangent = self.tangent or any(self.i3d.materials[mat_id].is_normalmapped() for mat_id in self.material_ids)
         self.logger.info("Finished mesh processing.")
 
     def process_and_write_mesh_data(self):

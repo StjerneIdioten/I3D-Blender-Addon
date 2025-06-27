@@ -40,6 +40,12 @@ class Material(Node):
     def is_normalmapped(self) -> bool:
         return 'Normalmap' in self.xml_elements
 
+    def get_slot_name(self) -> str | None:
+        """Returns the material slot name if it's set, otherwise returns the material name."""
+        if self.blender_material.i3d_attributes.use_material_slot_name:
+            return self.blender_material.i3d_attributes.material_slot_name or self.blender_material.name
+        return None
+
     def populate_xml_element(self) -> None:
         material = self.blender_material
         if material.use_nodes:
