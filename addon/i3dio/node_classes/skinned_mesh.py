@@ -8,7 +8,7 @@ import mathutils
 import bpy
 
 from .node import (TransformGroupNode, SceneGraphNode)
-from .shape import (ShapeNode, EvaluatedMesh)
+from .shape import (ShapeNode, EvaluatedMesh, IndexedTriangleSet)
 from ..i3d import I3D
 from .. import xml_i3d
 
@@ -201,7 +201,7 @@ class SkinnedMeshShapeNode(ShapeNode):
     def populate_xml_element(self):
         super().populate_xml_element()
 
-        its = self.i3d.shapes[self.shape_id]
+        its: IndexedTriangleSet = self.i3d.shapes[self.shape_id]
         if its.final_skin_bind_node_ids:
             skin_bind_ids = " ".join(map(str, its.final_skin_bind_node_ids))
             self.logger.debug(f"Writing Skin bind IDs: {skin_bind_ids}")
