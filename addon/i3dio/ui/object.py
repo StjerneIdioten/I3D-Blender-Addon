@@ -530,6 +530,24 @@ class I3DReferenceData(bpy.types.PropertyGroup):
         default='',
         subtype='FILE_PATH'
     )
+    runtime_loaded: BoolProperty(
+        name="Runtime Loaded",
+        description=(
+            "If enabled, the referenced I3D file will be loaded in-game at runtime. "
+            "Disable for objects managed by XML (e.g. lights) or if you only want to preview in Giants Editor. "
+            "Most references should NOT be runtime loaded."
+        ),
+        default=False  # Default in GE is True, but for most use cases False makes more sense
+    )
+    child_path: StringProperty(
+        name="Child Path",
+        description=(
+            "Selects which root node or sub-node to load from the referenced I3D. "
+            "e.g. '0>' for the first root node, '1>' for the second. If left empty and the file has multiple "
+            "root nodes, you'll get a warning, but the first node ('0>') will be used by default in Giants Editor."
+        ),
+        default=''
+    )
 
 
 @register
@@ -837,6 +855,8 @@ def draw_reference_file_attributes(layout: bpy.types.UILayout, i3d_reference: bp
     header.label(text="Reference File")
     if panel:
         panel.prop(i3d_reference, 'path')
+        panel.prop(i3d_reference, 'runtime_loaded')
+        panel.prop(i3d_reference, 'child_path', placeholder="0>")
 
 
 def draw_merge_group_attributes(layout: bpy.types.UILayout, context: bpy.types.Context) -> None:
