@@ -41,7 +41,6 @@ class Node(ABC):
         self.xml_elements = {}
         self.logger = self._set_logging_output_name_field()
         self._create_xml_element()
-        self.populate_xml_element()
 
     @property
     @abstractmethod
@@ -152,8 +151,9 @@ class SceneGraphNode(Node):
                 self.logger.debug(f'Has no data specific attributes')
 
     def _write_user_attributes(self):
-        try:
-            self.i3d.add_user_attributes(self.blender_object.i3d_user_attributes.attribute_list, self.id)
+        try:  # Only write attributes if list is not empty
+            if self.blender_object.i3d_user_attributes.attribute_list:
+                self.i3d.add_user_attributes(self.blender_object.i3d_user_attributes.attribute_list, self.id)
         except AttributeError:
             pass
 
@@ -221,6 +221,16 @@ class SceneGraphNode(Node):
 
     def add_child(self, node: SceneGraphNode):
         self.children.append(node)
+
+    def remove_child(self, node: SceneGraphNode):
+        """Removes a child node from the children list."""
+        try:
+            self.children.remove(node)
+        except ValueError:
+            self.logger.warning(
+                f"Attempted to remove child '{node.name}' from parent '{self.name}', "
+                "but it was not found in the children list."
+            )
 
     def add_i3d_mapping_to_xml(self):
         try:

@@ -1,6 +1,6 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, Dict, List, Type, OrderedDict, Optional, Tuple)
+from typing import (Union, Type)
 import logging
 from . import xml_i3d
 
@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class I3D:
     """A special node which is the root node for the entire I3D file. It essentially represents the i3d file"""
     def __init__(self, name: str, i3d_file_path: str, conversion_matrix: mathutils.Matrix,
-                 depsgraph: bpy.types.Depsgraph, settings: Dict):
+                 depsgraph: bpy.types.Depsgraph, settings: dict):
         self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
                                                   {'object_name': name})
         self._ids = {
@@ -36,24 +36,25 @@ class I3D:
         self.xml_elements['UserAttributes'] = xml_i3d.SubElement(self.xml_elements['Root'], 'UserAttributes')
 
         self.scene_root_nodes = []
-        self.processed_objects: Dict[bpy.types.Object, SceneGraphNode] = {}
+        self.processed_objects: dict[bpy.types.Object, SceneGraphNode] = {}
         self.deferred_constraints: list[tuple[SkinnedMeshBoneNode, bpy.types.Object]] = []
         self.conversion_matrix = conversion_matrix
         self.conversion_matrix_inv = conversion_matrix.inverted_safe()
 
-        self.shapes: Dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
-        self.materials: Dict[Union[str, int], Material] = {}
-        self.files: Dict[Union[str, int], File] = {}
-        self.merge_groups: Dict[int, MergeGroup] = {}
-        self.skinned_meshes: Dict[str, SkinnedMeshRootNode] = {}
+        self.shapes: dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
+        self.materials: dict[Union[str, int], Material] = {}
+        self.files: dict[Union[str, int], File] = {}
+        self.merge_groups: dict[int, MergeGroup] = {}
+        self.deferred_shapes_to_populate: list[IndexedTriangleSet] = []
+        self.skinned_meshes: dict[str, SkinnedMeshRootNode] = {}
 
-        self.i3d_mapping: List[SceneGraphNode] = []
+        self.i3d_mapping: list[SceneGraphNode] = []
 
         self.settings = settings
 
         self.depsgraph = depsgraph
 
-        self.all_objects_to_export: List[bpy.types.Object] = []
+        self.all_objects_to_export: list[bpy.types.Object] = []
         self.anim_links: dict[bpy.types.Action, list[tuple[SceneGraphNode, bpy.types.ActionSlot]]] = {}
 
     # Private Methods ##################################################################################################
@@ -65,8 +66,11 @@ class I3D:
     def _add_node(self, node_type: Type[SceneGraphNode], object_: Type[bpy.types.bpy_struct],
                   parent: Type[SceneGraphNode] = None, **kwargs) -> SceneGraphNode:
         node = node_type(self._next_available_id('node'), object_, self, parent, **kwargs)
+        # Populate xml element after node is fully constructed
+        node.populate_xml_element()
         self.processed_objects[object_] = node
         if parent is None:
+            self.logger.debug(f"Node {node.name!r} has no parent, adding to scene root.")
             self.scene_root_nodes.append(node)
             self.xml_elements['Scene'].append(node.element)
         return node
@@ -76,8 +80,18 @@ class I3D:
         """Retrieves an existing SkinnedMeshRootNode for the armature or creates a new one if needed."""
         node = self.skinned_meshes.get(armature_object.name)
         if node is None:
+            self.logger.debug(f"Creating new SkinnedMeshRootNode for armature {armature_object.name!r}.")
             node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self, parent=parent)
+            node.populate_xml_element()
             self.skinned_meshes[armature_object.name] = node
+        elif parent is not None and node.parent is None and not node.is_collapsed:
+            self.logger.debug(
+                f"Armature {armature_object.name!r} was pre-created by a modifier. "
+                f"Now assigning its correct parent: {parent.name!r}."
+            )
+            node.parent = parent
+            parent.add_child(node)
+            parent.element.append(node.element)
         return node
 
     # Public Methods ###################################################################################################
@@ -85,25 +99,39 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(ShapeNode, mesh_object, parent)
 
-    def add_merge_group_node(self, merge_group_object: bpy.types.Object, parent: SceneGraphNode = None, is_root: bool = False) \
-            -> [SceneGraphNode, None]:
+    def add_merge_group_node(self, merge_group_object: bpy.types.Object,
+                             parent: SceneGraphNode | None = None) -> SceneGraphNode:
         self.logger.debug("Adding merge group node")
-        merge_group = self.merge_groups[merge_group_object.i3d_merge_group_index]
 
-        node_to_return: [MergeGroupRoot or MergeGroupChild] = None
+        # Blender-side and export-side merge group data
+        blender_merge_group = bpy.context.scene.i3dio_merge_groups[merge_group_object.i3d_merge_group_index]
+        exporter_merge_group = self.merge_groups[merge_group_object.i3d_merge_group_index]
 
-        if is_root:
-            if merge_group.root_node is not None:
-                    self.logger.warning(f"Merge group '{merge_group.name}' already has a root node! "
-                                        f"The object '{merge_group_object.name}' will be ignored for export")
-            else:
-                node_to_return = self._add_node(MergeGroupRoot, merge_group_object, parent)
-                merge_group.set_root(node_to_return)
-        else:
-            node_to_return = self._add_node(MergeGroupChild, merge_group_object, parent)
-            merge_group.add_child(node_to_return)
+        # Check if a root is assigned in Blender and if that root is part of this export
+        root_obj = blender_merge_group.root
+        has_valid_root = (root_obj and root_obj in self.all_objects_to_export)
 
-        return node_to_return
+        # Determine if the current object should be the root of the merge group
+        # 1. If it is marked as root in Blender and the root object matches the merge group object
+        # 2. There is no valid root assigned, and the exporter haven't assigned a root yet
+        should_be_root = (
+            (has_valid_root and root_obj == merge_group_object)
+            or (not has_valid_root and exporter_merge_group.root_node is None)
+        )
+
+        if should_be_root:
+            if not has_valid_root:
+                self.logger.warning(
+                    f"No valid root was found for merge group '{blender_merge_group.name}'. "
+                    f"Automatically assigning '{merge_group_object.name}' as the root."
+                )
+            root_node = self._add_node(MergeGroupRoot, merge_group_object, parent)
+            exporter_merge_group.set_root(root_node)
+            return root_node
+        # Child node
+        child_node = self._add_node(MergeGroupChild, merge_group_object, parent)
+        exporter_merge_group.add_child(child_node)
+        return child_node
 
     def add_merge_children_node(self, merge_children_object: bpy.types.Object,
                                 parent: SceneGraphNode | None = None) -> SceneGraphNode:
@@ -114,18 +142,26 @@ class I3D:
         # Prevent the bone from getting added to the scene root node if added through a armature modifier.
         # If it actually should be added to scene root we will handle it when we get to the armature object
         node = SkinnedMeshBoneNode(self._next_available_id('node'), bone_object, self, parent, root_node)
+        node.populate_xml_element()
         self.processed_objects[bone_object] = node
+
+        if parent is not None:
+            parent.add_child(node)
+            parent.element.append(node.element)
+
         return node
 
     def add_armature_from_modifier(self, armature_object: bpy.types.Object) -> SkinnedMeshRootNode:
-        """Gets or creates an armature node for a SkinnedMeshShapeNode.
-        When processing a mesh with an ARMATURE modifier, the armature must be retrieved or created
-        to ensure the skinned mesh can properly bind to its bones.
         """
+        Gets or creates an armature node when discovered via a Skinned Mesh (armature modifier).
+        The parent is unknown at this time, so it's passed as None.
+        """
+        self.logger.debug(f"Adding armature from modifier: {armature_object.name!r}")
         return self._get_or_create_armature_node(armature_object, parent=None)
 
-    def add_armature_from_scene(self, armature_object: bpy.types.Object, parent: SceneGraphNode) -> SceneGraphNode:
-        """Gets or creates an armature node during scene traversal and assigns hierarchy."""
+    def add_armature_from_scene(self, armature_object: bpy.types.Object, parent: SceneGraphNode) -> SkinnedMeshRootNode:
+        """Processes an armature found during the main scene traversal. The parent is known at this time."""
+        self.logger.debug(f"Adding armature from scene: {armature_object.name!r} with parent {parent}")
         armature_node = self._get_or_create_armature_node(armature_object, parent)
         armature_node.organize_armature_hierarchy(parent)
         return armature_node
@@ -145,24 +181,27 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(CameraNode, camera_object, parent)
 
-    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: Optional[str] = None, is_merge_group=False,
-                  is_generic=False, bone_mapping: ChainMap = None) -> int:
-        name = shape_name or evaluated_mesh.name
-        if name not in self.shapes:
+    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: str | None = None, is_merge_group: bool = False,
+                  is_generic: bool = False, bone_mapping: ChainMap | None = None) -> int:
+        export_name = shape_name or evaluated_mesh.name
+        if export_name not in self.shapes:
             shape_id = self._next_available_id('shape')
-            indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name, is_merge_group,
-                                                      is_generic, bone_mapping)
+            indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name=export_name,
+                                                      is_merge_group=is_merge_group, is_generic=is_generic,
+                                                      bone_mapping=bone_mapping)
+            indexed_triangle_set.populate_xml_element()
             # Store a reference to the shape from both it's name and its shape id
-            self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
+            self.shapes.update(dict.fromkeys([shape_id, export_name], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
             return shape_id
-        return self.shapes[name].id
+        return self.shapes[export_name].id
 
-    def add_curve(self, evaluated_curve: EvaluatedNurbsCurve, curve_name: Optional[str] = None) -> int:
+    def add_curve(self, evaluated_curve: EvaluatedNurbsCurve, curve_name: str | None = None) -> int:
         name = curve_name or evaluated_curve.name
         if name not in self.shapes:
             curve_id = self._next_available_id('shape')
             nurbs_curve = NurbsCurve(curve_id, self, evaluated_curve, curve_name)
+            nurbs_curve.populate_xml_element()
             # Store a reference to the curve from both its name and its curve id
             self.shapes.update(dict.fromkeys([curve_id, name], nurbs_curve))
             self.xml_elements['Shapes'].append(nurbs_curve.element)
@@ -197,6 +236,7 @@ class I3D:
             self.logger.debug(f"New Material")
             material_id = self._next_available_id('material')
             material = Material(material_id, self, blender_material)
+            material.populate_xml_element()
             self.materials.update(dict.fromkeys([material_id, name], material))
             self.xml_elements['Materials'].append(material.element)
             return material_id
@@ -221,6 +261,7 @@ class I3D:
             self.logger.debug(f"New File")
             file_id = self._next_available_id('file')
             file = file_type(file_id, self, path_to_file)
+            file.populate_xml_element()
             # Store with reference to blender path instead of potential relative path, to avoid unnecessary creation of
             # a file before looking it up in the files dictionary.
             self.files.update(dict.fromkeys([file_id, file.blender_path], file))
