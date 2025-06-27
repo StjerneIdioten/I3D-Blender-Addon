@@ -183,18 +183,18 @@ class I3D:
 
     def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: str | None = None, is_merge_group: bool = False,
                   is_generic: bool = False, bone_mapping: ChainMap | None = None) -> int:
-        name = shape_name or evaluated_mesh.name
-        if name not in self.shapes:
+        export_name = shape_name or evaluated_mesh.name
+        if export_name not in self.shapes:
             shape_id = self._next_available_id('shape')
-            indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name=shape_name,
+            indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name=export_name,
                                                       is_merge_group=is_merge_group, is_generic=is_generic,
                                                       bone_mapping=bone_mapping)
             indexed_triangle_set.populate_xml_element()
             # Store a reference to the shape from both it's name and its shape id
-            self.shapes.update(dict.fromkeys([shape_id, name], indexed_triangle_set))
+            self.shapes.update(dict.fromkeys([shape_id, export_name], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
             return shape_id
-        return self.shapes[name].id
+        return self.shapes[export_name].id
 
     def add_curve(self, evaluated_curve: EvaluatedNurbsCurve, curve_name: str | None = None) -> int:
         name = curve_name or evaluated_curve.name

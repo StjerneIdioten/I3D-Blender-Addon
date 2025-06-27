@@ -192,8 +192,10 @@ class SkinnedMeshShapeNode(ShapeNode):
         super().__init__(id_=id_, shape_object=skinned_mesh_object, i3d=i3d, parent=parent)
 
     def _create_shape(self):
-        self.shape_id = self.i3d.add_shape(EvaluatedMesh(self.i3d, self.blender_object, node=self),
-                                           self.skinned_mesh_name, bone_mapping=self.bone_mapping)
+        self.shape_id = self.i3d.add_shape(
+            EvaluatedMesh(self.i3d, self.blender_object, node=self),
+            self.skinned_mesh_name, bone_mapping=self.bone_mapping
+        )
         self.xml_elements['IndexedTriangleSet'] = self.i3d.shapes[self.shape_id].element
 
     def populate_xml_element(self):
