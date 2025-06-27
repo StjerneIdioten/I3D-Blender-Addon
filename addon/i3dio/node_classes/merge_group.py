@@ -37,6 +37,7 @@ class MergeGroupRoot(ShapeNode):
         self._write_attribute('skinBindNodeIds', self.skin_bind_ids[:-1])
         self.i3d.shapes[self.shape_id].append_from_evaluated_mesh(
             EvaluatedMesh(self.i3d, child.blender_object, reference_frame=self.blender_object.matrix_world))
+        self._write_attribute('materialIds', self.i3d.shapes[self.shape_id].material_ids)
 
     def populate_xml_element(self):
         super().populate_xml_element()
