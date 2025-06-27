@@ -74,7 +74,6 @@ class MeshExtraction:
     generic_values: np.ndarray | None  # (num_loops,) or None, used for generic meshes (geo nodes)
     triangle_loop_indices: np.ndarray  # (num_tris, 3) indices of loops for each triangle
     tri_material_indices: np.ndarray   # (num_tris,) material slot for each triangle
-    materials: list                    # List of *non-None* Blender materials
 
 
 @dataclass
@@ -90,6 +89,7 @@ class TriangleAssignment:
     mesh_data: MeshExtraction
     loop_indices: np.ndarray  # shape (3,)
     id_value: float
+    material: bpy.types.Material
 
 
 class IndexedTriangleSet(Node):
@@ -123,6 +123,7 @@ class IndexedTriangleSet(Node):
         self.bind_index: int = 0
 
         self.material_ids: list[int] = []
+        self.subset_slot_indices: list[int] = []
         self.tangent: bool = False
         self.final_skin_bind_node_ids: list[int] = []
 
@@ -184,23 +185,6 @@ class IndexedTriangleSet(Node):
             self.logger.warning(f"Object {obj.name!r} (mesh {mesh.name!r}) has no vertices, loops, or triangles. "
                                 "Skipping extraction.")
             return None
-
-        if not len(mesh.materials):
-            self.logger.warning(f"Object {obj.name!r} (mesh {mesh.name!r}) has no materials. "
-                                "Assigning default material for export.")
-            mesh.materials.append(self.i3d.get_default_material().blender_material)
-        else:
-            # Fill empty material slots with single valid material (if exactly one), otherwise use default
-            non_none_materials = [mat for mat in mesh.materials if mat is not None]
-            fallback_material = (non_none_materials[0] if len(non_none_materials) == 1
-                                 else self.i3d.get_default_material().blender_material)
-            for i, mat in enumerate(mesh.materials):
-                if mat is None:
-                    self.logger.warning(
-                        f"Object {obj.name!r} (mesh {mesh.name!r}) has an empty material slot at index {i}. "
-                        f"Assigning fallback/default material {fallback_material.name!r} for export."
-                    )
-                    mesh.materials[i] = fallback_material
 
         # Vertex positions
         positions = np.empty((num_verts, 3), dtype=np.float32)
@@ -269,8 +253,7 @@ class IndexedTriangleSet(Node):
             blend_weights=vert_bone_weights,
             generic_values=generic_values,
             triangle_loop_indices=tri_loop_indices,
-            tri_material_indices=tri_material_indices,
-            materials=mesh.materials[:]
+            tri_material_indices=tri_material_indices
         )
 
     def _extract_skinning_data(self,
@@ -429,16 +412,20 @@ class IndexedTriangleSet(Node):
 
         return dataclasses.replace(mesh_data, uvs=padded_uvs, colors=padded_colors)
 
-    def _get_safe_material(self, mesh_data: MeshExtraction, mat_idx: int, fallback_material: bpy.types.Material | None,
-                           obj_name: str, warned: set) -> bpy.types.Material:
+    def _get_safe_material(self, obj: bpy.types.Object, mat_idx: int,
+                           fallback_material: bpy.types.Material | None, warned: set) -> bpy.types.Material:
         """Safely retrieves a material by index from the mesh data."""
-        if 0 <= mat_idx < len(mesh_data.materials):
-            return mesh_data.materials[mat_idx]
+        if 0 <= mat_idx < len(obj.material_slots):
+            mat = obj.material_slots[mat_idx].material
+            if mat is not None:
+                return mat
         # Out of bounds
-        if obj_name not in warned:
-            self.logger.warning(f"Object {obj_name!r} has a triangle referencing a non-existent material slot "
-                                f"(index {mat_idx}). Using fallback/default material.")
-            warned.add(obj_name)
+        if obj.name not in warned:
+            self.logger.warning(
+                f"Object {obj.name!r} has a triangle referencing an empty or out-of-bounds material slot "
+                f"(index {mat_idx}). Using fallback/default material."
+            )
+            warned.add(obj.name)
         return fallback_material or self.i3d.get_default_material().blender_material
 
     def _process_meshes(self, meshes_to_process: list[dict]) -> None:
@@ -461,7 +448,7 @@ class IndexedTriangleSet(Node):
         # Group ALL triangles from ALL meshes by material
         self.logger.debug("Grouping all triangles by final material subset...")
 
-        # Exract & pad mesh data
+        # Extract & pad mesh data
         padded_mesh_data_cache = {}
         extracted_mesh_data: list[tuple[dict, MeshExtraction]] = []
         for entry in meshes_to_process:
@@ -483,39 +470,49 @@ class IndexedTriangleSet(Node):
             # Store both entry and its mesh data for later use
             extracted_mesh_data.append((entry, final_mesh_data))
 
-        # Build master list of unique materials from processed mesh data which have triangles assigned to them.
-        globally_ordered_materials: list[bpy.types.Material] = []
-        visited_materials = set()
-        for _, mesh_data in extracted_mesh_data:
-            for mat_idx in mesh_data.tri_material_indices:
-                if 0 <= mat_idx < len(mesh_data.materials):
-                    mat = mesh_data.materials[mat_idx]
-                    if mat and mat not in visited_materials:
-                        globally_ordered_materials.append(mat)
-                        visited_materials.add(mat)
-
-        # Create final mapping based on the globally ordered materials
-        master_material_map = OrderedDict({mat.name: i for i, mat in enumerate(globally_ordered_materials)})
-        material_object_map = {mat.name: mat for mat in globally_ordered_materials}
-
-        self.logger.debug(f"Found {len(master_material_map)} unique materials across all processed meshes.")
-
         # Assign triangles to subsets by material
         subset_data_to_process: defaultdict[list[TriangleAssignment]] = defaultdict(list)
         for entry, mesh_data in extracted_mesh_data:
-            obj_name = entry['evaluated_mesh'].object.name
-            unique_mats_in_mesh = {mat for mat in mesh_data.materials}
-            fallback_material = next(iter(unique_mats_in_mesh), None) if len(unique_mats_in_mesh) == 1 else None
+            obj = entry['evaluated_mesh'].object
+            unique_mats_in_mesh = {slot.material for slot in obj.material_slots if slot.material is not None}
+            fallback_material = None
+            if len(unique_mats_in_mesh) == 1:
+                fallback_material = next(iter(unique_mats_in_mesh))
+            elif not len(unique_mats_in_mesh):
+                fallback_material = self.i3d.get_default_material().blender_material
             warned = set()  # Track warnings per mesh to avoid duplicates
             for i, mat_idx in enumerate(mesh_data.tri_material_indices):
-                material = self._get_safe_material(mesh_data, mat_idx, fallback_material, obj_name, warned)
+                material = self._get_safe_material(obj, mat_idx, fallback_material, warned)
                 subset_data_to_process[material.name].append(
                     TriangleAssignment(
                         mesh_data=mesh_data,
                         loop_indices=mesh_data.triangle_loop_indices[i],
-                        id_value=entry['id_value']
+                        id_value=entry['id_value'],
+                        material=material
                     )
                 )
+
+        # Build master list of unique materials from processed mesh data which have triangles assigned to them.
+        all_used_materials = []
+        visited_materials = set()
+        for mat_name, tris in subset_data_to_process.items():
+            if tris:
+                mat = tris[0].material
+                if mat and mat not in visited_materials:
+                    all_used_materials.append(mat)
+                    visited_materials.add(mat)
+
+        # Only used by instances: this maps each exported subset/material back to its slot index
+        # in the original object, so instanced shapes assign materials in the right order.
+        blender_slots = [slot.material for slot in self.evaluated_mesh.object.material_slots]
+        self.subset_slot_indices = [blender_slots.index(mat) for mat in all_used_materials if mat in blender_slots]
+        self.logger.debug(f"Subset slot indices: {self.subset_slot_indices!r}")
+
+        # Create final mapping based on the globally ordered materials
+        master_material_map = OrderedDict({mat.name: i for i, mat in enumerate(all_used_materials)})
+        material_object_map = {mat.name: mat for mat in all_used_materials}
+
+        self.logger.debug(f"Found {len(master_material_map)} unique materials across all processed meshes.")
 
         self.material_ids = [self.i3d.add_material(material_object_map[name]) for name in master_material_map.keys()]
         self.tangent = self.tangent or any(self.i3d.materials[mat_id].is_normalmapped() for mat_id in self.material_ids)
@@ -899,6 +896,29 @@ class ShapeNode(SceneGraphNode):
     def _transform_for_conversion(self) -> mathutils.Matrix:
         return self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
 
+    def is_instance(self) -> bool:
+        """Return True if this shape node is an instance (not the source/original) of a processed mesh."""
+        shape: IndexedTriangleSet = self.i3d.shapes.get(self.shape_id)
+        if not shape:
+            return False
+        return shape.evaluated_mesh.source_object is not self.blender_object
+
     def populate_xml_element(self) -> None:
+        if self.blender_object.type == 'MESH' and self.is_instance():
+            # For mesh instances: Remap material IDs using slot indices to match subset order from original mesh
+            shape: IndexedTriangleSet = self.i3d.shapes[self.shape_id]
+            self.logger.debug(f"Instance detected: Original={shape.evaluated_mesh.source_object.name}, "
+                              f"Instance={self.blender_object.name}, shape_id={self.shape_id}")
+            blender_slots = [slot.material for slot in self.blender_object.material_slots]
+            material_ids = [
+                self.i3d.add_material(
+                    blender_slots[slot_idx] if 0 <= slot_idx < len(blender_slots) and blender_slots[slot_idx]
+                    else self.i3d.get_default_material().blender_material
+                )
+                for slot_idx in shape.subset_slot_indices
+            ]
+            self.logger.debug(f"writing {len(material_ids)} material IDs for instanced shape")
+            self._write_attribute('materialIds', ' '.join(map(str, material_ids)))
+
         self._write_attribute('shapeId', self.shape_id)
         super().populate_xml_element()
