@@ -157,12 +157,6 @@ class SceneGraphNode(Node):
         except AttributeError:
             pass
 
-    def _add_reference_file(self):
-        if (reference := self.blender_object.i3d_reference) and reference.path and reference.path.endswith('.i3d'):
-            self.logger.debug("Adding reference file")
-            file_id = self.i3d.add_file_reference(reference.path)
-            self._write_attribute('referenceId', file_id)
-
     @property
     @abstractmethod
     def _transform_for_conversion(self) -> Union[mathutils.Matrix, None]:
@@ -216,8 +210,6 @@ class SceneGraphNode(Node):
         self._write_properties()
         self._write_user_attributes()
         self._add_transform_to_xml_element(self._transform_for_conversion)
-        if hasattr(self.blender_object, 'i3d_reference') and self.blender_object.type == 'EMPTY':
-            self._add_reference_file()
 
     def add_child(self, node: SceneGraphNode):
         self.children.append(node)
@@ -243,20 +235,40 @@ class SceneGraphNode(Node):
 class TransformGroupNode(SceneGraphNode):
     ELEMENT_TAG = 'TransformGroup'
 
-    def __init__(self, id_: int, empty_object: [bpy.types.Object, bpy.types.Collection],
-                 i3d: I3D, parent: SceneGraphNode or None = None):
+    def __init__(self, id_: int, empty_object: bpy.types.Object | bpy.types.Collection,
+                 i3d: I3D, parent: SceneGraphNode | None = None):
         super().__init__(id_=id_, blender_object=empty_object, i3d=i3d, parent=parent)
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
         try:
-            conversion_matrix = self.i3d.conversion_matrix @ \
-                                self.blender_object.matrix_local @ \
-                                self.i3d.conversion_matrix.inverted()
+            conversion_matrix = (
+                self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
+            )
         except AttributeError:
-            self.logger.info(f"is a Collection and it will be exported as a transformgroup with default transform")
+            self.logger.info("is a Collection and it will be exported as a transformgroup with default transform")
             conversion_matrix = None
         return conversion_matrix
+
+    def _write_reference_path(self):
+        """Write the reference path for the transform group if it exists."""
+        try:
+            if not (reference_path := self.blender_object.i3d_reference.path):
+                return
+        except AttributeError:
+            return
+
+        if not reference_path.lower().endswith('.i3d'):
+            self.logger.warning(
+                f"Reference path {reference_path!r} does not end with '.i3d'. Reference files must be .i3d files."
+            )
+            return
+        self.logger.debug(f"Reference path: {reference_path!r}")
+        self._write_attribute('referenceId', self.i3d.add_file_reference(reference_path))
+
+    def populate_xml_element(self):
+        super().populate_xml_element()
+        self._write_reference_path()
 
 
 class LightNode(SceneGraphNode):
