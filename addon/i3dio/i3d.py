@@ -281,27 +281,6 @@ class I3D:
     def get_setting(self, setting: str):
         return self.settings[setting]
 
-    def get_scene_as_formatted_string(self):
-        """Tree represented as depth first"""
-        tree_string = ""
-        longest_string = 0
-
-        def traverse(node, indents=0):
-            nonlocal tree_string, longest_string
-            indent = indents * '  '
-            line = f"|{indent}{node}\n"
-            longest_string = len(line) if len(line) > longest_string else longest_string
-            tree_string += line
-            for child in node.children:
-                traverse(child, indents + 1)
-
-        for root_node in self.scene_root_nodes:
-            traverse(root_node)
-
-        tree_string += f"{longest_string * '-'}\n"
-
-        return f"{longest_string * '-'}\n" + tree_string
-
     def export_to_i3d_file(self) -> None:
         xml_i3d.export_to_i3d_file(self.xml_elements['Root'], self.paths['i3d_file_path'])
 
