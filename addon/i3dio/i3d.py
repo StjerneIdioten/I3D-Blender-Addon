@@ -3,6 +3,8 @@ from __future__ import annotations  # Enables python 4.0 annotation typehints fx
 from typing import (Union, Type)
 import logging
 from . import xml_i3d
+import bpy
+import mathutils
 
 logger = logging.getLogger(__name__)
 
@@ -378,11 +380,11 @@ class I3D:
         self.logger.info(f"Successfully exported i3dMappings to {file_path}")
 
 # To avoid a circular import, since all nodes rely on the I3D class, but i3d itself contains all the different nodes.
-from i3dio.node_classes.node import *
-from i3dio.node_classes.shape import *
-from i3dio.node_classes.merge_group import *
-from i3dio.node_classes.merge_children import *
-from i3dio.node_classes.skinned_mesh import *
-from i3dio.node_classes.material import *
-from i3dio.node_classes.file import *
-from i3dio.node_classes.animation import *
+from .node_classes.node import *
+from .node_classes.shape import *
+from .node_classes.merge_group import *
+from .node_classes.merge_children import *
+from .node_classes.skinned_mesh import *
+from .node_classes.material import *
+from .node_classes.file import *
+from .node_classes.animation import *
