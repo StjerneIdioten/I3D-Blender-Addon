@@ -4,7 +4,6 @@ import math
 import re
 import bpy
 
-from ..utility import get_fs_data_path
 from .material_templates import (get_template_by_name, apply_template_to_material, brand_name_from_color,
                                  ensure_base_color_texture)
 from .shader_migration_utils import migrate_variation, migrate_and_apply_parameters, migrate_material_textures
@@ -131,10 +130,11 @@ def remove_mat_suffix(name: str) -> str:
 def strip_texture_suffix(name: str) -> str:
     """
     Removes common FS texture role suffixes (diffuse, normal, etc.) from texture names,
-    e.g., 'metalPainted_diffuse.dds' -> 'metalPainted'.
-    Handles optional Blender numerical suffixes.
+    e.g., 'myVehicle_diffuse.dds' -> 'myVehicle'.
+    Handles .dds, .png, .jpg, .jpeg, and optional Blender numerical suffixes.
     """
-    return re.sub(r'_(diffuse|normal|specular|vmask|alpha|height)\.dds(\.\d+)?$', '', name, flags=re.IGNORECASE)
+    return re.sub(r'_(diffuse|normal|specular|vmask|alpha|height)\.(dds|png|jpe?g)(\.\d+)?$', '',
+                  name, flags=re.IGNORECASE)
 
 
 def main_texture_name(mat: bpy.types.Material) -> str:
