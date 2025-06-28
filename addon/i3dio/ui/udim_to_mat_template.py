@@ -4,7 +4,6 @@ import math
 import re
 import bpy
 
-from ..utility import get_fs_data_path
 from .material_templates import (get_template_by_name, apply_template_to_material, brand_name_from_color,
                                  ensure_base_color_texture)
 from .shader_migration_utils import migrate_variation, migrate_and_apply_parameters, migrate_material_textures
