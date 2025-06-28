@@ -5,7 +5,8 @@ import re
 import bpy
 
 from ..utility import get_fs_data_path
-from .material_templates import get_template_by_name, apply_template_to_material, brand_name_from_color
+from .material_templates import (get_template_by_name, apply_template_to_material, brand_name_from_color,
+                                 ensure_base_color_texture)
 from .shader_migration_utils import migrate_variation, migrate_and_apply_parameters, migrate_material_textures
 
 # UDIM tile index to material template mapping.
@@ -147,40 +148,6 @@ def main_texture_name(mat: bpy.types.Material) -> str:
     if texture_node and texture_node.image:
         return strip_texture_suffix(texture_node.image.name)
     return remove_mat_suffix(mat.name)
-
-
-def ensure_base_color_texture(material: bpy.types.Material) -> None:
-    """
-    Ensures a material has a texture connected to its Base Color input.
-
-    If the Principled BSDF's 'Base Color' socket is not linked, this function creates a new image texture node,
-    loads the game's standard 'white_diffuse.dds', and connects it. This is a common requirement for
-    game shaders that expect a texture in the primary diffuse/albedo slot.
-    """
-    if not material.use_nodes or not material.node_tree:
-        return
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-
-    if not (bsdf := next((node for node in nodes if node.bl_idname == "ShaderNodeBsdfPrincipled"), None)):
-        return  # No bsdf node found
-    if bsdf.inputs["Base Color"].is_linked:
-        return  # Base color is already linked, no need to add a texture node
-
-    try:
-        fs_data_dir = get_fs_data_path(as_path=True)
-        texture_path = fs_data_dir / "shared" / "white_diffuse.dds"
-        texture_path_str = texture_path.as_posix()
-    except Exception:
-        return
-    try:
-        image = bpy.data.images.load(texture_path_str, check_existing=True)
-    except Exception:
-        return
-    texture_node = nodes.new("ShaderNodeTexImage")
-    texture_node.image = image
-    texture_node.location = (bsdf.location.x - 400, bsdf.location.y + 400)
-    links.new(texture_node.outputs["Color"], bsdf.inputs["Base Color"])
 
 
 def should_be_wet(all_names: list[str], mat: bpy.types.Material) -> bool:

@@ -200,6 +200,40 @@ def apply_template_to_material(params, textures, template,
                 tex.source = value
 
 
+def ensure_base_color_texture(material: bpy.types.Material) -> None:
+    """
+    Ensures a material has a texture connected to its Base Color input.
+
+    If the Principled BSDF's 'Base Color' socket is not linked, this function creates a new image texture node,
+    loads the game's standard 'white_diffuse.dds', and connects it. This is a common requirement for
+    game shaders that expect a texture in the primary diffuse/albedo slot.
+    """
+    if not material.use_nodes or not material.node_tree:
+        return
+    nodes = material.node_tree.nodes
+    links = material.node_tree.links
+
+    if not (bsdf := next((node for node in nodes if node.bl_idname == "ShaderNodeBsdfPrincipled"), None)):
+        return  # No bsdf node found
+    if bsdf.inputs["Base Color"].is_linked:
+        return  # Base color is already linked, no need to add a texture node
+
+    try:
+        fs_data_dir = get_fs_data_path(as_path=True)
+        texture_path = fs_data_dir / "shared" / "white_diffuse.dds"
+        texture_path_str = texture_path.as_posix()
+    except Exception:
+        return
+    try:
+        image = bpy.data.images.load(texture_path_str, check_existing=True)
+    except Exception:
+        return
+    texture_node = nodes.new("ShaderNodeTexImage")
+    texture_node.image = image
+    texture_node.location = (bsdf.location.x - 400, bsdf.location.y + 400)
+    links.new(texture_node.outputs["Color"], bsdf.inputs["Base Color"])
+
+
 classes = []
 
 
@@ -307,6 +341,7 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
         if not new_material:
             new_material = bpy.data.materials.new(name=mat_name)
             new_material.use_nodes = True
+            ensure_base_color_texture(new_material)
             i3d_attrs = new_material.i3d_attributes
             i3d_attrs.shader_name = 'vehicleShader'
             apply_template_to_material(i3d_attrs.shader_material_params, i3d_attrs.shader_material_textures, template)
