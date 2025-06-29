@@ -111,9 +111,11 @@ class I3D_IO_AddonPreferences(AddonPreferences):
                     row.operator('i3dio.i3d_converter_path_from_giants_addon',
                                  text="Get Path from GIANTS Addon", icon="FILE_ALIAS")
                     info_box.separator()
-                info_box.label(text="Automatically download and set up the I3D Converter:", icon="TRIA_RIGHT")
+                info_box.label(text="Automatically download and set up the I3D Converter (GDN login required):",
+                               icon="TRIA_RIGHT")
                 row = info_box.row()
-                row.operator("i3dio.download_i3d_converter", text="Download I3D Converter...", icon='INTERNET')
+                row.operator("i3dio.download_i3d_converter",
+                             text="Download I3D Converter (GDN Login)...", icon='INTERNET')
             else:
                 info_box.label(text="Manually download and set up the I3D Converter:", icon="TRIA_RIGHT")
                 info_box.label(text="1. Download the GIANTS I3D Exporter addon:")
@@ -159,12 +161,15 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
 
 class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
     bl_idname = "i3dio.download_i3d_converter"
-    bl_label = "Download I3D Converter"
-    bl_description = "Download from Giants Developer Network (Requires valid login)"
+    bl_label = "Download I3D Converter (GDN Login Required)"
+    bl_description = (
+        "Download from Giants Developer Network. "
+        "Requires a registered account at https://gdn.giants-software.com/."
+    )
     bl_options = {'INTERNAL'}
 
-    email: StringProperty(name="Email", default="")
-    password: StringProperty(name="Password", default="", subtype="PASSWORD")
+    email: StringProperty(name="GDN Email", default="")
+    password: StringProperty(name="GDN Password", default="", subtype="PASSWORD")
 
     @classmethod
     def poll(cls, context):
@@ -181,7 +186,8 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
 
         # Attempt to login using provided credentials
         session = Session()
-        request = session.post('https://gdn.giants-software.com/index.php', data={'greenstoneX':'1', 'redstoneX':self.email, 'bluestoneX':self.password})
+        request = session.post('https://gdn.giants-software.com/index.php',
+                               data={'greenstoneX': '1', 'redstoneX': self.email, 'bluestoneX': self.password})
 
         # Clear email and password after usage
         self.email = ""
@@ -189,14 +195,18 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
 
         # Check if login was successful
         if not re.search(r'href="index\.php\?logout=true"', request.text):
-            self.report({'WARNING'}, "Could not login to https://gdn.giants-software.com/index.php with provided credentials!")
+            self.report({'WARNING'}, "Could not log in to Giants Developer Network (GDN). "
+                        "Make sure you enter your account email and password from https://gdn.giants-software.com/")
             return {'CANCELLED'}
 
         # Get download page
         request = session.get('https://gdn.giants-software.com/downloads.php')
 
         # Find the download IDs for the all Giants Blender Exporters (As long as Giants names them the same way)
-        result = re.findall(r'href="download.php\?downloadId=([0-9]+)">Blender Exporter Plugins v([0-9]+.[0-9]+.[0-9]+)', request.text)
+        result = re.findall(
+            r'href="download.php\?downloadId=([0-9]+)">Blender Exporter Plugins v([0-9]+.[0-9]+.[0-9]+)',
+            request.text
+        )
 
         # Assume the first found is the newest
         download_id, exporter_version = result[0]
@@ -228,15 +238,16 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
     def invoke(self, context, event):
         wm = context.window_manager
         # Width increased to fit the warning about the download freezing the UI
-        return wm.invoke_props_dialog(self, width=350)
+        return wm.invoke_props_dialog(self, width=360)
 
-    def draw(self, context):
+    def draw(self, _context):
         layout = self.layout
-        row = layout.row()
-        row.prop(self, "email")
-        row = layout.row()
-        row.prop(self, "password")
-        row = layout.row()
+        box = layout.box()
+        box.label(text="Enter your GDN (Giants Developer Network) login details:", icon='INFO')
+        box.label(text="You need a free account at https://gdn.giants-software.com/")
+        box.prop(self, "email")
+        box.prop(self, "password")
+        row = box.row()
         row.alignment = "CENTER"
         row.label(text="Blender UI will appear frozen during file download (~15MB) ", icon="ERROR")
 
