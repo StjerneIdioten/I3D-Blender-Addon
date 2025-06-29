@@ -117,6 +117,23 @@ def get_poly_udim_by_center(poly: bpy.types.MeshPolygon, uv_layer: bpy.types.Mes
     return custom_udim_index(u_avg, v_avg)
 
 
+def get_poly_udim_colormat_aware(poly: bpy.types.MeshPolygon, uv_layer: bpy.types.MeshUVLoopLayer) -> int:
+    """
+    Returns a UDIM index for polygons, handling colorMat faces correctly:
+    - For colorMat faces (any UV.y < 0), assigns colorMatN (N from U), always -1 to -8.
+    - For regular (non-colorMat) faces, falls back to normal UDIM logic.
+    """
+    # Check if any UV in the polygon is below 0 on the Y axis (colorMat row)
+    uvs = [uv_layer.data[li].uv for li in poly.loop_indices]
+    if any(v < 0 for u, v in uvs):
+        # Always clamp U to 0..7 and return as negative index
+        u_idx = int(math.floor(min(u for u, v in uvs)))
+        u_idx = max(0, min(7, u_idx))
+        return -(u_idx + 1)
+    # For non-colorMat faces, use the center-based UDIM calculation for max accuracy
+    return get_poly_udim_by_center(poly, uv_layer)
+
+
 def remove_mat_suffix(name: str) -> str:
     """
     Removes the '_mat' or '.mat' suffix (case-insensitive) and any Blender-style numerical suffixes (e.g., .001)
@@ -219,21 +236,16 @@ def remap_wetness_uvs(new_material_work_orders: dict) -> None:
               f"Desired state: {'WET' if is_desired_wet else 'DRY'}.")
 
         if is_desired_wet and not is_currently_in_wet_region:
-            # Move from DRY region (V < 0) to WET region (V >= 0).
+            # Move all UVs so that their lowest V is at 0 (move island up into wet region)
             print("  -> Action: Moving UVs UP into wet region.")
-
-            # Calculate how many full rows below V=0 the UVs are.
-            # e.g., UDIM -1 -> -8 are on row 0, -9 -> -16 are on row 1, etc.
-            rows_below_zero = (abs(udim) - 1) // UDIM_TILES_X
-            # The offset moves the UVs up by the number of rows plus one,
-            # placing them in the V=[0, 1] range.
-            offset = float(rows_below_zero + 1)
-
             for obj, polys in work_order['objects'].items():
                 uv_layer = obj.data.uv_layers[0]
-                for _poly_idx, loop_indices in polys:
-                    for li in loop_indices:
-                        uv_layer.data[li].uv[1] += offset
+                min_v = min(uv_layer.data[li].uv[1] for _poly_idx, loop_indices in polys for li in loop_indices)
+                if min_v < 0:
+                    offset = -min_v  # This will place the lowest point at V=0
+                    for _poly_idx, loop_indices in polys:
+                        for li in loop_indices:
+                            uv_layer.data[li].uv[1] += offset
 
         elif not is_desired_wet and is_currently_in_wet_region:
             # Move from WET region (V >= 0) to DRY region (V < 0).
@@ -308,7 +320,7 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                 for poly in mesh.polygons:
                     if poly.material_index != mat_slot_idx:
                         continue  # Polygon isn't using this slot/material
-                    udim = get_poly_udim_by_center(poly, uv_layer)
+                    udim = get_poly_udim_colormat_aware(poly, uv_layer)
                     key = (mat, udim)
                     work_order = new_material_work_orders[key]
                     work_order['objects'][obj].append((poly.index, list(poly.loop_indices)))
