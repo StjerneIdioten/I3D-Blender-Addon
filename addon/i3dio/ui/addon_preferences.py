@@ -3,70 +3,34 @@ import pathlib
 
 import bpy
 from bpy.types import AddonPreferences
-from bpy.props import (StringProperty, EnumProperty, BoolProperty)
+from bpy.props import (StringProperty, EnumProperty)
 from .. import __package__ as base_package
 from .shader_parser import populate_game_shaders
 from .material_templates import parse_templates
-
-
-def show_popup(title: str, message: str, icon: str = 'ERROR', units: int = 10):
-    def draw_popup(popup, _context):
-        layout: bpy.types.UILayout = popup.layout
-        layout.label(text=title, icon=icon)
-        layout.separator(type="LINE")
-        layout.label(text=message)
-        layout.template_popup_confirm("", text="", cancel_text="Close")
-    wm = bpy.context.window_manager
-    wm.popover(draw_popup, ui_units_x=units)
-
-
-def update_fs_data_path(self, context: bpy.types.Context) -> None:
-    wm = context.window_manager
-    if getattr(wm, "skip_fs_update_once", False):
-        wm.skip_fs_update_once = False
-        return
-    path = pathlib.Path(self.fs_data_path).resolve()
-    wm.fs_last_data_path = self.fs_data_path
-
-    if not path.exists():
-        show_popup("Invalid Path", "The provided path does not exist", units=9)
-        wm.skip_fs_update_once = True
-        self.fs_data_path = ""
-        return
-
-    if path.name.lower() != "data":  # Try to append "data" folder if not already present
-        data_path = path / "data"
-        if not data_path.exists():  # Check if "data" actually exists inside the given folder
-            show_popup("Invalid Path", "Could not find 'data' folder inside provided path", units=13)
-            wm.skip_fs_update_once = True
-            self.fs_data_path = ""
-            return
-        path = data_path  # Append "data" if valid
-
-    corrected_path = str(path) + ('\\' if path.drive else '/')
-    if corrected_path != getattr(wm, "fs_last_data_path", ""):  # Prevent infinite recursion, only update if different
-        self.fs_data_path = corrected_path
-        populate_game_shaders()
-        parse_templates(None)
+from .collision_data import populate_collision_cache
+from .bit_mask_editor import get_bitmask_flags
 
 
 class I3D_IO_AddonPreferences(AddonPreferences):
     bl_idname = base_package
 
-    fs_data_path: StringProperty(
-        name="FS Data Folder",
-        subtype='DIR_PATH',
-        default="",
-        update=update_fs_data_path
-    )
-
     # Blender does not automatically mark add-on preferences as "dirty" when modified through the API (via operators).
     # This means that changes made programmatically will not be saved when Blender is closed.
     # The workaround below forces Blender to recognize the preferences as modified,
-    # ensuring that the I3D Converter path persists across Blender sessions.
+    # ensuring that the assigned property persists across Blender sessions.
     # Related Blender issue: https://projects.blender.org/blender/blender/issues/128505
     def update_is_dirty(self, context: bpy.types.Context) -> None:
         context.preferences.is_dirty = True
+
+    fs_data_path: StringProperty(
+        name="FS Data Folder",
+        description=(
+            "Path to the Farming Simulator data folder.\n"
+            "This is required for the add-on to function properly, as it provides access to game assets."
+        ),
+        default="",
+        update=update_is_dirty
+    )
 
     i3d_converter_path: StringProperty(
         name="I3D Converter Path",
@@ -87,7 +51,26 @@ class I3D_IO_AddonPreferences(AddonPreferences):
         row = col.row()
         row.prop(self, "general_tabs", expand=True)
         col.separator(factor=1.5)
-        col.box().row().prop(self, 'fs_data_path')
+
+        box = col.box()
+        data_path = pathlib.Path(self.fs_data_path)
+        is_data_path_valid = data_path.exists() and data_path.is_dir() and data_path.name.lower() == "data"
+        if not is_data_path_valid or not self.fs_data_path:
+            if not self.fs_data_path:
+                box.label(text="No FS Data Path set. This is required for the add-on to function properly.",
+                          icon="ERROR")
+            elif not data_path.exists():
+                box.label(text="The specified path does not exist.", icon="ERROR")
+            elif not data_path.is_dir():
+                box.label(text="The specified path is not a directory.", icon="ERROR")
+            elif data_path.name.lower() != "data":
+                box.label(text="Path must point directly to the game's 'data' folder.", icon="ERROR")
+            else:
+                box.label(text="Invalid FS Data Path.", icon="ERROR")
+        row = box.row(align=True)
+        row.prop(self, 'fs_data_path')
+        row.operator("i3dio.set_fs_data_path", text="", icon='FILE_FOLDER')
+
         col.separator(factor=1.5)
         box = col.box()
         box.label(text="Binary I3D Converter:")
@@ -132,6 +115,40 @@ class I3D_IO_AddonPreferences(AddonPreferences):
         row.prop(self, 'i3d_converter_path', placeholder="Path to i3dConverter.exe")
         if is_path_valid:
             row.operator('i3dio.reset_i3d_converter_path', icon='X', text="")
+
+
+class I3D_IO_set_fs_data_path(bpy.types.Operator):
+    bl_idname = "i3dio.set_fs_data_path"
+    bl_label = "Set FS Data Path"
+    bl_description = "Set the path to the Farming Simulator data folder"
+    bl_options = {'INTERNAL', 'UNDO'}
+    directory: StringProperty(name="FS Data Folder", subtype='DIR_PATH')
+
+    def execute(self, context):
+        path = pathlib.Path(self.directory).resolve()
+
+        if not path.exists():
+            self.report({'ERROR'}, "The provided path does not exist")
+            return {"CANCELLED"}
+        if path.name.lower() != "data":  # Check if the last folder is named "data"
+            data_path = path / "data"
+            if not data_path.exists():
+                self.report({'ERROR'}, "Could not find 'data' folder inside provided path")
+                return {"CANCELLED"}
+            path = data_path
+
+        corrected_path = str(path) + ('\\' if path.drive else '/')
+        context.preferences.addons[base_package].preferences.fs_data_path = corrected_path
+        self.report({'INFO'}, f"FS Data Path set to: {corrected_path}")
+        populate_game_shaders()
+        parse_templates(None)
+        populate_collision_cache()
+        get_bitmask_flags()
+        return {"FINISHED"}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
 
 class I3D_IO_OT_reset_i3d_converter_path(bpy.types.Operator):
@@ -252,19 +269,12 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         row.label(text="Blender UI will appear frozen during file download (~15MB) ", icon="ERROR")
 
 
-def register():
-    bpy.types.WindowManager.fs_last_data_path = StringProperty()
-    bpy.types.WindowManager.skip_fs_update_once = BoolProperty(default=False)
-    bpy.utils.register_class(I3D_IO_OT_reset_i3d_converter_path)
-    bpy.utils.register_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
-    bpy.utils.register_class(I3D_IO_OT_download_i3d_converter)
-    bpy.utils.register_class(I3D_IO_AddonPreferences)
+classes = (
+    I3D_IO_set_fs_data_path,
+    I3D_IO_OT_reset_i3d_converter_path,
+    I3D_IO_OT_i3d_converter_path_from_giants_addon,
+    I3D_IO_OT_download_i3d_converter,
+    I3D_IO_AddonPreferences,
+)
 
-
-def unregister():
-    bpy.utils.unregister_class(I3D_IO_AddonPreferences)
-    bpy.utils.unregister_class(I3D_IO_OT_download_i3d_converter)
-    bpy.utils.unregister_class(I3D_IO_OT_i3d_converter_path_from_giants_addon)
-    bpy.utils.unregister_class(I3D_IO_OT_reset_i3d_converter_path)
-    del bpy.types.WindowManager.skip_fs_update_once
-    del bpy.types.WindowManager.fs_last_data_path
+register, unregister = bpy.utils.register_classes_factory(classes)
