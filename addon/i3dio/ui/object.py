@@ -180,6 +180,9 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         if preset:
             self.collision_filter_group = preset.group_hex
             self.collision_filter_mask = preset.mask_hex
+        else:
+            self.collision_filter_group = self.i3d_map['collision_filter_group']['default']
+            self.collision_filter_mask = self.i3d_map['collision_filter_mask']['default']
 
     collision_preset_name: StringProperty(
         name="Collision Preset Name",
@@ -769,9 +772,6 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
             op.target_prop = 'collision_filter_mask'
             op.layout_mode = 'VERTICAL'
             op.dialog_width = 890
-
-            if i3d_attributes.collision_preset_name == "NONE":
-                unset_properties(i3d_attributes, ('collision_filter_group', 'collision_filter_mask'))
 
         panel.prop(i3d_attributes, 'restitution')
         panel.prop(i3d_attributes, 'static_friction')
