@@ -758,7 +758,7 @@ class ControlVertex:
         return f"{self!s}" == f'{other!s}'
 
     def position_for_xml(self):
-        return "{0:.6f} {1:.6f} {2:.6f}".format(*self._position)
+        return "{0:.6g} {1:.6g} {2:.6g}".format(*self._position)
 
 
 class EvaluatedNurbsCurve:

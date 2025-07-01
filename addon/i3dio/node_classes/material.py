@@ -172,10 +172,10 @@ class Material(Node):
             self.xml_elements[xml_key] = xml_i3d.SubElement(self.element, xml_key)
             self._write_attribute('fileId', file_id, xml_key)
             if bump_depth is not None:
-                self._write_attribute('bumpDepth', "{0:.6f}".format(bump_depth), xml_key)
+                self._write_attribute('bumpDepth', "{0:.6g}".format(bump_depth), xml_key)
 
     def _write_color(self, color: list[float], xml_key: str) -> None:
-        self._write_attribute(xml_key, " ".join(map('{0:.6f}'.format, color)))
+        self._write_attribute(xml_key, " ".join(map('{0:.6g}'.format, color)))
 
     def _write_properties(self):
         # Alpha blending
@@ -206,12 +206,12 @@ class Material(Node):
                 default = shader_settings.shader_material_params.id_properties_ui(pname).as_dict().get('default')
                 if len(value) == 1:
                     if not math.isclose(value[0], default[0], abs_tol=1e-7):
-                        parameter_dict['value'] = f'{value[0]:.6f}'
+                        parameter_dict['value'] = f'{value[0]:.6g}'
                         xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
                 else:
                     print(f"Processing parameter '{pname}' with value: {value}, default: {default}")
                     if not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default)):
-                        parameter_dict['value'] = ' '.join(f'{v:.6f}' for v in value)
+                        parameter_dict['value'] = ' '.join(f'{v:.6g}' for v in value)
                         xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
 
             for texture in shader_settings.shader_material_textures:
