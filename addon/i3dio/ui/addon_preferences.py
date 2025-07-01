@@ -117,7 +117,18 @@ class I3D_IO_AddonPreferences(AddonPreferences):
             row.operator('i3dio.reset_i3d_converter_path', icon='X', text="")
 
 
-class I3D_IO_set_fs_data_path(bpy.types.Operator):
+class I3D_IO_OT_open_add_preferences(bpy.types.Operator):
+    bl_idname = "i3dio.open_addon_preferences"
+    bl_label = "Open Addon Preferences"
+    bl_description = "Open the preferences for the Community I3D Exporter Addon"
+    bl_options = {'INTERNAL'}
+
+    def execute(self, context):
+        bpy.ops.preferences.addon_show(module=base_package)
+        return {'FINISHED'}
+
+
+class I3D_IO_OT_set_fs_data_path(bpy.types.Operator):
     bl_idname = "i3dio.set_fs_data_path"
     bl_label = "Set FS Data Path"
     bl_description = "Set the path to the Farming Simulator data folder"
@@ -270,7 +281,8 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
 
 
 classes = (
-    I3D_IO_set_fs_data_path,
+    I3D_IO_OT_open_add_preferences,
+    I3D_IO_OT_set_fs_data_path,
     I3D_IO_OT_reset_i3d_converter_path,
     I3D_IO_OT_i3d_converter_path_from_giants_addon,
     I3D_IO_OT_download_i3d_converter,

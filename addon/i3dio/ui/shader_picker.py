@@ -273,9 +273,7 @@ class I3D_IO_PT_material_shader(Panel):
         if not data_path or not Path(data_path).exists():
             box = col.box()
             box.label(text="No game data path set", icon='ERROR')
-            row = box.row(align=True)
-            row.prop(context.preferences.addons[base_package].preferences, 'fs_data_path')
-            row.operator('i3dio.set_fs_data_path', text="", icon='FILE_FOLDER')
+            box.operator('i3dio.open_addon_preferences', text="Open Addon Preferences...", icon='PREFERENCES')
 
         # Only "Valid" legacy key we care about is the "source" key, which is the old shader path
         if game_version and i3d_attributes.shader_game_version != game_version and \
