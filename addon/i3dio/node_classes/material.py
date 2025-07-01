@@ -209,7 +209,6 @@ class Material(Node):
                         parameter_dict['value'] = f'{value[0]:.6f}'
                         xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
                 else:
-                    print(f"Processing parameter '{pname}' with value: {value}, default: {default}")
                     if not utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default)):
                         parameter_dict['value'] = ' '.join(f'{v:.6f}' for v in value)
                         xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)

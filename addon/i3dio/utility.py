@@ -55,32 +55,49 @@ def as_fs_relative_path(filepath: str) -> str:
     Returns:
         str: The `$data`-replaced filepath if applicable, or a cleaned-up absolute path.
     """
-    logger.debug(f"Original filepath: {filepath}")
-
-    # Early return if it's already a proper $data path
-    if filepath.startswith('$data'):
-        logger.debug("Filepath already starts with '$data'")
-        return filepath
-
-    # Use strict=False to allow for non-existing paths
-    filepath_clean = Path(bpy.path.abspath(filepath)).resolve(strict=False)
-    logger.debug(f"Cleaned filepath: {filepath_clean}")
-
+    # Resolve the absolute, normalized path to the FS data directory (if set)
     fs_data_pref = get_fs_data_path()
-    if not fs_data_pref:
-        logger.warning("No FS data path set in the addon preferences")
-        return filepath_clean.as_posix()
+    target_path = Path(bpy.path.abspath(filepath)).resolve(strict=False)
+    if fs_data_pref:
+        fs_data_path = Path(bpy.path.abspath(fs_data_pref)).resolve(strict=False)
+        try:  # Return $data-prefixed path if inside FS data directory
+            relative_to_fs = target_path.relative_to(fs_data_path)
+            return (Path('$data') / relative_to_fs).as_posix()
+        except ValueError:
+            pass  # Not inside FS data directory
+    return target_path.as_posix()
 
-    fs_data_path = Path(bpy.path.abspath(fs_data_pref)).resolve(strict=False)
-    logger.debug(f"FS data path: {fs_data_path}")
 
+def as_export_path(filepath: str) -> str:
+    """
+    Resolves the export path for a file, for compatibility with Giants Editor and modding workflows.
+
+    Priority:
+      - If inside the Farming Simulator (FS) Data directory, returns a '$data/...' path.
+      - If under the current .blend file's folder (or subfolders), returns a path relative to the blend file.
+      - Otherwise, returns an absolute path.
+
+    Args:
+        filepath (str): The path to the file, as used or stored by/in Blender.
+
+    Returns:
+        str: The resolved export path (either $data-relative, relative to blend file, or absolute).
+    """
+    if filepath.startswith('$data'):
+        # If the path already starts with $data, return it as is (can happen from certain shader textures)
+        return filepath
+    fs_path = as_fs_relative_path(filepath)
+    if fs_path.startswith('$data'):
+        return fs_path
+    # If under blend file directory, use blend-relative path
+    blend_dir = Path(bpy.data.filepath).parent.resolve()
+    target_path = Path(bpy.path.abspath(filepath)).resolve(strict=False)
     try:
-        relative_path = filepath_clean.relative_to(fs_data_path)
-        path_to_return = Path('$data') / relative_path
-        logger.debug(f"Fs relative path: {path_to_return}")
-        return path_to_return.as_posix()
+        rel = target_path.relative_to(blend_dir)
+        return rel.as_posix()  # Relative to blend file directory
     except ValueError:
-        return filepath_clean.as_posix()
+        pass  # Not inside blend file directory
+    return target_path.as_posix()  # Absolute path, as a last resort
 
 
 def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderObject]:

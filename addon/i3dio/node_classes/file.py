@@ -18,6 +18,7 @@ class File(Node):
     ELEMENT_TAG = 'File'
     NAME_FIELD_NAME = 'filename'
     ID_FIELD_NAME = 'fileId'
+
     @property
     @classmethod
     @abstractmethod
@@ -56,16 +57,28 @@ class File(Node):
         super()._create_xml_element()
 
     def _resolve_filepath(self):
-        filepath_relative_to_fs = utility.as_fs_relative_path(self.blender_path)
+        """
+        Resolves the file path for export.
+        - FS data files always reference as $data and are never copied.
+        - Other files are copied if copy_files is enabled.
+        - Otherwise, relative to blend or absolute.
+        """
+        filepath_export = utility.as_export_path(self.blender_path)
+        self.resolved_path = Path(filepath_export)
 
-        if filepath_relative_to_fs.startswith('$data'):
-            self.resolved_path = Path(filepath_relative_to_fs)
-        elif self.i3d.settings.get('copy_files', False):
+        if filepath_export.startswith('$data'):
+            # Game asset, always reference with $data prefix and never copy
+            self.logger.info(f"Resolved filepath as FS data: {self.resolved_path}")
+            return
+
+        if self.i3d.settings.get('copy_files', False):
             self._copy_file()
         else:
-            self.resolved_path = Path(filepath_relative_to_fs)
-
-        self.logger.info(f"Resolved filepath: {self.resolved_path}")
+            self.logger.info(f"Resolved filepath: {self.resolved_path}")
+            if self.resolved_path.is_absolute():
+                self.logger.warning(
+                    f"File {self.blender_path!r} is outside the blend file folder; using absolute path in I3D."
+                )
 
     def _copy_file(self):
         resolved_directory = Path()
