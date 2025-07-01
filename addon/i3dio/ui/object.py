@@ -51,9 +51,10 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'lod_distances': {'name': 'lodDistance', 'default': (0.0, 0.0, 0.0, 0.0), 'preset_group': 'EMPTY'},
         'lod_blending': {'name': 'lodBlending', 'default': True, 'preset_group': 'EMPTY'},
         'collision': {'name': 'collision', 'default': True, 'preset_group': 'MESH'},
-        'collision_filter_group': {'name': 'collisionFilterGroup', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
-        'collision_filter_mask': {'name': 'collisionFilterMask', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
-        'collision_mask': {'name': 'collisionMask', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
+        'collision_filter_group': {
+            'name': 'collisionFilterGroup', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
+        'collision_filter_mask': {
+            'name': 'collisionFilterMask', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
         'compound': {'name': 'compound', 'default': False, 'preset_group': 'MESH'},
         'trigger': {'name': 'trigger', 'default': False, 'preset_group': 'MESH'},
         'restitution': {'name': 'restitution', 'default': 0.0, 'preset_group': 'MESH'},
@@ -171,6 +172,20 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Collision",
         description="Does the object take part in collisions",
         default=i3d_map['collision']['default']
+    )
+
+    def update_collision_preset_name(self, context):
+        """Update the collision filter group and mask based on the selected preset."""
+        preset = COLLISIONS['presets'].get(self.collision_preset_name, {})
+        if preset:
+            self.collision_filter_group = preset.group_hex
+            self.collision_filter_mask = preset.mask_hex
+
+    collision_preset_name: StringProperty(
+        name="Collision Preset Name",
+        description="The name of the collision preset to use",
+        default="",
+        update=update_collision_preset_name
     )
 
     collision_filter_group: StringProperty(
@@ -559,18 +574,13 @@ class I3D_IO_OT_set_collision_preset(bpy.types.Operator):
 
     @classmethod
     def description(cls, _context, properties):
+        desc = COLLISIONS['presets'].get(properties.preset, None)
+        if desc and getattr(desc, 'desc', None):
+            return desc.desc
         return f"Set the collision preset to {properties.preset}"
 
     def execute(self, context):
-        preset = COLLISIONS['presets'].get(self.preset, {})
-        i3d_attributes = context.object.i3d_attributes
-
-        if preset:
-            i3d_attributes.collision_filter_group = preset.group_hex
-            i3d_attributes.collision_filter_mask = preset.mask_hex
-        else:
-            i3d_attributes.collision_filter_group = i3d_attributes.i3d_map['collision_filter_group']['default']
-            i3d_attributes.collision_filter_mask = i3d_attributes.i3d_map['collision_filter_mask']['default']
+        context.object.i3d_attributes.collision_preset_name = self.preset
         return {'FINISHED'}
 
 
@@ -742,7 +752,7 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
         panel.prop(i3d_attributes, 'collision')
         panel.prop(i3d_attributes, 'trigger')
 
-        col_filter_header, col_filter_panel = layout.panel('i3d_collision_filter', default_closed=False)
+        col_filter_header, col_filter_panel = panel.panel('i3d_collision_filter', default_closed=False)
         col_filter_header.label(text="Collision Filter")
         col_filter_header.emboss = 'NONE'
         col_filter_header.menu(I3D_IO_MT_collision_presets.bl_idname, icon='PRESET', text="")
@@ -759,6 +769,9 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
             op.target_prop = 'collision_filter_mask'
             op.layout_mode = 'VERTICAL'
             op.dialog_width = 890
+
+            if i3d_attributes.collision_preset_name == "NONE":
+                unset_properties(i3d_attributes, ('collision_filter_group', 'collision_filter_mask'))
 
         panel.prop(i3d_attributes, 'restitution')
         panel.prop(i3d_attributes, 'static_friction')
