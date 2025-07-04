@@ -42,7 +42,7 @@ class MergeGroupRoot(ShapeNode):
             self._write_attribute('skinBindNodeIds', id_string)
             self.logger.debug(f"Registered skin bind ID {node_id} for MergeGroup {self.merge_group_name!r}")
 
-    def add_child(self, child: MergeGroupChild):
+    def add_mergegroup_child(self, child: MergeGroupChild):
         """Adds a child mesh to the processing queue and registers its ID for skin binding."""
         self.logger.debug(f"Adding Child {child.blender_object.name!r} to MergeGroup {self.merge_group_name!r}")
         self.register_skin_bind_id(child.id)
@@ -75,11 +75,11 @@ class MergeGroup:
         if self.child_nodes:
             self.logger.debug(f"Registering {len(self.child_nodes)} pre-existing children with the root.")
             for child in self.child_nodes:
-                self.root_node.add_child(child)
+                self.root_node.add_mergegroup_child(child)
 
     def add_child(self, child_node: MergeGroupChild) -> None:
         """Adds a child node to the collector and registers it with the root if the root already exists."""
         self.child_nodes.append(child_node)
         # If the root node is already set, immediately register the new child.
         if self.root_node is not None:
-            self.root_node.add_child(child_node)
+            self.root_node.add_mergegroup_child(child_node)
