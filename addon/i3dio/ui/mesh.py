@@ -46,9 +46,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'nav_mesh_mask': {'name': 'buildNavMeshMask', 'default': '0', 'type': 'HEX'},
         'decal_layer': {'name': 'decalLayer', 'default': 0},
         'vertex_compression_range': {'name': 'vertexCompressionRange', 'default': 'auto',
-                                     'placement': 'IndexedTriangleSet'},
-        'fill_volume': {'name': 'name', 'default': False, 'placement': 'IndexedTriangleSet',
-                        'type': 'OVERRIDE', 'override': 'fillVolumeShape'}
+                                     'placement': 'IndexedTriangleSet'}
     }
 
     casts_shadows: BoolProperty(
@@ -149,13 +147,6 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         default=i3d_map['vertex_compression_range']['default']
     )
 
-    fill_volume: BoolProperty(
-        name="Fill Volume",
-        description="Check this if the object is meant to be a fill volume, since this requires some special naming of "
-                    "the IndexedTriangleSet in the i3d file.",
-        default=i3d_map['fill_volume']['default']
-    )
-
     bounding_volume_object: PointerProperty(
         name="Bounding Volume Object",
         description="The object used to calculate bvCenter and bvRadius. "
@@ -227,7 +218,6 @@ class I3D_IO_PT_shape_attributes(Panel):
         op.used_bits = 8
         layout.prop(mesh.i3d_attributes, "decal_layer")
         layout.prop(mesh.i3d_attributes, "vertex_compression_range")
-        layout.prop(mesh.i3d_attributes, 'fill_volume')
 
         header, panel = layout.panel('i3d_bounding_volume', default_closed=False)
         header.label(text="I3D Bounding Volume")
