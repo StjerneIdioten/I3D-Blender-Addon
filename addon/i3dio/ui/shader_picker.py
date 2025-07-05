@@ -8,11 +8,13 @@ from bpy.props import (
     PointerProperty,
     EnumProperty,
     CollectionProperty,
-    BoolProperty
+    BoolProperty,
+    FloatProperty
 )
 from bpy.app.handlers import (persistent, load_post)
 
 from ..utility import get_fs_data_path
+from ..xml_i3d import i3d_max
 from .shader_parser import (get_shader_dict, ShaderParameter, ShaderTexture)
 from .helper_functions import (detect_fs_version, is_version_compatible, humanize_template)
 from .shader_migration_utils import (migrate_variation, migrate_material_parameters, migrate_material_textures)
@@ -198,27 +200,6 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
     shader_material_textures: CollectionProperty(type=I3DShaderTexture)
     required_vertex_attributes: CollectionProperty(type=I3DRequiredVertexAttribute)
 
-    alpha_blending: BoolProperty(
-        name='Alpha Blending',
-        description='Enable alpha blending for this material',
-        default=False
-    )
-
-    shading_rate: EnumProperty(
-        name='Shading Rate',
-        description='Shading Rate',
-        items=[
-            ('1x1', '1x1', '1x1'),
-            ('1x2', '1x2', '1x2'),
-            ('2x1', '2x1', '2x1'),
-            ('2x2', '2x2', '2x2'),
-            ('2x4', '2x4', '2x4'),
-            ('4x2', '4x2', '4x2'),
-            ('4x4', '4x4', '4x4')
-        ],
-        default='1x1'
-    )
-
     use_material_slot_name: BoolProperty(
         name="Enable Material Slot Name",
         description="If checked, this material will export a material slot name",
@@ -229,6 +210,91 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         name="Material Slot Name",
         description="If left empty, the material name will be used instead",
         default=""
+    )
+
+    i3d_map = {
+        'alpha_blending': {'name': 'alphaBlending', 'default': False},
+        'shading_rate': {'name': 'shadingRate', 'default': '1x1'},
+        'refraction_map': {'name': 'refractionMap', 'default': False, 'placement': None},
+        'refraction_type': {
+            'name': 'type', 'default': 'planar', 'placement': 'Refractionmap',
+            'depends': [{'name': 'refraction_map', 'value': True}]
+        },
+        'light_absorbance': {  # All in game files use 1.0, so therefor setting blender default to 1.0
+            'name': 'coeff', 'default': 0.0, 'blender_default': 1.0, 'placement': 'Refractionmap',
+            'depends': [{'name': 'refraction_map', 'value': True}]
+        },
+        'refraction_bump_scale': {  # Most game files use 0.1, so therefor setting blender default to 0.1
+            'name': 'bumpScale', 'default': 0.5, 'blender_default': 0.1, 'placement': 'Refractionmap',
+            'depends': [{'name': 'refraction_map', 'value': True}]
+        },
+        'refraction_with_ssr_data': {
+            'name': 'withSSRData', 'default': False, 'placement': 'Refractionmap',
+            'depends': [{'name': 'refraction_map', 'value': True}]
+        }
+    }
+
+    alpha_blending: BoolProperty(
+        name="Alpha Blending",
+        description="Enable alpha blending for this material",
+        default=i3d_map['alpha_blending']['default']
+    )
+
+    shading_rate: EnumProperty(
+        name="Shading Rate",
+        description=(
+            "Control the shading quality. Lower values (e.g. 1x1) give the highest quality, "
+            "while higher values (e.g. 4x4) reduce shading detail"
+        ),
+        items=[
+            ('1x1', '1x1', '1x1'),
+            ('1x2', '1x2', '1x2'),
+            ('2x1', '2x1', '2x1'),
+            ('2x2', '2x2', '2x2'),
+            ('2x4', '2x4', '2x4'),
+            ('4x2', '4x2', '4x2'),
+            ('4x4', '4x4', '4x4')
+        ],
+        default=i3d_map['shading_rate']['default']
+    )
+
+    refraction_map: BoolProperty(
+        name="Refraction Map",
+        description="Enable refraction for this material (e.g., glass, water effects)",
+        default=False
+    )
+
+    refraction_type: EnumProperty(
+        # Only "planar" exists, in case more will be added have it as a enum and not expose to UI
+        name="Refraction Type",
+        description="Method used for refraction",
+        items=[
+            ('planar', 'Planar', 'Planar refraction for flat surfaces'),
+        ],
+        default=i3d_map['refraction_type']['default'],
+        options={'HIDDEN'}
+    )
+
+    light_absorbance: FloatProperty(
+        name="Absorbance Coefficient",
+        description="Amount of light absorbed when passing through the material (higher = darker look)",
+        default=i3d_map['light_absorbance']['blender_default'],
+        min=0.0,
+        max=i3d_max
+    )
+
+    refraction_bump_scale: FloatProperty(
+        name="Bump Scale",
+        description="Intensity of the bump map distortion effect for refraction",
+        default=i3d_map['refraction_bump_scale']['blender_default'],
+        min=0.0,
+        max=i3d_max
+    )
+
+    refraction_with_ssr_data: BoolProperty(
+        name="SSR Data",
+        description="Enable Screen Space Reflections for refraction, for more realistic glass or water effects",
+        default=i3d_map['refraction_with_ssr_data']['default']
     )
 
 
@@ -309,6 +375,7 @@ class I3D_IO_PT_material_shader(Panel):
 
         if not shaderdefault:
             draw_shader_group_panels(layout, i3d_attributes)
+            draw_refraction_attributes(layout, i3d_attributes)
 
 
 def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_label: str, i3d_attributes,
@@ -374,6 +441,26 @@ def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes) -> None
         group_label = "" if single_template else friendly_name + " "
         idname = f"shader_material_{template.lower()}"
         draw_shader_group_panel(layout, idname, group_label, i3d_attributes, params, textures)
+
+
+def draw_refraction_attributes(layout: bpy.types.UILayout, i3d_attributes: I3DMaterialShader) -> None:
+    if i3d_attributes.shader_name not in {"exhaustShader", "oceanShader", "precipitionShader", "waterfallShader"}:
+        i3d_attributes.property_unset('refraction_map')
+        return  # Only draw refraction attributes for specified shaders
+    header, panel = layout.panel('i3d_material_refraction', default_closed=False)
+    header.prop(i3d_attributes, 'refraction_map', text="")
+    header.label(text="I3D Refraction Map")
+    if panel:
+        panel.use_property_split = True
+        panel.enabled = i3d_attributes.refraction_map
+        panel.prop(i3d_attributes, 'light_absorbance')
+        panel.prop(i3d_attributes, 'refraction_bump_scale')
+        panel.prop(i3d_attributes, 'refraction_with_ssr_data')
+
+        if not i3d_attributes.refraction_map:
+            i3d_attributes.property_unset('light_absorbance')
+            i3d_attributes.property_unset('refraction_bump_scale')
+            i3d_attributes.property_unset('refraction_with_ssr_data')
 
 
 DEBUG = True

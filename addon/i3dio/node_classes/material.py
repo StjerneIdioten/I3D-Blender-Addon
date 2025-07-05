@@ -31,11 +31,11 @@ class Material(Node):
 
     @property
     def element(self):
-        return self.xml_elements['node']
+        return self.xml_elements['Node']
 
     @element.setter
     def element(self, value):
-        self.xml_elements['node'] = value
+        self.xml_elements['Node'] = value
 
     def is_normalmapped(self) -> bool:
         return 'Normalmap' in self.xml_elements
@@ -45,6 +45,12 @@ class Material(Node):
         if self.blender_material.i3d_attributes.use_material_slot_name:
             return self.blender_material.i3d_attributes.material_slot_name or self.blender_material.name
         return None
+
+    def _write_properties(self):
+        try:
+            xml_i3d.write_i3d_properties(self.blender_material, self.blender_material.i3d_attributes, self.xml_elements)
+        except AttributeError:
+            pass
 
     def populate_xml_element(self) -> None:
         material = self.blender_material
@@ -176,14 +182,6 @@ class Material(Node):
 
     def _write_color(self, color: list[float], xml_key: str) -> None:
         self._write_attribute(xml_key, " ".join(map('{0:.6g}'.format, color)))
-
-    def _write_properties(self):
-        # Alpha blending
-        if self.blender_material.i3d_attributes.alpha_blending:
-            self._write_attribute('alphaBlending', True)
-        # Shading rate
-        if (shading_rate := self.blender_material.i3d_attributes.shading_rate) != '1x1':
-            self._write_attribute('shadingRate', shading_rate)
 
     def _export_shader_settings(self):
         shader_settings = self.blender_material.i3d_attributes

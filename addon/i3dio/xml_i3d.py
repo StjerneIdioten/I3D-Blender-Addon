@@ -166,6 +166,12 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
         i3d_name = property_group.i3d_map[prop_key].get('name')
         field_type = property_group.i3d_map[prop_key].get('type')
         i3d_placement = property_group.i3d_map[prop_key].get('placement', 'Node')
+        if i3d_placement is None:
+            continue  # Some props are only used in the UI and should not be exported
+
+        # Create the i3d_placement element if it does not exist, assuming it is a child of the 'Node' element
+        if i3d_placement not in elements:
+            elements[i3d_placement] = SubElement(elements['Node'], i3d_placement)
 
         # Conversion Checks
 
