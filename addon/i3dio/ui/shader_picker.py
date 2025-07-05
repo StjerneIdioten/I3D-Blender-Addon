@@ -449,7 +449,7 @@ def draw_refraction_attributes(layout: bpy.types.UILayout, i3d_attributes: I3DMa
         return  # Only draw refraction attributes for specified shaders
     header, panel = layout.panel('i3d_material_refraction', default_closed=False)
     header.prop(i3d_attributes, 'refraction_map', text="")
-    header.label(text="I3D Refraction Map")
+    header.label(text="Refraction Map")
     if panel:
         panel.use_property_split = True
         panel.enabled = i3d_attributes.refraction_map
