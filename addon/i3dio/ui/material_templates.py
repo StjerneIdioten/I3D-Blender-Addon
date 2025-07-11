@@ -117,7 +117,7 @@ def _parse_brand_material_templates(path: Path) -> dict[str, BrandMaterialTempla
 
 
 def parse_brand_templates_from_moddesc() -> None:
-    path = bpy.context.scene.i3dio.moddesc_path
+    path = bpy.path.abspath(bpy.context.scene.i3dio.moddesc_path)
     if not path or not Path(path).exists():
         return
     tree = xml_i3d.parse(path)
