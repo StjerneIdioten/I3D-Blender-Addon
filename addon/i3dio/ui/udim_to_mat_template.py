@@ -236,13 +236,13 @@ def remap_wetness_uvs(new_material_work_orders: dict) -> None:
               f"Desired state: {'WET' if is_desired_wet else 'DRY'}.")
 
         if is_desired_wet and not is_currently_in_wet_region:
-            # Move all UVs so that their lowest V is at 0 (move island up into wet region)
+            # Move all UVs up so the lowest V is at 0, snapping the island into the wet region without misaligning it
             print("  -> Action: Moving UVs UP into wet region.")
             for obj, polys in work_order['objects'].items():
                 uv_layer = obj.data.uv_layers[0]
                 min_v = min(uv_layer.data[li].uv[1] for _poly_idx, loop_indices in polys for li in loop_indices)
                 if min_v < 0:
-                    offset = -min_v  # This will place the lowest point at V=0
+                    offset = math.ceil(-min_v)  # Snap UVs to whole tiles to preserve alignment
                     for _poly_idx, loop_indices in polys:
                         for li in loop_indices:
                             uv_layer.data[li].uv[1] += offset
