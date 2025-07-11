@@ -173,7 +173,7 @@ class Material(Node):
     def _write_texture_to_xml(self, texture_path: str, xml_key: str, bump_depth: float = None) -> None:
         """Handles writing texture file references to XML."""
         if texture_path:
-            self.logger.debug(f"Has {xml_key}: '{utility.as_fs_relative_path(texture_path)}'")
+            self.logger.debug(f"Has {xml_key}: {utility.as_fs_relative_path(texture_path).as_posix()!r}")
             file_id = self.i3d.add_file_image(texture_path)
             self.xml_elements[xml_key] = xml_i3d.SubElement(self.element, xml_key)
             self._write_attribute('fileId', file_id, xml_key)

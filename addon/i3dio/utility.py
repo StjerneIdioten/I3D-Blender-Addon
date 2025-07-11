@@ -8,6 +8,7 @@ import math
 import mathutils
 import bpy
 from pathlib import Path
+import os
 import re
 
 logger = logging.getLogger(__name__)
@@ -42,7 +43,7 @@ def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon: float = 0.
     return True
 
 
-def as_fs_relative_path(filepath: str) -> str:
+def as_fs_relative_path(filepath: str) -> Path:
     """
     Checks if a filepath is relative to the FS data directory
 
@@ -62,13 +63,13 @@ def as_fs_relative_path(filepath: str) -> str:
         fs_data_path = Path(bpy.path.abspath(fs_data_pref)).resolve(strict=False)
         try:  # Return $data-prefixed path if inside FS data directory
             relative_to_fs = target_path.relative_to(fs_data_path)
-            return (Path('$data') / relative_to_fs).as_posix()
+            return (Path('$data') / relative_to_fs)
         except ValueError:
             pass  # Not inside FS data directory
-    return target_path.as_posix()
+    return target_path
 
 
-def as_export_path(filepath: str) -> str:
+def as_export_path(filepath: str) -> Path:
     """
     Resolves the export path for a file, for compatibility with Giants Editor and modding workflows.
 
@@ -81,23 +82,23 @@ def as_export_path(filepath: str) -> str:
         filepath (str): The path to the file, as used or stored by/in Blender.
 
     Returns:
-        str: The resolved export path (either $data-relative, relative to blend file, or absolute).
+        Path: The resolved path, either as a relative path (to the blend file) or an absolute path.
     """
     if filepath.startswith('$data'):
-        # If the path already starts with $data, return it as is (can happen from certain shader textures)
-        return filepath
-    fs_path = as_fs_relative_path(filepath)
-    if fs_path.startswith('$data'):
+        # Already $data-prefixed (can happen from certain shader textures)
+        return Path(filepath)
+
+    # Check if inside FS data directory
+    if (fs_path := as_fs_relative_path(filepath)).parts and fs_path.parts[0] == '$data':
         return fs_path
-    # If under blend file directory, use blend-relative path
+
+    # Try to make path relative to the .blend file
     blend_dir = Path(bpy.data.filepath).parent.resolve()
     target_path = Path(bpy.path.abspath(filepath)).resolve(strict=False)
     try:
-        rel = target_path.relative_to(blend_dir)
-        return rel.as_posix()  # Relative to blend file directory
+        return Path(os.path.relpath(str(target_path), str(blend_dir)))
     except ValueError:
-        pass  # Not inside blend file directory
-    return target_path.as_posix()  # Absolute path, as a last resort
+        return target_path  # Happens if on another drive
 
 
 def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderObject]:

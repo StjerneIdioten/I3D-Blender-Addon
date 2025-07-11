@@ -63,22 +63,22 @@ class File(Node):
         - Other files are copied if copy_files is enabled.
         - Otherwise, relative to blend or absolute.
         """
-        filepath_export = utility.as_export_path(self.blender_path)
-        self.resolved_path = Path(filepath_export)
-
-        if filepath_export.startswith('$data'):
+        if self.blender_path.startswith('$data'):
             # Game asset, always reference with $data prefix and never copy
+            self.resolved_path = Path(self.blender_path)
             self.logger.info(f"Resolved filepath as FS data: {self.resolved_path}")
             return
 
         if self.i3d.settings.get('copy_files', False):
             self._copy_file()
-        else:
-            self.logger.info(f"Resolved filepath: {self.resolved_path}")
-            if self.resolved_path.is_absolute():
-                self.logger.warning(
-                    f"File {self.blender_path!r} is outside the blend file folder; using absolute path in I3D."
-                )
+            return
+
+        self.resolved_path = utility.as_export_path(self.blender_path)
+        self.logger.info(f"Resolved filepath: {self.resolved_path}")
+        if self.resolved_path.is_absolute():
+            self.logger.warning(
+                f"File {self.blender_path!r} is outside the blend file folder; using absolute path in I3D."
+            )
 
     def _copy_file(self):
         resolved_directory = Path()
