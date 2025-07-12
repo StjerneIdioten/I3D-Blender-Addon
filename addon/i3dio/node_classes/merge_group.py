@@ -37,7 +37,6 @@ class MergeGroupRoot(ShapeNode):
         """Adds a node ID to the list for skin bind nodes."""
         if node_id not in self.skin_bind_node_ids:
             self.skin_bind_node_ids.append(node_id)
-            self.skin_bind_node_ids.sort()
             id_string = " ".join(map(str, self.skin_bind_node_ids))
             self._write_attribute('skinBindNodeIds', id_string)
             self.logger.debug(f"Registered skin bind ID {node_id} for MergeGroup {self.merge_group_name!r}")
