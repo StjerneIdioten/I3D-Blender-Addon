@@ -572,7 +572,7 @@ class I3DReferenceData(bpy.types.PropertyGroup):
 class I3D_IO_OT_set_collision_preset(bpy.types.Operator):
     bl_idname = 'i3dio.set_collision_preset'
     bl_label = 'Set Collision Preset'
-    bl_options = {'INTERNAL'}
+    bl_options = {'INTERNAL', 'UNDO'}
     preset: StringProperty()
 
     @classmethod
