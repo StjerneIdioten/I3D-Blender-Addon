@@ -1,7 +1,6 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from typing import List
 import sys
-from pathlib import PurePath
 import subprocess
 import time
 import logging
@@ -15,7 +14,7 @@ from . import (
     xml_i3d
 )
 
-from .utility import (BlenderObject, sort_blender_objects_by_outliner_ordering)
+from .utility import (BlenderObject, sort_blender_objects_by_outliner_ordering, get_fs_data_path)
 from .i3d import I3D
 from .node_classes.node import SceneGraphNode
 from .node_classes.skinned_mesh import SkinnedMeshRootNode
@@ -106,34 +105,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
         i3d.export_to_i3d_file()
 
         if operator.binarize_i3d:
-            logger.info(f'Starting binarization of "{filepath}"')
-            try:
-                i3d_binarize_path = PurePath(None if (path := bpy.context.preferences.addons[__package__].preferences.i3d_converter_path) == "" else path)
-            except TypeError:
-                logger.error(f"Empty Converter Binary Path")
-            else:
-                try:
-                    # This is under the assumption that the data folder is always in the gamefolder! (Which is usually the case, but imagine having the data folder on a dev machine just for Blender)
-                    game_path = PurePath(None if (path := bpy.context.preferences.addons[__package__].preferences.fs_data_path) == "" else path).parent
-                except TypeError:
-                    logger.error(f"Empty Game Path")
-                else:
-                    try:
-                        conversion_result = subprocess.run(args=[str(i3d_binarize_path), '-in', str(filepath), '-out', str(filepath), '-gamePath', f"{game_path}/"], timeout=BINARIZER_TIMEOUT_IN_SECONDS, check=True, text=True, stdout = subprocess.PIPE, stderr=subprocess.STDOUT)
-                    except FileNotFoundError as e:
-                        logger.error(f'Invalid path to i3dConverter.exe: "{i3d_binarize_path}"')
-                    except subprocess.TimeoutExpired as e:
-                        if e.output is not None and "Press any key to continue . . ." in e.output.decode():
-                            logger.error(f'i3dConverter.exe could not run with provided arguments: {e.cmd}')
-                        else:
-                            logger.error(f"i3dConverter.exe took longer than {BINARIZER_TIMEOUT_IN_SECONDS} seconds to run and was cancelled!")
-                    except subprocess.CalledProcessError as e:
-                        logger.error(f"i3dConverter.exe failed to run with error code: {e.returncode}")
-                    else:
-                        if error_messages := [f"\t{error_line}" for error_line in conversion_result.stdout.split('\n', -1) if error_line.startswith("Error:")]:
-                            logger.error("i3dConverter.exe produced errors:\n" + '\n'.join(error_messages))
-                        else:
-                            logger.info(f'Finished binarization of "{filepath}"')
+            _binarize_i3d(filepath, operator, logger)
 
     # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
     except Exception:
@@ -144,7 +116,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
 
     export_data['time'] = time.time() - time_start
 
-    print(f"Export took {export_data['time']:.3f} seconds")
+    logger.info(f"Export took {export_data['time']:.3f} seconds")
 
     # EAFP
     try:
@@ -343,3 +315,43 @@ def _process_deferred_constraints(i3d: I3D):
             bone_node.reparent(target_node)
         else:
             i3d.logger.warning(f"Target '{target_obj}' is not processed or not in export list. Skipping.")
+
+
+def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
+    """Tries to binarize the exported I3D file"""
+    if not (converter_path := bpy.context.preferences.addons[__package__].preferences.i3d_converter_path):
+        logger.error("No i3dConverter path set in preferences. Skipping binarization.")
+        return
+    if not (game_path := get_fs_data_path(as_path=True).parent):
+        logger.error("No game data path set in preferences. Skipping binarization.")
+        return
+
+    logger.info(f"Starting binarization of {filepath!r}")
+    try:
+        conversion_result = subprocess.run(
+            args=[
+                str(converter_path),
+                '-in', str(filepath),
+                '-out', str(filepath),
+                '-gamePath', f"{game_path}/"
+            ],
+            timeout=BINARIZER_TIMEOUT_IN_SECONDS,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT
+        )
+    except FileNotFoundError:
+        logger.error(f"Invalid path to i3dConverter.exe: {converter_path!r}")
+    except subprocess.TimeoutExpired as e:
+        logger.error(f"i3dConverter.exe timed out after {BINARIZER_TIMEOUT_IN_SECONDS} seconds. Output: {e.output!r}")
+    except subprocess.CalledProcessError as e:
+        logger.error(f"i3dConverter.exe failed to run with error code: {e.returncode}")
+    else:
+        error_messages = [f"\t{line}" for line in conversion_result.stdout.split('\n') if line.startswith("Error:")]
+        if error_messages:
+            logger.error("i3dConverter.exe produced errors:\n" + '\n'.join(error_messages))
+            operator.report({'ERROR'}, "i3dConverter.exe reported errors. See log for details.")
+        else:
+            logger.info(f'Finished binarization of "{filepath}"')
+            operator.report({'INFO'}, "Binarization completed successfully.")
