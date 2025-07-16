@@ -6,11 +6,7 @@ import math
 import mathutils
 import bpy
 
-from .. import (
-            debugging,
-            utility,
-            xml_i3d
-)
+from .. import (debugging, utility, xml_i3d)
 
 from ..i3d import I3D
 
@@ -93,6 +89,7 @@ class SceneGraphNode(Node):
                  ):
         self.children = []
         self.blender_object = blender_object
+        self.parent = parent
         self.xml_elements: Dict[str, Union[xml_i3d.XML_Element, None]] = {'Node': None}
 
         self._name = self.blender_object.name
@@ -148,7 +145,7 @@ class SceneGraphNode(Node):
             try:
                 xml_i3d.write_i3d_properties(data, self.blender_object.data.i3d_attributes, self.xml_elements)
             except AttributeError:
-                self.logger.debug(f'Has no data specific attributes')
+                self.logger.debug('Has no data specific attributes')
 
     def _write_user_attributes(self):
         try:  # Only write attributes if list is not empty
@@ -156,6 +153,32 @@ class SceneGraphNode(Node):
                 self.i3d.add_user_attributes(self.blender_object.i3d_user_attributes.attribute_list, self.id)
         except AttributeError:
             pass
+
+    def _get_object_matrix(self) -> mathutils.Matrix:
+        """Returns the correct matrix for the object, depending on its parent and position in the scene graph."""
+        obj = self.blender_object
+        if self.parent is None:
+            self.logger.debug("no parent in exporter: using world matrix")
+            return obj.matrix_world.copy()
+        export_parent_obj = self.parent.blender_object
+        if obj.parent is export_parent_obj:
+            self.logger.debug(f"Blender parent matches exporter parent ({export_parent_obj.name}): using local matrix")
+            return obj.matrix_local.copy()
+        if export_parent_obj is None:
+            self.logger.warning(
+                "exporter parent exists, but exporter_parent_obj is None. "
+                "Defaulting to world-space transform. Possible broken hierarchy."
+            )
+            parent_world = mathutils.Matrix.Identity(4)
+        else:
+            parent_world = export_parent_obj.matrix_world
+
+        self.logger.debug(
+            f"Using world transform relative to exporter parent "
+            f"({export_parent_obj.name if export_parent_obj else 'None'}) "
+            "because Blender parent does not match exporter parent."
+        )
+        return parent_world.inverted_safe() @ obj.matrix_world.copy()
 
     @property
     @abstractmethod
@@ -174,7 +197,7 @@ class SceneGraphNode(Node):
         if self.parent is not None:
             if type(self.parent) in [CameraNode, LightNode]:
                 matrix = self.i3d.conversion_matrix.inverted() @ matrix
-                self.logger.debug(f"Is transformed to accommodate flipped z-axis in GE of parent Light/Camera")
+                self.logger.debug("Is transformed to accommodate flipped z-axis in GE of parent Light/Camera")
 
         translation = matrix.to_translation()
         self.logger.debug(f"translation is {translation}")
@@ -185,7 +208,7 @@ class SceneGraphNode(Node):
             self._write_attribute('translation', translation)
             self.logger.debug(f"has translation: [{translation}]")
         else:
-            self.logger.debug(f"translation is default")
+            self.logger.debug("translation is default")
 
         # Rotation, no unit scaling since it will always be degrees.
         rotation = [math.degrees(axis) for axis in matrix.to_euler('XYZ')]
@@ -196,8 +219,8 @@ class SceneGraphNode(Node):
 
         # Scale
         if matrix.is_negative:
-            self.logger.error(f"has one or more negative scaling components, "
-                              f"which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
+            self.logger.error("has one or more negative scaling components, "
+                              "which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
         else:
             scale = matrix.to_scale()
             if not utility.vector_compare(scale, mathutils.Vector((1, 1, 1))):
@@ -243,7 +266,7 @@ class TransformGroupNode(SceneGraphNode):
     def _transform_for_conversion(self) -> mathutils.Matrix:
         try:
             conversion_matrix = (
-                self.i3d.conversion_matrix @ self.blender_object.matrix_local @ self.i3d.conversion_matrix.inverted()
+                self.i3d.conversion_matrix @ self._get_object_matrix() @ self.i3d.conversion_matrix_inv
             )
         except AttributeError:
             self.logger.info("is a Collection and it will be exported as a transformgroup with default transform")
@@ -284,11 +307,9 @@ class LightNode(SceneGraphNode):
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
-        return self.i3d.conversion_matrix @ self.blender_object.matrix_local
+        return self.i3d.conversion_matrix @ self._get_object_matrix()
 
     def populate_xml_element(self):
-        light = self.blender_object.data
-
         super().populate_xml_element()
 
 
@@ -300,7 +321,7 @@ class CameraNode(SceneGraphNode):
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
-        return self.i3d.conversion_matrix @ self.blender_object.matrix_local
+        return self.i3d.conversion_matrix @ self._get_object_matrix()
 
     def populate_xml_element(self):
         camera = self.blender_object.data

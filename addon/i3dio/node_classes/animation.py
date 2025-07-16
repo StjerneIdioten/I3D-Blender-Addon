@@ -84,7 +84,7 @@ class Keyframes(BaseAnimationExport):
 
         self.i3d.depsgraph.scene.frame_set(frame)
 
-        local_matrix = self.node.blender_object.matrix_local.copy()
+        local_matrix = self.node._get_object_matrix()
         if self.is_bone:
             if pose_bone := self.node.root_node.blender_object.pose.bones.get(self.node.blender_object.name):
                 local_matrix = pose_bone.matrix.copy()
