@@ -155,7 +155,7 @@ class SceneGraphNode(Node):
             pass
 
     def _get_object_matrix(self) -> mathutils.Matrix:
-        """Returns the correct matrix for the object, depending on its parent and position in the scene graph."""
+        """Returns the correct matrix for the object, depending on its parent and position in the hierarchy."""
         obj = self.blender_object
         if self.parent is None:
             self.logger.debug("no parent in exporter: using world matrix")
