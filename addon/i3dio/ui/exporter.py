@@ -124,7 +124,10 @@ class I3D_IO_OT_export(Operator, ExportHelper):
 
     binarize_i3d: BoolProperty(
         name="Binarize i3d",
-        description="Binarizes i3d after Export. Needs to have path to i3dConverter.exe set in Addon Preferences",
+        description=(
+            "Converts the exported .i3d file to binary format using i3dConverter.exe.\n"
+            "Requires the converter path to be set in Addon Preferences"
+        ),
         default=True
     )
 
@@ -347,8 +350,9 @@ def export_options(layout: bpy.types.UILayout, operator):
     header.label(text="Export Options")
     if body:
         col = body.column()
-        if bool(bpy.context.preferences.addons[base_package].preferences.i3d_converter_path):
-            col.prop(operator, 'binarize_i3d')
+        col.enabled = bool(bpy.context.preferences.addons[base_package].preferences.i3d_converter_path)
+        col.prop(operator, 'binarize_i3d')
+        col = body.column()
         col.prop(operator, 'keep_collections_as_transformgroups')
         col.prop(operator, 'apply_modifiers')
         col.prop(operator, 'apply_unit_scale')
