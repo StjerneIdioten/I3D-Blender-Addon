@@ -96,6 +96,9 @@ def as_export_path(filepath: str) -> Path:
     blend_dir = Path(bpy.data.filepath).parent.resolve()
     target_path = Path(bpy.path.abspath(filepath)).resolve(strict=False)
     try:
+        # NOTE: Path.relative_to (pathlib) does not support paths outside its base location before Python 3.12
+        # https://docs.python.org/3.12/library/pathlib.html#pathlib.PurePath.relative_to
+        # Blender will remain on Python 3.11 until 2026 https://vfxplatform.com/ so use os.path.relpath until then
         return Path(os.path.relpath(str(target_path), str(blend_dir)))
     except ValueError:
         return target_path  # Happens if on another drive
