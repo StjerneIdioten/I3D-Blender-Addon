@@ -31,12 +31,6 @@ def register(cls):
     return cls
 
 
-def validate_collision_filter(value: str, allowed_values: list[str]) -> bool:
-    """Validate if the given value exists in the allowed_values list."""
-    print(f"Validating collision filter group: {value}")
-    return value in allowed_values
-
-
 @register
 class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     i3d_map = {
