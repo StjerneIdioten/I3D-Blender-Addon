@@ -155,13 +155,40 @@ def _export_active_object(i3d: I3D):
         logger.warning("No active object, aborting export")
 
 
-# TODO: Maybe this should export a sort of skeleton structure if the parents of an object isn't selected?
 def _export_selected_objects(i3d: I3D):
-    logger.info("'Selected Objects' export is selected'")
-    if bpy.context.selected_objects:
+    if not bpy.context.selected_objects:
+        logger.warning("No objects selected for export")
+        return
+    if i3d.settings['selection_traverse_children']:
+        logger.info("'Selected Objects' export is selected, traversing children")
         _export(i3d, bpy.context.selected_objects)
     else:
-        logger.warning("No selected objects, aborting export")
+        logger.info("'Selected Objects' export is selected, exporting only selected objects without children traversal")
+        _export_selected_only(i3d, bpy.context.selected_objects)
+
+
+def _export_selected_only(i3d: I3D, selected_objs: list[BlenderObject]):
+    """Export only the selected objects, without traversing their children."""
+    selection_set = set(selected_objs)
+    i3d.all_objects_to_export.extend(selected_objs)
+    # Create a parent map to keep track of the "new" hierarchy based on the selection
+    parent_map = {}
+    roots = []
+    for obj in selected_objs:
+        parent = obj.parent
+        # Find the nearest parent that is also in the selection set
+        while parent and parent not in selection_set:
+            parent = parent.parent
+        if parent and parent in selection_set:
+            parent_map[obj] = parent
+        else:
+            roots.append(obj)
+    i3d._selection_set = selection_set
+    i3d._parent_map = parent_map
+    for root in sort_blender_objects_by_outliner_ordering(roots):
+        _add_object_to_i3d(i3d, root)
+    del i3d._selection_set
+    del i3d._parent_map
 
 
 def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = True):
@@ -271,10 +298,15 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
     # Process children of objects (other objects) and children of collections (other collections)
     # WARNING: Might be slow due to searching through the entire object list in the blend file:
     # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
-    logger.debug(f"[{obj.name}] processing objects children")
-    for child in sort_blender_objects_by_outliner_ordering(obj.children):
-        _add_object_to_i3d(i3d, child, node)
-    logger.debug(f"[{obj.name}] no more children to process in object")
+    if getattr(i3d, '_selection_set', None) is not None:
+        children = [child for child in i3d._selection_set if i3d._parent_map.get(child) == obj]
+        for child in sort_blender_objects_by_outliner_ordering(children):
+            _add_object_to_i3d(i3d, child, node)
+    else:
+        logger.debug(f"[{obj.name}] processing objects children")
+        for child in sort_blender_objects_by_outliner_ordering(obj.children):
+            _add_object_to_i3d(i3d, child, node)
+        logger.debug(f"[{obj.name}] no more children to process in object")
 
 
 def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, parent: SceneGraphNode):

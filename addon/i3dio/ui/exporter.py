@@ -111,15 +111,24 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     )
 
     selection: EnumProperty(
-        name="Export",
-        description="Select which part of the scene to export",
+        name="Export Scope",
+        description="Choose which part of the scene to export",
         items=[
             ('ALL', "Everything", "Export everything from the scene master collection"),
             ('ACTIVE_COLLECTION', "Active Collection", "Export only the active collection and all its children"),
-            ('ACTIVE_OBJECT', "Active Object", "Export only the active object and its children"),
-            ('SELECTED_OBJECTS', "Selected Objects", "Export all of the selected objects")
+            ('ACTIVE_OBJECT', "Active Object", "Export the active object and its children"),
+            ('SELECTED_OBJECTS', "Selected Objects", "Export only selected objects (with optional children)")
         ],
         default='SELECTED_OBJECTS'
+    )
+
+    selection_traverse_children: BoolProperty(
+        name="Include Children",
+        description=(
+            "When enabled, also exports all children of the selected objects. "
+            "When disabled, only the selected objects are exported, without their children."
+        ),
+        default=False
     )
 
     binarize_i3d: BoolProperty(
@@ -252,6 +261,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         # Use i3d_mapping_file_path from context.scene.i3dio instead of self.i3d_mapping_file_path
         ACCEPTED_PROPERTIES = [
             "selection",
+            "selection_traverse_children",
             "binarize_i3d",
             "keep_collections_as_transformgroups",
             "apply_modifiers",
@@ -339,9 +349,11 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         return {'FINISHED'}
 
 
-def export_main(layout, operator, is_file_browser):
+def export_main(layout: bpy.types.UILayout, operator, is_file_browser: bool):
     if is_file_browser:
         layout.prop(operator, 'selection')
+        if operator.selection == 'SELECTED_OBJECTS':
+            layout.prop(operator, 'selection_traverse_children')
     layout.prop(operator, 'object_sorting_prefix')
 
 
