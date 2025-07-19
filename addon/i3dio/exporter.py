@@ -187,8 +187,6 @@ def _export_selected_only(i3d: I3D, selected_objs: list[BlenderObject]):
     i3d._parent_map = parent_map
     for root in sort_blender_objects_by_outliner_ordering(roots):
         _add_object_to_i3d(i3d, root)
-    del i3d._selection_set
-    del i3d._parent_map
 
 
 def _export(i3d: I3D, objects: List[BlenderObject], sort_alphabetical: bool = True):
