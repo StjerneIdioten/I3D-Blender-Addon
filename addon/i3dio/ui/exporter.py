@@ -181,15 +181,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'CURVE', 'ARMATURE'},
     )
 
-    fallback_to_empties: BoolProperty(
-        name="Fallback to Empties",
-        description=(
-            "When enabled, objects with unsupported or excluded types will be exported as empty/transform groups, "
-            "preserving transform and hierarchy structure"
-        ),
-        default=True,
-    )
-
     features_to_export: EnumProperty(
         name="Features",
         description="Select which features should be enabled for the export",
@@ -277,7 +268,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             "apply_unit_scale",
             "alphabetic_uvs",
             "object_types_to_export",
-            "fallback_to_empties",
             "features_to_export",
             "copy_files",
             "overwrite_files",
@@ -381,7 +371,6 @@ def export_options(layout: bpy.types.UILayout, operator):
         col.prop(operator, 'alphabetic_uvs')
         body.separator(type='LINE')
         body.prop(operator, 'object_types_to_export', expand=True)
-        body.prop(operator, 'fallback_to_empties')
         body.separator(type='LINE')
         body.prop(operator, 'features_to_export', expand=True)
         body.separator(type='LINE')

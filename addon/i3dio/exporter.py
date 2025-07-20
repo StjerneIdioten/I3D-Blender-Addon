@@ -288,16 +288,8 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         case 'CURVE' if type_supported:
             node = i3d.add_shape_node(obj, _parent)
         case _:
-            if i3d.settings['fallback_to_empties']:
-                logger.info(
-                    f"[{obj.name}] has unsupported or disabled type {obj.type!r}, exporting as empty/transform group."
-                )
-                node = i3d.add_transformgroup_node(obj, _parent)
-            else:
-                logger.info(
-                    f"[{obj.name}] has unsupported or disabled type {obj.type!r}, skipping but exporting children."
-                )
-                node = None
+            logger.info(f"[{obj.name}] has unsupported type {obj.type!r}, exporting as Transform Group (empty)")
+            node = i3d.add_transformgroup_node(obj, _parent)
 
     children = []
     if getattr(i3d, '_selection_set', None) is not None:
@@ -310,7 +302,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
     # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
     logger.debug(f"[{obj.name}] processing objects children")
     for child in sort_blender_objects_by_outliner_ordering(children):
-        _add_object_to_i3d(i3d, child, node if node is not None else _parent)
+        _add_object_to_i3d(i3d, child, node)
     logger.debug(f"[{obj.name}] no more children to process in object")
 
 
