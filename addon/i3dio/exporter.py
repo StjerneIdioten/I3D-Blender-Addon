@@ -217,10 +217,6 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         logger.info(f"Skipping [{obj.name}] and its children. Excluded from export.")
         return
 
-    if obj.type not in i3d.settings['object_types_to_export']:
-        logger.debug(f"[{obj.name}] has type {obj.type!r} which is not a type selected for exporting")
-        return
-
     _parent = parent
     # Special handling for collapsed armatures: Unlike Maya, Blender treats armatures differently, so when an armature
     # is collapsed, its children should be reassigned to the armature's parent (or scene root) to maintain hierarchy.
@@ -228,9 +224,10 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         logger.debug(f"[{obj.name}] is under a collapsed armature. Moving it to the armature's parent.")
         _parent = parent.parent
 
+    type_supported = obj.type in i3d.settings['object_types_to_export']
     logger.debug(f"[{obj.name}] is of type {obj.type!r}")
     match obj.type:
-        case 'MESH':
+        case 'MESH' if type_supported:
             # MergeChildren objects take precedence over any other Shape type
             if 'MERGE_CHILDREN' in i3d.settings['features_to_export'] and obj.i3d_merge_children.enabled:
                 if obj.children and any(child.type == 'MESH' for child in obj.children):
@@ -274,9 +271,9 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
             # Default to a regular Shape if none of the special types applied
             else:
                 node = i3d.add_shape_node(obj, _parent)
-        case 'ARMATURE':
+        case 'ARMATURE' if type_supported:
             node = i3d.add_armature_from_scene(obj, _parent)
-        case 'EMPTY':
+        case 'EMPTY' if type_supported:
             node = i3d.add_transformgroup_node(obj, _parent)
             if obj.instance_collection is not None:
                 logger.debug(f"[{obj.name}] is a collection instance and will be instanced into the 'Empty' object")
@@ -284,27 +281,37 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 # collection and be 'instanced' as children of the 'Empty' object directly.
                 _process_collection_objects(i3d, obj.instance_collection, node)
                 return
-        case 'LIGHT':
+        case 'LIGHT' if type_supported:
             node = i3d.add_light_node(obj, _parent)
-        case 'CAMERA':
+        case 'CAMERA' if type_supported:
             node = i3d.add_camera_node(obj, _parent)
-        case 'CURVE':
+        case 'CURVE' if type_supported:
             node = i3d.add_shape_node(obj, _parent)
         case _:
-            raise NotImplementedError(f"Object type: {obj.type!r} is not supported yet")
+            if i3d.settings['fallback_to_empties']:
+                logger.info(
+                    f"[{obj.name}] has unsupported or disabled type {obj.type!r}, exporting as empty/transform group."
+                )
+                node = i3d.add_transformgroup_node(obj, _parent)
+            else:
+                logger.info(
+                    f"[{obj.name}] has unsupported or disabled type {obj.type!r}, skipping but exporting children."
+                )
+                node = None
+
+    children = []
+    if getattr(i3d, '_selection_set', None) is not None:
+        children = [child for child in i3d._selection_set if i3d._parent_map.get(child) == obj]
+    else:
+        children = obj.children
 
     # Process children of objects (other objects) and children of collections (other collections)
     # WARNING: Might be slow due to searching through the entire object list in the blend file:
     # https://docs.blender.org/api/current/bpy.types.Object.html#bpy.types.Object.children
-    if getattr(i3d, '_selection_set', None) is not None:
-        children = [child for child in i3d._selection_set if i3d._parent_map.get(child) == obj]
-        for child in sort_blender_objects_by_outliner_ordering(children):
-            _add_object_to_i3d(i3d, child, node)
-    else:
-        logger.debug(f"[{obj.name}] processing objects children")
-        for child in sort_blender_objects_by_outliner_ordering(obj.children):
-            _add_object_to_i3d(i3d, child, node)
-        logger.debug(f"[{obj.name}] no more children to process in object")
+    logger.debug(f"[{obj.name}] processing objects children")
+    for child in sort_blender_objects_by_outliner_ordering(children):
+        _add_object_to_i3d(i3d, child, node if node is not None else _parent)
+    logger.debug(f"[{obj.name}] no more children to process in object")
 
 
 def _process_collection_objects(i3d: I3D, collection: bpy.types.Collection, parent: SceneGraphNode):
