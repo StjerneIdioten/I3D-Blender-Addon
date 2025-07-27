@@ -4,6 +4,7 @@ if "bpy" in locals():
         'helper_functions',
         'addon_preferences',
         'exporter',
+        'dds_exporter',
         'collision_data',
         'bit_mask_editor',
         'presets',
@@ -22,6 +23,6 @@ if "bpy" in locals():
         if module_name in locals():
             importlib.reload(locals()[module_name])
 
-from . import (helper_functions, addon_preferences, exporter, collision_data, bit_mask_editor, object, presets,
-               user_attributes, mesh, light, shader_parser, material_templates, shader_picker, udim_to_mat_template,
-               udim_picker)
+from . import (helper_functions, addon_preferences, exporter, dds_exporter, collision_data, bit_mask_editor, object,
+               presets, user_attributes, mesh, light, shader_parser, material_templates,
+               shader_picker, udim_to_mat_template, udim_picker)

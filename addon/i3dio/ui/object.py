@@ -520,6 +520,63 @@ class I3DMergeChildren(bpy.types.PropertyGroup):
 
 
 @register
+class I3DMotionPathArray(bpy.types.PropertyGroup):
+    enabled: BoolProperty(
+        name="Enable Motion Path Array",
+        description=(
+            "Enable to export a Motion Path Array texture for this object and its children.\n"
+            "Only objects with this enabled will be exported as Motion Path Arrays"
+        ),
+        default=False
+    )
+    filepath: StringProperty(
+        name="Texture Filepath",
+        description="File path to save the generated Motion Path Array texture (DDS)",
+        default='',
+        subtype='FILE_PATH'
+    )
+    use_geometry_nodes: BoolProperty(
+        name="Use Geometry Nodes",
+        description=(
+            "Enable to generate the motion path array from a geometry nodes setup "
+            "instead of using child objects in the scene."
+        ),
+        default=False
+    )
+    is_cyclic: BoolProperty(
+        name="Cyclic Path",
+        description=(
+            "Enable for tracks or chains that form a closed loop.\n"
+            "Disable for open-ended paths (e.g. effects). This prevents flipping in motion path arrays."
+        ),
+        default=False
+    )
+    include_position: BoolProperty(
+        name="Include Position",
+        description="Include object positions (XYZ) in the exported texture",
+        default=True
+    )
+    include_rotation: BoolProperty(
+        name="Include Rotation",
+        description="Include object rotation (quaternion XYZW) in the exported texture",
+        default=True
+    )
+    include_scale: BoolProperty(
+        name="Include Scale",
+        description="Include object scales (XYZ) in the exported texture",
+        default=False
+    )
+    hide_first_and_last: BoolProperty(
+        name="Hide First and Last",
+        description=(
+            "Set the first and last child's visibility (position.w) to 0 in the texture.\n"
+            "This hides the endpoints in the shader. Useful for effect arrays to avoid visible end caps"
+        ),
+        default=False
+    )
+
+
+@register
 class I3DMappingData(bpy.types.PropertyGroup):
     is_mapped: BoolProperty(
         name="Add to mapping",
@@ -717,6 +774,9 @@ class I3D_IO_PT_object_attributes(Panel):
             draw_merge_children_attributes(layout, obj.i3d_merge_children)
             draw_merge_group_attributes(layout, context)
 
+        if obj.type in {'MESH', 'EMPTY'}:
+            # Only make it accessible for types that actually make sense
+            draw_motion_path_array_attrs(layout, obj.i3d_motion_path_array)
         draw_visibility_condition_attributes(layout, i3d_attributes)
 
 
@@ -900,6 +960,24 @@ def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_childre
         panel.enabled = i3d_merge_children.enabled
         panel.prop(i3d_merge_children, 'apply_transforms')
         panel.prop(i3d_merge_children, 'interpolation_steps')
+
+
+def draw_motion_path_array_attrs(layout: bpy.types.UILayout, i3d_motion_path_array: bpy.types.PropertyGroup) -> None:
+    header, panel = layout.panel('i3d_motion_path_array_panel', default_closed=True)
+    header.use_property_split = False
+    header.prop(i3d_motion_path_array, 'enabled', text="")
+    header.label(text="Motion Path Array")
+    if panel:
+        panel.enabled = i3d_motion_path_array.enabled
+        panel.prop(i3d_motion_path_array, 'filepath')
+        panel.prop(i3d_motion_path_array, 'use_geometry_nodes')
+        if not i3d_motion_path_array.use_geometry_nodes:
+            # Will be detected automatically from the splines used in the geometry nodes setup
+            panel.prop(i3d_motion_path_array, 'is_cyclic')
+        panel.prop(i3d_motion_path_array, 'hide_first_and_last')
+        panel.prop(i3d_motion_path_array, 'include_position')
+        panel.prop(i3d_motion_path_array, 'include_rotation')
+        panel.prop(i3d_motion_path_array, 'include_scale')
 
 
 def draw_i3d_mapping_box(layout: bpy.types.UILayout, i3d_mapping: bpy.types.PropertyGroup) -> None:
@@ -1165,6 +1243,7 @@ def register():
     bpy.types.Object.i3d_reference = PointerProperty(type=I3DReferenceData)
     bpy.types.Scene.i3dio_merge_groups = CollectionProperty(type=I3DMergeGroup)
     bpy.types.Object.i3d_merge_children = PointerProperty(type=I3DMergeChildren)
+    bpy.types.Object.i3d_motion_path_array = PointerProperty(type=I3DMotionPathArray)
     load_post.append(handle_old_merge_groups)
     load_post.append(handle_old_lod_distances)
     load_post.append(handle_old_reference_paths)
@@ -1174,6 +1253,7 @@ def unregister():
     load_post.remove(handle_old_reference_paths)
     load_post.remove(handle_old_lod_distances)
     load_post.remove(handle_old_merge_groups)
+    del bpy.types.Object.i3d_motion_path_array
     del bpy.types.Object.i3d_merge_children
     del bpy.types.Scene.i3dio_merge_groups
     del bpy.types.Object.i3d_reference
