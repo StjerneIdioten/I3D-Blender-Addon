@@ -69,7 +69,7 @@ class MotionPathArray:
             else:
                 arr = self._gather_flat()
 
-        if arr is None:
+        if arr is None or arr.size == 0:
             self.logger.warning("No data found for DDS export.")
             self.array = None
             return None
