@@ -386,8 +386,6 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
             new_mat = old_mat.copy()
             new_mat.name = final_name
             new_i3d_attrs = new_mat.i3d_attributes
-            params = new_i3d_attrs.shader_material_params
-            textures = new_i3d_attrs.shader_material_textures
 
             # Set shader and variation first to ensure material properties is "initialized" correctly
             new_i3d_attrs.shader_name = ""  # Clear before setting, avoids potential conflicts
@@ -400,12 +398,12 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
             if brand_template:
                 # Always apply base first, then overlay "only the declared values" from brand
                 if base_template:
-                    apply_template_to_material(params, textures, base_template)
+                    apply_template_to_material(new_mat, base_template)
                 # Only apply explicit (non-default) values from brand template
-                apply_template_to_material(params, textures, brand_template, overlay_only_declared=True)
+                apply_template_to_material(new_mat, brand_template, overlay_only_declared=True)
             elif base_template:
                 # Only base template (no brand overlay)
-                apply_template_to_material(params, textures, base_template)
+                apply_template_to_material(new_mat, base_template)
             else:
                 print(f"WARNING: No base or brand template found for {template_name!r} or {brand_name!r}.")
 
