@@ -166,6 +166,15 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         default=False
     )
 
+    export_color_by_shader: BoolProperty(
+        name="Export Color Attribute by Shader",
+        description=(
+            "Only export color attributes for materials whose shader requires them.\n"
+            "Disable to always export color attributes if present."
+        ),
+        default=True
+    )
+
     object_types_to_export: EnumProperty(
         name="Object Types",
         description="Select which objects should be included in the exported",
@@ -267,6 +276,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             "apply_modifiers",
             "apply_unit_scale",
             "alphabetic_uvs",
+            "export_color_by_shader",
             "object_types_to_export",
             "features_to_export",
             "copy_files",
@@ -369,6 +379,7 @@ def export_options(layout: bpy.types.UILayout, operator):
         col.prop(operator, 'apply_modifiers')
         col.prop(operator, 'apply_unit_scale')
         col.prop(operator, 'alphabetic_uvs')
+        col.prop(operator, 'export_color_by_shader')
         body.separator(type='LINE')
         body.prop(operator, 'object_types_to_export', expand=True)
         body.separator(type='LINE')

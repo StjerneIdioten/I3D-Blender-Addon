@@ -516,6 +516,10 @@ class IndexedTriangleSet(Node):
 
         self.material_ids = [self.i3d.add_material(material_object_map[name]) for name in master_material_map.keys()]
         self.tangent = self.tangent or any(self.i3d.materials[mat_id].is_normalmapped() for mat_id in self.material_ids)
+        if self.i3d.get_setting("export_color_by_shader"):
+            self.final_has_colors = any(
+                self.i3d.materials[mat_id].requires_color_attribute() for mat_id in self.material_ids
+            )
 
         # Process material subsets to create contiguous buffers
         self.logger.debug("Processing subsets one by one to create contiguous vertex buffer...")
@@ -657,6 +661,8 @@ class IndexedTriangleSet(Node):
             for i in range(self.final_max_uv_layers):
                 if f'uv{i}' in final_verts_dtype.names:
                     self._write_attribute(f"uv{i}", True, 'vertices')
+        if self.final_has_colors:
+            self._write_attribute('color', True, 'vertices')
 
         if self.is_generic or self.is_geo_nodes_generic:
             self.logger.debug(f"Setting generic to True for shape {self.name!r}")

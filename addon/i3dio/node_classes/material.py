@@ -23,6 +23,7 @@ class Material(Node):
 
     def __init__(self, id_: int, i3d: I3D, blender_material: bpy.types.Material):
         self.blender_material = blender_material
+        self.i3d_attrs = blender_material.i3d_attributes
         super().__init__(id_, i3d, None)
 
     @property
@@ -39,6 +40,10 @@ class Material(Node):
 
     def is_normalmapped(self) -> bool:
         return 'Normalmap' in self.xml_elements
+
+    def requires_color_attribute(self) -> bool:
+        """Returns True if the shader assigned to this material requires a color attribute (vertex color)."""
+        return any("color" in attr.name.lower() for attr in self.i3d_attrs.required_vertex_attributes)
 
     def get_slot_name(self) -> str | None:
         """Returns the material slot name if it's set, otherwise returns the material name."""
