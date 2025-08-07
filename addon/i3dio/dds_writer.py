@@ -26,8 +26,8 @@ DDS_RESOURCE_DIMENSION_TEXTURE2D = 3
 
 def write_dds_dx10(filepath: str, arr: np.ndarray) -> None:
     """
-    Write a DX10 DDS (R16G16B16A16_FLOAT, 2D array) from numpy array
-    arr: shape (array_size, Z, Y, X, 4), dtype float16
+    Write a DX10 DDS (R16G16B16A16_FLOAT, 2D array) from a numpy array.
+    arr: A numpy array with shape (array_size, height, width, 4) and dtype float16.
     """
     array_size, height, width, channels = arr.shape
     assert channels == 4, "Channels must be 4 (RGBA)"
@@ -70,8 +70,6 @@ def write_dds_dx10(filepath: str, arr: np.ndarray) -> None:
     header += dword(0)                # dwReserved2
 
     # DDS_HEADER_DXT10 (20 bytes)
-    DXGI_FORMAT_R16G16B16A16_FLOAT = 10
-    DDS_RESOURCE_DIMENSION_TEXTURE2D = 3
     header_dx10 = bytearray()
     header_dx10 += dword(DXGI_FORMAT_R16G16B16A16_FLOAT)    # dxgiFormat
     header_dx10 += dword(DDS_RESOURCE_DIMENSION_TEXTURE2D)  # resourceDimension

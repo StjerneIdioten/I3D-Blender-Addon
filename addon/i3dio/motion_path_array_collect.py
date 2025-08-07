@@ -1,169 +1,308 @@
+import logging
 import numpy as np
 import bpy
 import mathutils
 from bpy_extras.io_utils import axis_conversion
 from .utility import sort_blender_objects_by_outliner_ordering
-from .debugging import addon_logger as logger
-
+from . import debugging
 
 CONVERSION_MATRIX: mathutils.Matrix = axis_conversion(to_forward='-Z', to_up='Y').to_4x4()
 CONVERSION_MATRIX_INVERSE = CONVERSION_MATRIX.inverted()
 
 
-def is_hierarchical(obj: bpy.types.Object) -> bool:
-    """Checks if the object has children that also have children."""
-    return any(child.children for child in obj.children)
-
-
-def get_item_data(obj_matrix: mathutils.Matrix, prev_quat: mathutils.Quaternion = None, is_cyclic: bool = False
-                  ) -> tuple[list[float], list[float], list[float]]:
+class MotionPathArray:
     """
-    Extracts position, quaternion (DDS order), and scale from the matrix.
-    For cyclic paths (normalized to [0, 2π) range).
+    Collects and structures transform data for VAT-style shaders, supporting both
+    classic parenting and geometry nodes instancing.
+
+    Output Array Shape (Z, Y, X, 12):
+        - Z (pose): "motion variants" or animation states, used for blending in the shader.
+            Each pose represents a different possible shape or motion for the same path/effect.
+            For example, one pose might be a "default" track, and another a "lifted" variant for special ground effects.
+        - Y (group): subgroups or splines within a pose.
+        - X (item): sample/instance within a group, e.g. point along a curve.
+        - 12: [position(4), quaternion(4), scale(4)]
+
+    The shader can blend between poses using scrollPos.y/z/w parameters, enabling
+    dynamic, responsive effects (like changing snow spray shape or making tracks lift at certain ground types).
+
+    All arrays output by this class are ready for packing into 16-bit float DDS textures.
     """
-    matrix = CONVERSION_MATRIX @ obj_matrix @ CONVERSION_MATRIX_INVERSE
+    def __init__(self, obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph = None):
+        self.obj = obj
+        self.props = obj.i3d_motion_path_array
+        self.depsgraph = depsgraph or bpy.context.view_layer.depsgraph
+        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
+                                                  {'object_name': obj.name})
 
-    if is_cyclic:
-        # For cyclic curves or splines, matrix.to_euler() wraps angles to [-π, π],
-        # which causes sudden flips if the rotation crosses ±180 degrees.
-        # To ensure smooth, continuous rotation (0 to 2π) for export,
-        # normalize the X Euler angle to the [0, 2π) range before converting to quaternion.
-        euler = matrix.to_euler('XYZ')
-        x_unwrapped = euler.x % (2 * np.pi)
-        quat = mathutils.Euler((x_unwrapped, euler.y, euler.z), 'XYZ').to_quaternion()
-    else:
-        quat = matrix.to_quaternion()
-        if prev_quat is not None:
-            # Smooth quaternion transition from previous item
-            quat.make_compatible(prev_quat)
-    orient = [quat.x, quat.y, quat.z, quat.w]  # Giants/DDS order
-    position = list(matrix.to_translation()) + [1.0]  # Last value (.w) used for visibility in shader
-    scale = list(matrix.to_scale()) + [1.0]  # Last value (.w) is unused, but kept for consistency
-    return position, orient, scale, quat
+        self.is_cyclic = self.props.is_cyclic
+        self.prev_quat = None  # For smooth quaternion transitions
+        self.array = None
 
+    def _is_geo_nodes(self) -> bool:
+        """Checks if the object is a mesh with geometry nodes modifier."""
+        return (
+            self.obj.type == 'MESH'
+            and self.props.use_geometry_nodes
+            and any(mod.type == 'NODES' for mod in self.obj.modifiers)
+        )
 
-def gather_flat_array(obj: bpy.types.Object, props: bpy.types.PropertyGroup) -> np.ndarray:
-    """
-    Collects transforms for all children of obj in a flat array.
-    Returns shape (count, 12): [pos(4), rot(4), scale(4)] per child.
-    """
-    children = sort_blender_objects_by_outliner_ordering(list(obj.children))
-    children_count = len(children)
-    arr = np.zeros((children_count, 12), dtype=np.float16)
-    prev_quat = None
-    for i, child in enumerate(children):
-        position, orient, scale, prev_quat = get_item_data(child.matrix_local, child, prev_quat,
-                                                           is_cyclic=props.is_cyclic)
-        # Hide first/last object if enabled, by setting position.w (visibility) to 0
-        if props.hide_first_and_last and (i == 0 or i == children_count - 1):
-            position[3] = 0.0
-        arr[i] = position + orient + scale
-    return arr
-
-
-def gather_hierarchical_array(obj: bpy.types.Object, props: bpy.types.PropertyGroup) -> np.ndarray:
-    """
-    Collects transforms in a 3D hierarchy:
-      - Z: poses (direct children of obj)
-      - Y: groups (children of pose)
-      - X: items (children of group)
-    Pads missing Y/X with last value for consistent array shape.
-    Returns (z_count, max_y, max_x, 12)
-    """
-    parents = sort_blender_objects_by_outliner_ordering(list(obj.children))
-    z_count = len(parents)
-    max_y = 0
-    max_x = 0
-
-    # Find the maximum Y (rows) and X (columns) needed for padding
-    for parent in parents:
-        y_children = parent.children
-        max_y = max(max_y, len(y_children))
-        for y_child in y_children:
-            x_children = y_child.children
-            max_x = max(max_x, len(x_children))
-
-    arr = np.zeros((z_count, max_y, max_x, 12), dtype=np.float16)
-
-    # Collect and pad data
-    for zi, parent in enumerate(parents):
-        y_children = sort_blender_objects_by_outliner_ordering(list(parent.children))
-        logger.debug(f"[{obj.name}] Processing parent '{parent.name}' with {len(y_children)} groups")
-        for yi, y_child in enumerate(y_children):
-            x_children = sort_blender_objects_by_outliner_ordering(list(y_child.children))
-            logger.debug(f"[{obj.name}] Processing group '{y_child.name}' with {len(x_children)} items")
-            prev_quat = None
-            for xi, x_child in enumerate(x_children):
-                position, orient, scale, prev_quat = get_item_data(x_child.matrix_local, prev_quat,
-                                                                   is_cyclic=props.is_cyclic)
-                logger.debug(f"[{obj.name}] Processing item '{x_child.name}', position: {position}, orient: {orient}")
-                # Optionally hide first/last in this row
-                if props.hide_first_and_last and (xi == 0 or xi == len(x_children) - 1):
-                    position[3] = 0.0
-                arr[zi, yi, xi] = position + orient + scale
-            # Pad missing X with last value, or zero if row is empty
-            for xi in range(len(x_children), max_x):
-                if len(x_children) == 0:
-                    arr[zi, yi, xi] = 0
-                else:
-                    arr[zi, yi, xi] = arr[zi, yi, len(x_children) - 1]
-        # Pad missing Y with last row, or zero if no groups
-        for yi in range(len(y_children), max_y):
-            if len(y_children) == 0:
-                arr[zi, yi] = 0
+    def gather_data(self) -> np.ndarray:
+        if self._is_geo_nodes():
+            self.logger.debug("Using Geometry Nodes mode for DDS array.")
+            evaluated_geometry = self.obj.evaluated_get(self.depsgraph).evaluated_geometry()
+            pc = evaluated_geometry.instances_pointcloud()
+            if not pc or not pc.points:
+                self.logger.warning("Geo Nodes object has no instance points for DDS export.")
+                return None
+            if is_cyclic := pc.attributes.get("is_cyclic"):
+                self.is_cyclic = is_cyclic.data[0].value
+            if pc.attributes.get("pose_idx"):
+                arr = self._gather_hierarchical_gn(pc)
             else:
-                arr[zi, yi, :] = arr[zi, len(y_children) - 1, :]
-    return arr
+                arr = self._gather_flat(pc)
 
+        else:
+            self.logger.debug("Using Classic Parenting mode for DDS array.")
+            if any(child.children for child in self.obj.children):
+                arr = self._gather_hierarchical_classic()
+            else:
+                arr = self._gather_flat()
 
-def pack_motion_path_dds_array(arr: np.ndarray, props: bpy.types.PropertyGroup) -> np.ndarray:
-    """
-    Packs a motion path array for DDS export, supporting both flat and hierarchical modes.
+        if arr is None:
+            self.logger.warning("No data found for DDS export.")
+            self.array = None
+            return None
+        self.logger.info(f"Motion path array shape: {arr.shape}")
+        self.array = arr
+        return self._pack_array()
 
-    - For flat: (1, N, 12) → (num_channels, N, 1, 4)
-    - For hierarchical: (Z, Y, X, 12) → (num_poses * num_channels, Y, X, 4)
-    Channels (position, rotation, scale) are stored as separate arrays, per pose.
-    """
-    # Normalize to 4D: (Z, Y, X, 12)
-    if arr.ndim == 3:
-        arr = arr[np.newaxis, :, :]   # Flat array: (1, N, 12)
+    def _gather_flat(self, pc: bpy.types.PointCloud = None) -> np.ndarray:
+        """
+        Collects transforms into a flat array of shape (1, 1, N, 12).
 
-    channel_slices = []
-    # Build a list of (start, end) slices for each enabled channel
-    channel_indices = []
-    if props.include_position:
-        channel_indices.append((0, 4))
-    if props.include_rotation:
-        channel_indices.append((4, 8))
-    if props.include_scale:
-        channel_indices.append((8, 12))
-    if not channel_indices:
-        return None
+        This is used when data has no hierarchical 'pose' or 'group' structure.
+        The 'N' items are laid out along the texture's width.
+        """
+        item_matrices = []
+        item_count = 0
+        if pc is not None:
+            # Gather transforms from the point cloud instances
+            item_count = len(pc.points)
+            data = pc.attributes["instance_transform"].data
+            item_matrices = [data[i].value for i in range(item_count)]
+        else:
+            children = sort_blender_objects_by_outliner_ordering(self.obj.children)
+            item_count = len(children)
+            item_matrices = [child.matrix_local for child in children]
 
-    num_poses = arr.shape[0]
-    for pose_idx in range(num_poses):
-        for start, end in channel_indices:
-            channel_slices.append(arr[pose_idx, :, :, start:end])
+        if item_count == 0:
+            self.logger.warning(f"[{self.obj.name}] No items found for flat array.")
+            return None
 
-    return np.stack(channel_slices, axis=0)
+        self.logger.debug(f"Gathered {item_count} items for flat array.")
+        arr = np.zeros((item_count, 12), dtype=np.float16)
+        for i, matrix in enumerate(item_matrices):
+            position, orient, scale = self._get_item_data(matrix)
+            arr[i] = np.array(position + orient + scale, dtype=np.float16)
 
+        if self.props.hide_first_and_last:
+            arr[0, 3] = 0.0  # Hide first item's position.w
+            if item_count > 1:
+                arr[-1, 3] = 0.0  # Hide last item's position.w
 
-def gather_motion_path_array_data(obj: bpy.types.Object) -> np.ndarray:
-    """
-    Entry point: gathers and packs array data (flat or hierarchical)
-    into a (array_size, Z, Y, X, 4) shape ready for DDS export.
-    """
-    logger.info(f"[{obj.name}] Gathering motion path array data")
-    props = obj.i3d_motion_path_array
-    if is_hierarchical(obj):
-        logger.debug(f"[{obj.name}] Using hierarchical mode for DDS array.")
-        arr = gather_hierarchical_array(obj, props)  # (Z, Y, X, 12)
-    else:
-        logger.debug(f"[{obj.name}] Using flat mode for DDS array.")
-        arr = gather_flat_array(obj, props)  # (N, 12)
-        arr = arr[np.newaxis, :, :]  # (1, N, 12)
-    if arr is None:
-        logger.warning(f"[{obj.name}] No data found for DDS export.")
-    else:
-        logger.info(f"[{obj.name}] Motion path array shape: {arr.shape}")
-    return pack_motion_path_dds_array(arr, props) if arr is not None else None
+        return arr[np.newaxis, np.newaxis, :, :]  # Shape: (Z=1, Y=1, X=N, channels=12)
+
+    def _gather_hierarchical_gn(self, pc: bpy.types.PointCloud) -> np.ndarray:
+        """
+        Collects transforms for Geometry Nodes instances into a 3D hierarchy.
+
+        This function relies on a data contract for the instance attributes:
+        - 'pose_idx' and 'group_idx' must be zero-based and contiguous
+        (e.g., 0, 1, 2...).
+        - It iterates through all possible (pose, group) pairs to build the
+        final array, ensuring correct quaternion smoothing and padding.
+        """
+        pose_attr = pc.attributes.get("pose_idx")
+        group_attr = pc.attributes.get("group_idx")
+        if not pose_attr or not group_attr:
+            self.logger.warning(f"[{self.obj.name}] Missing pose_idx or group_idx on geo nodes instances.")
+            return None
+
+        n = len(pc.points)
+        pose_indices = np.empty(n, dtype=np.int32)
+        group_indices = np.empty(n, dtype=np.int32)
+        pose_attr.data.foreach_get("value", pose_indices)
+        group_attr.data.foreach_get("value", group_indices)
+
+        z_count = np.max(pose_indices) + 1 if pose_indices.size > 0 else 0  # Number of poses
+        y_count = np.max(group_indices) + 1 if group_indices.size > 0 else 0  # Max number of groups per pose
+
+        # Calculate max_x by finding the largest group
+        unique_pairs, counts = np.unique(np.stack((pose_indices, group_indices), axis=-1), axis=0, return_counts=True)
+        max_x = np.max(counts) if counts.size > 0 else 0
+
+        if max_x == 0:
+            self.logger.warning("No items found in Geometry Nodes data!")
+            return None
+
+        arr = np.zeros((z_count, y_count, max_x, 12), dtype=np.float16)
+        inst_xform_attr = pc.attributes["instance_transform"]
+        for zi in range(z_count):
+            for yj in range(y_count):
+                mask = (pose_indices == zi) & (group_indices == yj)
+                idxs = np.nonzero(mask)[0]
+                num_items = len(idxs)
+                if num_items == 0:
+                    continue
+                # Reset quaternion smoothing for each group
+                self.prev_quat = None
+                for xi, idx in enumerate(idxs):
+                    matrix = inst_xform_attr.data[idx].value
+                    position, orient, scale = self._get_item_data(matrix)
+                    arr[zi, yj, xi] = position + orient + scale
+
+                # If hiding first and last items, set their position.w to 0
+                if self.props.hide_first_and_last and num_items > 0:
+                    arr[zi, yj, 0, 3] = 0.0
+                    if num_items > 1:
+                        arr[zi, yj, num_items - 1, 3] = 0.0
+
+                # Pad with last value if fewer items than max_x
+                if num_items > 0:
+                    last_item_data = arr[zi, yj, num_items - 1]
+                    arr[zi, yj, num_items:max_x] = last_item_data
+
+            # Pad missing Y rows with the data from the last valid group in this pose
+            last_filled_group = -1
+            for yj in range(y_count):
+                if np.any(arr[zi, yj]):  # Check if this group has any non-zero data
+                    last_filled_group = yj
+
+            if last_filled_group != -1:
+                last_group_data = arr[zi, last_filled_group, :, :]
+                # Pad all subsequent empty groups
+                for yj in range(last_filled_group + 1, y_count):
+                    if not np.any(arr[zi, yj]):
+                        arr[zi, yj, :, :] = last_group_data
+
+        return arr
+
+    def _gather_hierarchical_classic(self) -> np.ndarray:
+        """
+        Collects transforms from a classic parent->group->item hierarchy.
+
+        - The direct children of the main object are considered 'poses' (Z-axis).
+        - The children of each pose object are 'groups' (Y-axis).
+        - The children of each group object are 'items' (X-axis).
+        """
+        parents = sort_blender_objects_by_outliner_ordering(self.obj.children)
+        z_count = len(parents)
+        max_y = 0
+        max_x = 0
+
+        # Find max Y and X for padding
+        for parent in parents:
+            y_children = parent.children
+            max_y = max(max_y, len(y_children))
+            for y_child in y_children:
+                x_children = y_child.children
+                max_x = max(max_x, len(x_children))
+
+        # Collect and pad data
+        arr = np.zeros((z_count, max_y, max_x, 12), dtype=np.float16)
+        for zi, parent in enumerate(parents):
+            # y_children are the 'groups' (Y axis)
+            y_children = sort_blender_objects_by_outliner_ordering(parent.children)
+            for yi, y_child in enumerate(y_children):
+                # x_children are the 'items' (X axis)
+                x_children = sort_blender_objects_by_outliner_ordering(y_child.children)
+                # Reset prev_quat for each new group
+                self.prev_quat = None
+                for xi, x_child in enumerate(x_children):
+                    position, orient, scale = self._get_item_data(x_child.matrix_local)
+                    arr[zi, yi, xi] = position + orient + scale
+
+                num_items = len(x_children)
+                if self.props.hide_first_and_last and num_items > 0:
+                    arr[zi, yi, 0, 3] = 0.0  # Hide first item's position.w
+                    if num_items > 1:
+                        arr[zi, yi, num_items - 1, 3] = 0.0  # Hide last item's position.w
+
+                # Pad missing X with last value, or zero if row is empty
+                if num_items > 0:
+                    # Get the last valid item's data
+                    last_item_data = arr[zi, yi, num_items - 1]
+                    # Fill remaining X with last item data
+                    arr[zi, yi, num_items:max_x] = last_item_data
+                else:
+                    pass  # Already initialized to zero
+            # Pad missing Y with last row, or zero if no groups
+            num_groups = len(y_children)
+            if num_groups > 0:
+                last_group_data = arr[zi, num_groups - 1, :]
+                arr[zi, num_groups:max_y, :] = last_group_data
+
+        return arr
+
+    def _pack_array(self) -> np.ndarray:
+        """
+        Packs the array for DDS export, stacking channels and poses into the first axis for easy shader sampling.
+
+        Input:
+            self.array: (Z, Y, X, 12), see class docstring for axis meaning.
+        Output:
+            np.ndarray (num_poses * num_channels, Y, X, 4) for hierarchical arrays,
+            or (num_channels, 1, N, 4) for flat arrays.
+            All values are float16, ready for R16G16B16A16_FLOAT DDS export.
+
+        Note:
+            Each "layer" in the DDS texture corresponds to a unique (pose, channel) combination,
+            which matches the way the shader blends or selects different motion paths.
+        """
+        channel_slices = []
+        # Build a list of (start, end) slices for each enabled channel
+        channel_indices = []
+        if self.props.include_position:
+            channel_indices.append((0, 4))
+        if self.props.include_rotation:
+            channel_indices.append((4, 8))
+        if self.props.include_scale:
+            channel_indices.append((8, 12))
+        if not channel_indices:
+            return None
+
+        num_poses = self.array.shape[0]
+        for pose_idx in range(num_poses):
+            for start, end in channel_indices:
+                # NOTE: I am not sure why we need to reverse Y here, but giants do the same in their exporters
+                # and since there is no documentation on this, I guess its best to match their behavior
+                reversed_slice = self.array[pose_idx, ::-1, :, start:end]
+                channel_slices.append(reversed_slice)
+
+        return np.stack(channel_slices, axis=0)
+
+    def _get_item_data(self, matrix: mathutils.Matrix) -> tuple[list[float], list[float], list[float]]:
+        """
+        Extracts position, quaternion (DDS order), and scale from the matrix.
+        For cyclic paths (normalized to [0, 2π) range), which is usually for "trackArrays" since they are continuous.
+        """
+        matrix = CONVERSION_MATRIX @ matrix @ CONVERSION_MATRIX_INVERSE
+        if self.is_cyclic:
+            # For cyclic curves/splines, matrix.to_euler() & to_quaternion() wraps angles to [-π, π] after muliplying,
+            # which causes sudden flips if the rotation crosses ±180 degrees.
+            # To ensure smooth, continuous rotation (0 to 2π) for export,
+            # normalize the X Euler angle to the [0, 2π) range before converting to quaternion.
+            euler = matrix.to_euler('XYZ')
+            x_unwrapped = euler.x % (2 * np.pi)
+            quat = mathutils.Euler((x_unwrapped, euler.y, euler.z), 'XYZ').to_quaternion()
+        else:
+            quat = matrix.to_quaternion()
+            if self.prev_quat is not None:
+                # Smooth quaternion transition from previous item
+                quat.make_compatible(self.prev_quat)
+            self.prev_quat = quat
+        orient = [quat.x, quat.y, quat.z, quat.w]  # Giants/DDS order
+        position = list(matrix.to_translation()) + [1.0]  # Last value (.w) used for visibility in shader
+        scale = list(matrix.to_scale()) + [1.0]  # Last value (.w) is unused, but kept for consistency
+        return position, orient, scale

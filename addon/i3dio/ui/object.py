@@ -533,7 +533,8 @@ class I3DMotionPathArray(bpy.types.PropertyGroup):
         name="Texture Filepath",
         description="File path to save the generated Motion Path Array texture (DDS)",
         default='',
-        subtype='FILE_PATH'
+        subtype='FILE_PATH',
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
     )
     use_geometry_nodes: BoolProperty(
         name="Use Geometry Nodes",

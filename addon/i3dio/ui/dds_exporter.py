@@ -1,58 +1,51 @@
 import logging
 import bpy
 from bpy.types import Operator
-from bpy.props import StringProperty, EnumProperty
-from bpy_extras.io_utils import ExportHelper
+from bpy.props import EnumProperty
 
 from .. import debugging
-from ..motion_path_array_collect import gather_motion_path_array_data
+from ..motion_path_array_collect import MotionPathArray
 from ..dds_writer import write_dds_dx10
 
 
-def export_motion_path_array(obj: bpy.types.Object, logger=debugging.addon_logger, report_func=None) -> bool:
+def export_motion_path_array(obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph,
+                             logger=debugging.addon_logger) -> bool:
     """Exports DDS for an object with motion path array enabled.
     - logger: optional logging.Logger for info/error output
-    - report_func: optional function (type, msg) for Blender operator reporting
     Returns True on success, False otherwise.
     """
-    arr = gather_motion_path_array_data(obj)
+    array_builder = MotionPathArray(obj, depsgraph)
+    gathered_array = array_builder.gather_data()
+
     filepath = obj.i3d_motion_path_array.filepath
-    name = getattr(obj, "name", "Object")
-    if arr is not None and filepath:
-        if not filepath.endswith('.dds'):
-            filepath += '.dds'
-        try:
-            write_dds_dx10(filepath, arr)
-            msg = f"[{name}] Exported Motion Path Array DDS to {filepath}"
-            if logger:
-                logger.info(msg)
-            if report_func:
-                report_func({'INFO'}, msg)
-            return True
-        except Exception as e:
-            msg = f"[{name}] Failed to write DDS: {e}"
-            if logger:
-                logger.error(msg)
-            if report_func:
-                report_func({'ERROR'}, msg)
-            return False
-    else:
-        msg = f"[{name}] Skipped DDS export: No array data or filepath set."
-        if logger:
-            logger.warning(msg)
-        if report_func:
-            report_func({'ERROR'}, msg)
-        return False
+    name = obj.name
+    if gathered_array is None or not filepath:
+        msg = f"[{name}] Skipped: No data or filepath."
+        logger.info(msg)
+        return 'SKIP', msg
+
+    if not filepath.endswith('.dds'):
+        filepath += '.dds'
+    try:
+        filepath = bpy.path.abspath(filepath)
+        write_dds_dx10(filepath, gathered_array)
+        msg = f"[{name}] Exported successfully to {filepath}"
+        logger.info(msg)
+        return 'SUCCESS', msg
+    except Exception as e:
+        msg = f"[{name}] Failed to write DDS: {e}"
+        logger.error(msg)
+        return 'FAIL', msg
 
 
-class I3D_IO_OT_motion_path_array(Operator, ExportHelper):
-    bl_idname = "export_scene.motion_path_array"
+class I3D_IO_OT_motion_path_array(Operator):
+    bl_idname = "i3dio.motion_path_array"
     bl_label = "Export Motion Path Array"
+    bl_description = (
+        "Triggers the export of Motion Path Array DDS textures for objects configured within the scene. "
+        "Does not open a file browser, as file paths are defined per-object."
+    )
     bl_options = {'UNDO'}
-
-    filepath = "Defined per Object and not here"
-    filename_ext = ".dds"
-    filter_glob: StringProperty(default="*.dds", options={'HIDDEN'}, maxlen=255)
 
     selection: EnumProperty(
         name="Export Scope",
@@ -63,11 +56,6 @@ class I3D_IO_OT_motion_path_array(Operator, ExportHelper):
         ],
         default='ALL'
     )
-
-    def invoke(self, context, event):
-        self.filepath = "Defined per Object and not here"
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
 
     def execute(self, context):
         match self.selection:
@@ -84,16 +72,37 @@ class I3D_IO_OT_motion_path_array(Operator, ExportHelper):
 
         debugging.addon_console_handler.setLevel(logging.DEBUG)
 
-        any_exported = False
+        success_count = 0
+        skip_count = 0
+        fail_count = 0
+
         for obj in objects:
             if not obj.i3d_motion_path_array.enabled:
                 continue
-            ok = export_motion_path_array(obj, report_func=self.report)
-            any_exported = any_exported or ok
-        if not any_exported:
-            self.report({'ERROR'}, "No DDS textures exported")
+            status, message = export_motion_path_array(obj, depsgraph=context.view_layer.depsgraph)
+
+            match status:
+                case 'SUCCESS':
+                    success_count += 1
+                case 'FAIL':
+                    fail_count += 1
+                    self.report({'ERROR'}, f"Failed to export {obj.name}: {message}")
+                case 'SKIP':
+                    skip_count += 1
+
+        if fail_count > 0:
+            self.report({'ERROR'}, f"Export finished with {fail_count} error(s). Check the console for details.")
             return {'CANCELLED'}
+
+        if success_count == 0:
+            self.report({'WARNING'}, f"No DDS textures were exported. ({skip_count} skipped). Check configuration.")
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, f"Export successful: {success_count} file(s) written, {skip_count} skipped.")
         return {'FINISHED'}
+
+    def invoke(self, context, event):
+        return context.window_manager.invoke_props_dialog(self, confirm_text="Export")
 
     def draw(self, context):
         layout = self.layout
