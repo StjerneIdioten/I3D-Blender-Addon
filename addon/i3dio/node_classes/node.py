@@ -142,10 +142,11 @@ class SceneGraphNode(Node):
         except AttributeError:
             self.logger.debug(f'Is a "{type(self.blender_object).__name__}", which does not have "data"')
         else:
-            try:
-                xml_i3d.write_i3d_properties(data, self.blender_object.data.i3d_attributes, self.xml_elements)
-            except AttributeError:
-                self.logger.debug('Has no data specific attributes')
+            if not isinstance(self, TransformGroupNode):
+                try:
+                    xml_i3d.write_i3d_properties(data, self.blender_object.data.i3d_attributes, self.xml_elements)
+                except AttributeError:
+                    self.logger.debug('Has no data specific attributes')
 
     def _write_user_attributes(self):
         try:  # Only write attributes if list is not empty
