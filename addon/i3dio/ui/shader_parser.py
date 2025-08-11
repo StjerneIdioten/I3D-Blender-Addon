@@ -77,7 +77,7 @@ def parse_shader_parameters(parameter: xml_i3d.XML_Element) -> list[ShaderParame
     min_single = min_value[0] if all(x == min_value[0] for x in min_value) else -xml_i3d.i3d_max
     max_single = max_value[0] if all(x == max_value[0] for x in max_value) else xml_i3d.i3d_max
 
-    description = parameter.attrib.get('description', '')
+    description = parameter.attrib.get("description", "").replace("\\n", "\n")
     if parameter.attrib.get('arraySize') is not None:
         for child in parameter:
             child_default = _parse_floats(child.text)
