@@ -173,9 +173,12 @@ def get_template_by_name(name: str) -> MaterialTemplate | BrandMaterialTemplate 
     return MATERIAL_TEMPLATES.get(name) or BRAND_MATERIAL_TEMPLATES.get(name)
 
 
-def apply_template_to_material(params, textures, template,
+def apply_template_to_material(material: bpy.types.Material, template: MaterialTemplate | BrandMaterialTemplate,
                                allowed_params=None, allowed_textures=None, overlay_only_declared=False) -> None:
     """Applies params and textures from a template to the given material property collections."""
+    params = material.i3d_attributes.shader_material_params
+    textures = material.i3d_attributes.shader_material_textures
+
     if allowed_params is None:
         allowed_params = {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
                           "smoothnessScale", "metalnessScale", "porosity"}
@@ -198,6 +201,7 @@ def apply_template_to_material(params, textures, template,
             tex = next((t for t in textures if t.name == prop_name), None)
             if tex is not None and value and value != tex.default_source:
                 tex.source = value
+    material.update_tag()  # Marks the material as 'dirty' so changes are recognized for export and depsgraph updates
 
 
 def ensure_base_color_texture(material: bpy.types.Material) -> None:
@@ -342,9 +346,8 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
             new_material = bpy.data.materials.new(name=mat_name)
             new_material.use_nodes = True
             ensure_base_color_texture(new_material)
-            i3d_attrs = new_material.i3d_attributes
-            i3d_attrs.shader_name = 'vehicleShader'
-            apply_template_to_material(i3d_attrs.shader_material_params, i3d_attrs.shader_material_textures, template)
+            new_material.i3d_attributes.shader_name = 'vehicleShader'
+            apply_template_to_material(new_material, template)
 
         match self.assignment_mode:
             case 'SLOT':
@@ -438,20 +441,18 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
         if not (template := get_template_by_name(self.template_name)):
             self.report({'ERROR'}, f"Template '{self.template_name}' not found.")
             return {'CANCELLED'}
-        params = context.material.i3d_attributes.shader_material_params
-        textures = context.material.i3d_attributes.shader_material_textures
 
         if self.single_param:  # Updating single param only, no need for parent inheritance
-            apply_template_to_material(params, textures, template,
+            apply_template_to_material(context.material, template,
                                        allowed_params={self.single_param}, allowed_textures=[])
             info_parts.append(f"Only set param: {self.single_param}")
         else:
             if (parent := getattr(template, 'parentTemplate', None)) is not None:
                 info_parts.append(f"Applied parent template: {parent}")
-            apply_template_to_material(params, textures, template, allowed_params, allowed_textures)
+            apply_template_to_material(context.material, template, allowed_params, allowed_textures)
 
         if context.area:
-            context.area.tag_redraw()
+            context.area.tag_redraw()  # Ensures the set values are updated in the UI
 
         info_str = " | ".join(info_parts)
         msg = f"Set {'brand' if self.is_brand else 'material'} template: {self.template_name}"

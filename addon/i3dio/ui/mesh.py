@@ -228,6 +228,9 @@ class I3D_IO_PT_shape_attributes(Panel):
 @persistent
 def migrate_i3d_property_defaults(dummy) -> None:
     if not bpy.data.filepath:
+        # This is a new, unsaved file. Mark all meshes as 'migrated' to avoid false migration on next file load
+        for mesh in bpy.data.meshes:
+            mesh.i3d_attributes.version = CURRENT_VERSION
         return  # Skip new files
     for mesh in bpy.data.meshes:
         props = mesh.i3d_attributes
