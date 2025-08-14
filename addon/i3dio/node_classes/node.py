@@ -264,7 +264,7 @@ class SceneGraphNode(Node):
             try:
                 self.parent.element.remove(self.element)
             except Exception:
-                pass
+                self.logger.debug("XML detach skipped (element not present under previous parent)")
 
         self.parent = new_parent
         if new_parent:
@@ -279,7 +279,7 @@ class SceneGraphNode(Node):
             if getattr(self.blender_object.i3d_mapping, 'is_mapped'):
                 self.i3d.i3d_mapping.append(self)
         except AttributeError:
-            self.logger.debug("XML detach skipped (element not present under previous parent)")
+            pass
 
 
 class TransformGroupNode(SceneGraphNode):
