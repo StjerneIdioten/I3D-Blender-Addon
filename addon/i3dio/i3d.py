@@ -86,17 +86,24 @@ class I3D:
             node = SkinnedMeshRootNode(self._next_available_id('node'), armature_object, self, parent=parent)
             node.populate_xml_element()
             self.skinned_meshes[armature_object.name] = node
-        elif parent is not None and node.parent is None and not node.is_collapsed:
-            self.logger.debug(
-                f"Armature {armature_object.name!r} was pre-created by a modifier. "
-                f"Now assigning its correct parent: {parent.name!r}."
-            )
-            node.parent = parent
-            parent.add_child(node)
-            parent.element.append(node.element)
+            self.processed_objects[armature_object] = node
+        else:
+            self.processed_objects.setdefault(armature_object, node)
+            if parent is not None and node.parent is None:
+                # Set Python parent only (never append here) final wiring happens in finalize_armature_parenting()
+                node.parent = parent
+                parent.add_child(node)
         return node
 
     # Public Methods ###################################################################################################
+    def to_i3d(self, M: mathutils.Matrix) -> mathutils.Matrix:
+        """Full basis change. Transform the matrix to I3D space."""
+        return self.conversion_matrix @ M @ self.conversion_matrix_inv
+
+    def to_i3d_forward(self, M: mathutils.Matrix) -> mathutils.Matrix:
+        """Forward-only basis change."""
+        return self.conversion_matrix @ M
+
     def add_shape_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(ShapeNode, mesh_object, parent)
@@ -146,11 +153,6 @@ class I3D:
         node = SkinnedMeshBoneNode(self._next_available_id('node'), bone_object, self, parent, root_node)
         node.populate_xml_element()
         self.processed_objects[bone_object] = node
-
-        if parent is not None:
-            parent.add_child(node)
-            parent.element.append(node.element)
-
         return node
 
     def add_armature_from_modifier(self, armature_object: bpy.types.Object) -> SkinnedMeshRootNode:
@@ -165,7 +167,7 @@ class I3D:
         """Processes an armature found during the main scene traversal. The parent is known at this time."""
         self.logger.debug(f"Adding armature from scene: {armature_object.name!r} with parent {parent}")
         armature_node = self._get_or_create_armature_node(armature_object, parent)
-        armature_node.organize_armature_hierarchy(parent)
+        armature_node.finalize_armature_parenting(parent)
         return armature_node
 
     def add_skinned_mesh_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:

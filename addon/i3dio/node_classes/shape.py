@@ -900,7 +900,7 @@ class ShapeNode(SceneGraphNode):
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
-        return self.i3d.conversion_matrix @ self._get_object_matrix() @ self.i3d.conversion_matrix_inv
+        return self.i3d.to_i3d(self._get_object_matrix())
 
     def is_instance(self) -> bool:
         """Return True if this shape node is an instance (not the source/original) of a processed mesh."""

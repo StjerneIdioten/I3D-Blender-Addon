@@ -221,7 +221,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
     # Special handling for collapsed armatures: Unlike Maya, Blender treats armatures differently, so when an armature
     # is collapsed, its children should be reassigned to the armature's parent (or scene root) to maintain hierarchy.
     if isinstance(parent, SkinnedMeshRootNode) and parent.is_collapsed:
-        logger.debug(f"[{obj.name}] is under a collapsed armature. Moving it to the armature's parent.")
+        logger.debug(f"[{obj.name}] is under a collapsed armature. Moving it to the armature's parent or root")
         _parent = parent.parent
 
     type_supported = obj.type in i3d.settings['object_types_to_export']
@@ -342,8 +342,9 @@ def _process_deferred_constraints(i3d: I3D):
         i3d.logger.debug(f"Processing deferred constraint for: {bone_node}, Target: {target_obj}")
         if target_node := i3d.processed_objects.get(target_obj):
             bone_node.reparent(target_node)
+            bone_node.finalize_transform()
         else:
-            i3d.logger.warning(f"Target '{target_obj}' is not processed or not in export list. Skipping.")
+            i3d.logger.warning(f"Target {target_obj!r} is not processed or not in export list. Skipping.")
 
 
 def _binarize_i3d(filepath: str, operator, logger: logging.Logger):

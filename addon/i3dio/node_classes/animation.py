@@ -2,6 +2,7 @@ import logging
 import math
 import bpy
 from bpy_extras import anim_utils
+import mathutils
 import contextlib
 
 from .node import SceneGraphNode
@@ -84,21 +85,15 @@ class Keyframes(BaseAnimationExport):
 
         self.i3d.depsgraph.scene.frame_set(frame)
 
-        local_matrix = self.node._get_object_matrix()
         if self.is_bone:
-            if pose_bone := self.node.root_node.blender_object.pose.bones.get(self.node.blender_object.name):
-                local_matrix = pose_bone.matrix.copy()
-            if isinstance(self.node.parent, SkinnedMeshBoneNode):  # Bone is parented to another bone
-                if parent := self.node.root_node.blender_object.pose.bones.get(self.node.parent.blender_object.name):
-                    local_matrix = parent.matrix.inverted_safe() @ local_matrix
-                conv_matrix = local_matrix
-            else:
-                conv_matrix = self.i3d.conversion_matrix @ local_matrix
+            pose_bone = self.node.root_node.blender_object.pose.bones.get(self.node.blender_object.name)
+            local_pose = pose_bone.matrix if pose_bone else mathutils.Matrix.Identity(4)
+            conv_matrix = self._bone_anim_matrix(local_pose)
         else:
-            conv_matrix = self.i3d.conversion_matrix @ local_matrix @ self.i3d.conversion_matrix_inv
+            conv_matrix = self.i3d.to_i3d(self.node.blender_object.matrix_local)
 
-        translation, rotation, scale = conv_matrix.decompose()
-        rotation = rotation.to_euler('XYZ')
+        translation, quaternion, scale = conv_matrix.decompose()
+        rotation = quaternion.to_euler('XYZ')
         keyframe_element = xml_i3d.Element("Keyframe", {"time": f"{time_ms:.6g}"})
         if self.has_translation:
             keyframe_element.set("translation", "{0:.6g} {1:.6g} {2:.6g}".format(*translation))
@@ -108,6 +103,28 @@ class Keyframes(BaseAnimationExport):
             keyframe_element.set("scale", "{0:.6g} {1:.6g} {2:.6g}".format(*scale))
 
         return keyframe_element
+
+    def _bone_anim_matrix(self, pose_local: mathutils.Matrix) -> mathutils.Matrix:
+        """Mirrors the rest bone transformation logic in SkinnedMeshBoneNode with some adjustments to fit animation"""
+        parent = self.node.parent
+        armature = self.node.root_node.blender_object
+
+        # Bone parented to another bone, no conversion needed
+        if isinstance(parent, SkinnedMeshBoneNode):
+            parent_pose = armature.pose.bones.get(parent.blender_object.name)
+            return (parent_pose.matrix.inverted_safe() @ pose_local) if parent_pose else pose_local
+
+        bone_in_arm_i3d = self.i3d.to_i3d_forward(pose_local)
+        arm_world_i3d = self.i3d.to_i3d(armature.matrix_world)
+
+        # top-level under non-collapsed armature: relative to armature node (already i3d-local)
+        if parent is self.node.root_node and not self.node.root_node.is_collapsed:
+            return bone_in_arm_i3d
+
+        # Collapsed or CHILD_OF/external parent
+        parent_obj = getattr(parent, 'blender_object', None) if parent else None
+        parent_world_i3d = self.i3d.to_i3d(parent_obj.matrix_world) if parent_obj else mathutils.Matrix.Identity(4)
+        return parent_world_i3d.inverted_safe() @ arm_world_i3d @ bone_in_arm_i3d
 
 
 class Clip(BaseAnimationExport):
