@@ -219,6 +219,9 @@ class Animation(BaseAnimationExport):
 
     def _export(self):
         for action, node_slot_pairs in self.i3d.anim_links.items():
+            if not len(action.layers):
+                self.logger.warning(f"Action {action.name!r} has no layers, skipping")
+                continue
             anim_set = AnimationSet(self.i3d, self.fps, action, node_slot_pairs)
             self.animation_sets_element.append(anim_set.xml_element)
         self.animation_sets_element.set("count", str(len(self.i3d.anim_links)))
