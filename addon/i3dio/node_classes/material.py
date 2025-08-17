@@ -76,7 +76,7 @@ class Material(Node):
             return
         self.logger.debug("Uses nodes and has Principled BSDF node")
 
-        self.skip_diffuse = False
+        self.skip_diffuse = (self.i3d_attrs.shader_name == "vehicleShader")
         self.has_emission_texture = False
         self.has_glossmap = False
 
@@ -88,9 +88,21 @@ class Material(Node):
         self._process_material_input('Normal', 'Normalmap', bsdf)
         self._glossmap_from_nodes(bsdf)
         if not self.has_glossmap:
-            self._write_color([1.0 - bsdf.inputs['Roughness'].default_value,
-                               bsdf.inputs['Specular IOR Level'].default_value,
-                               bsdf.inputs['Metallic'].default_value], 'specularColor')
+            if self.i3d_attrs.shader_name != "vehicleShader":
+                self._write_color([1.0 - bsdf.inputs['Roughness'].default_value,
+                                   bsdf.inputs['Specular IOR Level'].default_value,
+                                   bsdf.inputs['Metallic'].default_value], 'specularColor')
+
+        if self.i3d_attrs.shader_name == "vehicleShader":
+            if "Texture" not in self.xml_elements:
+                self.logger.info("No Texture found, using default white diffuse texture")
+                self._write_texture_to_xml("$data/shared/white_diffuse.dds", "Texture")
+            if "Glossmap" not in self.xml_elements:
+                self.logger.info("No Glossmap found, using default vmask texture")
+                self._write_texture_to_xml("$data/shared/default_vmask.dds", "Glossmap")
+            if "Normalmap" not in self.xml_elements:
+                self.logger.info("No Normalmap found, using default normal map texture")
+                self._write_texture_to_xml("$data/shared/default_normal.dds", "Normalmap")
 
     def _process_material_input(self, socket_name: str, xml_key: str, node, use_emission=False) -> None:
         """Processes a material property and exports texture or color data."""
