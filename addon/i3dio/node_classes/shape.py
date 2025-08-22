@@ -516,10 +516,16 @@ class IndexedTriangleSet(Node):
 
         self.material_ids = [self.i3d.add_material(material_object_map[name]) for name in master_material_map.keys()]
         self.tangent = self.tangent or any(self.i3d.materials[mat_id].is_normalmapped() for mat_id in self.material_ids)
-        if self.i3d.get_setting("export_color_by_shader") and self.final_has_colors:
-            self.final_has_colors = any(
-                self.i3d.materials[mat_id].requires_color_attribute() for mat_id in self.material_ids
-            )
+
+        requires_color = any(self.i3d.materials[mat_id].requires_color_attribute() for mat_id in self.material_ids)
+        if self.i3d.get_setting("export_color_by_shader"):
+            # Only export colors if the mesh has colors and at least one material requires it
+            if requires_color and not self.final_has_colors:
+                self.logger.warning(
+                    f"Materials on {self.evaluated_mesh.source_object.name!r} require vertex colors, "
+                    f"but the mesh has none. Skipping color export."
+                )
+            self.final_has_colors = self.final_has_colors and requires_color
 
         # Process material subsets to create contiguous buffers
         self.logger.debug("Processing subsets one by one to create contiguous vertex buffer...")
