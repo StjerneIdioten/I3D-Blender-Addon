@@ -516,7 +516,7 @@ class IndexedTriangleSet(Node):
 
         self.material_ids = [self.i3d.add_material(material_object_map[name]) for name in master_material_map.keys()]
         self.tangent = self.tangent or any(self.i3d.materials[mat_id].is_normalmapped() for mat_id in self.material_ids)
-        if self.i3d.get_setting("export_color_by_shader"):
+        if self.i3d.get_setting("export_color_by_shader") and self.final_has_colors:
             self.final_has_colors = any(
                 self.i3d.materials[mat_id].requires_color_attribute() for mat_id in self.material_ids
             )
