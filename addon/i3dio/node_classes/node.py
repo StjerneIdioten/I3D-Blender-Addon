@@ -162,13 +162,15 @@ class SceneGraphNode(Node):
         if self.parent is None:
             self.logger.debug("no parent in exporter: using world matrix")
             return obj.matrix_world.copy()
+
         export_parent_obj = self.parent.blender_object
-        if obj.parent is export_parent_obj:
+        if isinstance(export_parent_obj, bpy.types.Object) and obj.parent is export_parent_obj:
             self.logger.debug(f"Blender parent matches exporter parent ({export_parent_obj.name}): using local matrix")
             return obj.matrix_local.copy()
-        if export_parent_obj is None:
+
+        if export_parent_obj is None or not isinstance(export_parent_obj, bpy.types.Object):
             self.logger.debug(
-                "exporter parent exists, but exporter_parent_obj is None. "
+                "exporter parent exists, but exporter_parent_obj is None or not an Object."
                 "Defaulting to world-space transform. Possible broken hierarchy."
             )
             parent_world = mathutils.Matrix.Identity(4)
