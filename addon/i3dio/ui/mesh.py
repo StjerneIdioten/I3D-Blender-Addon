@@ -3,7 +3,6 @@ from bpy.types import (
     Operator,
     Panel
 )
-from bpy.app.handlers import persistent
 
 from bpy.props import (
     StringProperty,
@@ -23,18 +22,11 @@ def register(cls):
     return cls
 
 
-# Versioning for the i3d attributes
-CURRENT_VERSION = 2
-
-
 @register
 class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
-    version: IntProperty(default=0)
     i3d_map = {
-        'casts_shadows': {'name': 'castsShadows', 'default': False, 'blender_default': True,
-                          'prev_default': False},
-        'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': True,
-                            'prev_default': False},
+        'casts_shadows': {'name': 'castsShadows', 'default': False, 'blender_default': True},
+        'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': True},
         'non_renderable': {'name': 'nonRenderable', 'default': False},
         'distance_blending': {'name': 'distanceBlending', 'default': True},
         'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
@@ -225,33 +217,13 @@ class I3D_IO_PT_shape_attributes(Panel):
             panel.prop(mesh.i3d_attributes, 'bounding_volume_object')
 
 
-@persistent
-def migrate_i3d_property_defaults(dummy) -> None:
-    if not bpy.data.filepath:
-        # This is a new, unsaved file. Mark all meshes as 'migrated' to avoid false migration on next file load
-        for mesh in bpy.data.meshes:
-            mesh.i3d_attributes.version = CURRENT_VERSION
-        return  # Skip new files
-    for mesh in bpy.data.meshes:
-        props = mesh.i3d_attributes
-        if props.version >= CURRENT_VERSION:
-            continue  # Skip already migrated meshes
-        for prop_name, defaults in I3DNodeShapeAttributes.i3d_map.items():
-            if "prev_default" in defaults and not props.is_property_set(prop_name):
-                setattr(props, prop_name, defaults['prev_default'])
-        # Update version only if migration was performed
-        props.version = CURRENT_VERSION
-
-
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
-    bpy.app.handlers.load_post.append(migrate_i3d_property_defaults)
 
 
 def unregister():
-    bpy.app.handlers.load_post.remove(migrate_i3d_property_defaults)
     del bpy.types.Mesh.i3d_attributes
     for cls in classes:
         bpy.utils.unregister_class(cls)
