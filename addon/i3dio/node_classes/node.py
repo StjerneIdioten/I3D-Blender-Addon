@@ -87,9 +87,10 @@ class SceneGraphNode(Node):
                  i3d: I3D,
                  parent: SceneGraphNode | None = None,
                  ):
-        self.children = []
+        self.children: list[SceneGraphNode] = []
         self.blender_object = blender_object
         self.parent = parent
+        self.defer_transform: bool = False  # bones may change parent which makes the first calculated transform invalid
         self.xml_elements: Dict[str, Union[xml_i3d.XML_Element, None]] = {'Node': None}
 
         self._name = self.blender_object.name
@@ -166,7 +167,7 @@ class SceneGraphNode(Node):
             self.logger.debug(f"Blender parent matches exporter parent ({export_parent_obj.name}): using local matrix")
             return obj.matrix_local.copy()
         if export_parent_obj is None:
-            self.logger.warning(
+            self.logger.debug(
                 "exporter parent exists, but exporter_parent_obj is None. "
                 "Defaulting to world-space transform. Possible broken hierarchy."
             )
@@ -233,20 +234,45 @@ class SceneGraphNode(Node):
     def populate_xml_element(self):
         self._write_properties()
         self._write_user_attributes()
-        self._add_transform_to_xml_element(self._transform_for_conversion)
+        if not self.defer_transform:
+            self._add_transform_to_xml_element(self._transform_for_conversion)
 
-    def add_child(self, node: SceneGraphNode):
-        self.children.append(node)
+    def finalize_transform(self):
+        if self.defer_transform:
+            self._add_transform_to_xml_element(self._transform_for_conversion)
+            self.defer_transform = False
 
-    def remove_child(self, node: SceneGraphNode):
+    def add_child(self, child_node: SceneGraphNode):
+        if child_node in self.children:
+            return
+        self.children.append(child_node)
+
+    def remove_child(self, child_node: SceneGraphNode):
         """Removes a child node from the children list."""
         try:
-            self.children.remove(node)
+            self.children.remove(child_node)
         except ValueError:
             self.logger.warning(
-                f"Attempted to remove child '{node.name}' from parent '{self.name}', "
+                f"Attempted to remove child {child_node.name!r} from parent {self.name!r}, "
                 "but it was not found in the children list."
             )
+
+    def reparent(self, new_parent: SceneGraphNode | None) -> None:
+        # Detach from current Python/XML parent if any
+        if self.parent is not None:
+            self.parent.remove_child(self)
+            try:
+                self.parent.element.remove(self.element)
+            except Exception:
+                self.logger.debug("XML detach skipped (element not present under previous parent)")
+
+        self.parent = new_parent
+        if new_parent:
+            new_parent.add_child(self)
+            new_parent.element.append(self.element)
+        else:
+            self.i3d.scene_root_nodes.append(self)
+            self.i3d.xml_elements['Scene'].append(self.element)
 
     def add_i3d_mapping_to_xml(self):
         try:
@@ -266,9 +292,7 @@ class TransformGroupNode(SceneGraphNode):
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
         try:
-            conversion_matrix = (
-                self.i3d.conversion_matrix @ self._get_object_matrix() @ self.i3d.conversion_matrix_inv
-            )
+            conversion_matrix = self.i3d.to_i3d(self._get_object_matrix())
         except AttributeError:
             self.logger.info("is a Collection and it will be exported as a transformgroup with default transform")
             conversion_matrix = None
@@ -308,7 +332,7 @@ class LightNode(SceneGraphNode):
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
-        return self.i3d.conversion_matrix @ self._get_object_matrix()
+        return self.i3d.to_i3d_forward(self._get_object_matrix())
 
     def populate_xml_element(self):
         super().populate_xml_element()
@@ -322,7 +346,7 @@ class CameraNode(SceneGraphNode):
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
-        return self.i3d.conversion_matrix @ self._get_object_matrix()
+        return self.i3d.to_i3d_forward(self._get_object_matrix())
 
     def populate_xml_element(self):
         camera = self.blender_object.data

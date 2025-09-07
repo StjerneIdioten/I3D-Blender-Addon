@@ -36,11 +36,15 @@ class SkinnedMeshBoneNode(TransformGroupNode):
 
         super().__init__(id_=id_, empty_object=bone_object, i3d=i3d, parent=self.parent)
 
-    def _matrix_to_i3d_space(self, matrix: mathutils.Matrix, skip_inversion: bool = False) -> mathutils.Matrix:
-        if skip_inversion:
-            # Bones are already in their armature's local space, so no need to apply the inverse transformation.
-            return self.i3d.conversion_matrix @ matrix
-        return self.i3d.conversion_matrix @ matrix @ self.i3d.conversion_matrix.inverted()
+        # Defer only when the final parent context is unknown/unstable:
+        #   - CHILD_OF target not processed yet, OR
+        #   - top-level bone of a collapsed armature (not child-of-bone, not resolved CHILD_OF)
+        is_child_bone = isinstance(self.parent, SkinnedMeshBoneNode)
+        has_resolved_childof = (self.is_child_of and self.deferred_target is None)
+        self.defer_transform = (
+            (self.deferred_target is not None)
+            or (self.root_node.is_collapsed and not is_child_bone and not has_resolved_childof)
+        )
 
     @property
     def _transform_for_conversion(self) -> mathutils.Matrix:
@@ -51,28 +55,32 @@ class SkinnedMeshBoneNode(TransformGroupNode):
         # Case 1: Bone is parented to another bone.
         # This is the simplest case. The bone's matrix_local is relative to its parent bone.
         if isinstance(self.parent, SkinnedMeshBoneNode):
-            # The transform is the bone's local matrix relative to its parent's local matrix.
-            return self.blender_object.parent.matrix_local.inverted() @ self.blender_object.matrix_local
+            # Local relative to parent bone (already in i3d basis)
+            return self.parent.blender_object.matrix_local.inverted_safe() @ self.blender_object.matrix_local
 
         # For all other cases, start with the bone's transform relative to the armature origin.
         # NOTE: skip_inversion=True because a bone's matrix is already in the armature's space.
-        bone_in_aramature_space = self._matrix_to_i3d_space(self.blender_object.matrix_local, skip_inversion=True)
+        bone_in_armature_space = self.i3d.to_i3d_forward(self.blender_object.matrix_local)
 
         # Case 2: The bone has a CHILD_OF constraint to an external object.
         # The transform needs to be calculated relative to that external object.
         if self.is_child_of or self.deferred_target is not None:
-            return self._get_child_of_transform(bone_in_aramature_space)
+            return self._get_child_of_transform(bone_in_armature_space)
 
         # Case 3: The armature is "collapsed" (not exported as a node in the scene).
         # The root bones must inherit the armature's world transform.
         if self.root_node.is_collapsed:
-            armature_transform = self._matrix_to_i3d_space(self.root_node.blender_object.matrix_world)
-            # Apply the armature's transform to the bone's local transform.
-            return armature_transform @ bone_in_aramature_space
+            if getattr(self.parent, "blender_object", None):
+                parent_world = self.i3d.to_i3d(self.parent.blender_object.matrix_world)
+            else:
+                parent_world = mathutils.Matrix.Identity(4)
+            armature_world = self.i3d.to_i3d(self.root_node.blender_object.matrix_world)
+            # Apply bones new inverted parent transform into armature space and then into bone space.
+            return parent_world.inverted_safe() @ armature_world @ bone_in_armature_space
 
         # Case 4 (Default): The bone is a root bone of a non-collapsed armature.
         # Its transform is already correct relative to the armature node.
-        return bone_in_aramature_space
+        return bone_in_armature_space
 
     def _get_child_of_transform(self, bone_in_armature_space: mathutils.Matrix) -> mathutils.Matrix:
         """Calculates the bone's transform when it's constrained to an external object."""
@@ -80,14 +88,14 @@ class SkinnedMeshBoneNode(TransformGroupNode):
         target_object = self.deferred_target or self.parent.blender_object
 
         # Get the world matrices of the target and the armature, converted to I3D space.
-        target_world_matrix = self._matrix_to_i3d_space(target_object.matrix_world)
-        armature_world_matrix = self._matrix_to_i3d_space(self.root_node.blender_object.matrix_world)
+        target_world_matrix = self.i3d.to_i3d(target_object.matrix_world)
+        armature_world_matrix = self.i3d.to_i3d(self.root_node.blender_object.matrix_world)
 
         # To get the bone's final local transform relative to its new target parent, do:
         # (TargetWorld)^-1 * ArmatureWorld * BoneLocal
         # This effectively moves the bone from armature space to world space,
         # and then from world space into the target's local space.
-        return target_world_matrix.inverted() @ armature_world_matrix @ bone_in_armature_space
+        return target_world_matrix.inverted_safe() @ armature_world_matrix @ bone_in_armature_space
 
     def reparent(self, new_parent: SceneGraphNode | None) -> None:
         """Reparents bone node to a new parent in the scene graph or moves it to the scene root."""
@@ -96,20 +104,7 @@ class SkinnedMeshBoneNode(TransformGroupNode):
             f"'{self.parent.name if self.parent else 'Scene Root'}' to "
             f"'{new_parent.name if new_parent else 'Scene Root'}'"
         )
-        # Detach from the current parent if it exists
-        if self.parent is not None:
-            self.parent.remove_child(self)
-            self.parent.element.remove(self.element)
-        else:
-            self.logger.debug(f"Bone '{self.blender_object.name}' is already at the scene root, no parent to remove.")
-        # Assign new parent or move to scene root
-        if new_parent:
-            new_parent.add_child(self)
-            new_parent.element.append(self.element)
-        else:
-            self.i3d.scene_root_nodes.append(self)
-            self.i3d.xml_elements['Scene'].append(self.element)
-        self.parent = new_parent
+        super().reparent(new_parent)
 
 
 class SkinnedMeshRootNode(TransformGroupNode):
@@ -119,14 +114,20 @@ class SkinnedMeshRootNode(TransformGroupNode):
         self.armature_object = armature_object
         self.is_collapsed = armature_object.i3d_attributes.collapse_armature
 
-        # The armature node itself is only parented if it's NOT collapsed.
-        # The `parent` argument passed here is its potential parent in the scene graph.
-        actual_parent = None if self.is_collapsed else parent
-        super().__init__(id_=id_, empty_object=armature_object, i3d=i3d, parent=actual_parent)
+        # Collapsed = do not append armature XML (pass None to base so no SubElement is created)
+        # Still keep the Python-side parent so children under the armature can be redirected properly.
+        xml_parent = None if self.is_collapsed else parent
+        super().__init__(id_=id_, empty_object=armature_object, i3d=i3d, parent=xml_parent)
+        self.defer_transform = True
+
+        # Keep Python-side parent even when collapsed (no XML append happened above).
+        if self.is_collapsed and parent is not None:
+            self.parent = parent
+            parent.add_child(self)
 
         # Build the bone hierarchy from the armature's bones.
         # The parent for all root bones is initially set to the armature node itself.
-        # The reparenting logic in organize_armature_hierarchy will fix this later.
+        # The reparenting logic in finalize_armature_parenting will fix this later.
         for bone in armature_object.data.bones:
             if bone.parent is None:
                 self._add_bone(bone, self)  # Keep parent as the armature for now (it will be adjusted later)
@@ -141,7 +142,7 @@ class SkinnedMeshRootNode(TransformGroupNode):
         for child_bone in bone_object.children:
             self._add_bone(child_bone, bone_node)
 
-    def organize_armature_hierarchy(self, final_parent: SceneGraphNode | None):
+    def finalize_armature_parenting(self, final_parent: SceneGraphNode | None):
         """
         Finalizes the parenting for the armature and its bones in the scene graph.
         This is called when the armature is processed by the main scene traversal.
@@ -150,30 +151,18 @@ class SkinnedMeshRootNode(TransformGroupNode):
                           f"'{final_parent.name if final_parent else 'Scene Root'}'.")
 
         if self.is_collapsed:
-            # The armature itself is NOT added to the scene.
-            # Its top-level bones are re-parented to the armature's final parent.
+            # No armature element in XML, move each top-level bone under final parent and write transforms once.
             for bone_node in self.bones:
-                if bone_node.parent == self:  # It's a top-level bone
-                    # Skip bones parented through CHILD_OF constraints, they will be handled separately.
-                    if not bone_node.is_child_of:
-                        bone_node.reparent(final_parent)
+                # Skip bones parented through CHILD_OF constraints, they will be handled separately.
+                if bone_node.parent == self and not bone_node.is_child_of:
+                    bone_node.reparent(final_parent)
+                    bone_node.finalize_transform()
         else:
-            # The armature IS added to the scene. Re-parent the armature itself.
+            # Armature node included in the export: attach it directly to the final parent
             self.reparent(final_parent)
-
-    def reparent(self, new_parent: SceneGraphNode | None):
-        """A new helper method specifically for the armature node itself."""
-        # This is a simplified version of the bone's reparent.
-        if self.parent:  # This should always be None, but as a safeguard.
-            self.parent.remove_child(self)
-            self.parent.element.remove(self.element)
-
-        self.parent = new_parent
-        if new_parent:
-            new_parent.add_child(self)
-            new_parent.element.append(self.element)
-        else:  # Add to scene root
-            self.i3d.set_as_root_node(self)
+            self.finalize_transform()
+            for bone_node in self.bones:
+                bone_node.finalize_transform()
 
     def add_i3d_mapping_to_xml(self):
         # Skip exporting i3d mapping if 'collapse_armature' is enabled, because the armature is not exported
