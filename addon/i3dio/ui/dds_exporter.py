@@ -1,3 +1,4 @@
+from pathlib import Path
 import logging
 import bpy
 from bpy.types import Operator
@@ -9,7 +10,7 @@ from ..dds_writer import write_dds_dx10
 
 
 def export_motion_path_array(obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph,
-                             logger=debugging.addon_logger) -> bool:
+                             logger=debugging.addon_logger) -> tuple[str, str]:
     """Exports DDS for an object with motion path array enabled.
     - logger: optional logging.Logger for info/error output
     Returns True on success, False otherwise.
@@ -28,6 +29,8 @@ def export_motion_path_array(obj: bpy.types.Object, depsgraph: bpy.types.Depsgra
         filepath += '.dds'
     try:
         filepath = bpy.path.abspath(filepath)
+        # ensure directory exists
+        Path(filepath).parent.mkdir(parents=True, exist_ok=True)
         write_dds_dx10(filepath, gathered_array)
         msg = f"[{name}] Exported successfully to {filepath}"
         logger.info(msg)

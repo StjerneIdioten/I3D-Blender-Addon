@@ -6,6 +6,7 @@ from bpy_extras.io_utils import axis_conversion
 from .utility import sort_blender_objects_by_outliner_ordering
 from . import debugging
 
+# Convert matrix from Blender to Giants coordinate system
 CONVERSION_MATRIX: mathutils.Matrix = axis_conversion(to_forward='-Z', to_up='Y').to_4x4()
 CONVERSION_MATRIX_INVERSE = CONVERSION_MATRIX.inverted()
 
