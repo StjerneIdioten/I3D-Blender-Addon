@@ -1,4 +1,5 @@
 import logging
+from math import tau
 import numpy as np
 import bpy
 import mathutils
@@ -37,6 +38,7 @@ class MotionPathArray:
                                                   {'object_name': obj.name})
 
         self.is_cyclic = self.props.is_cyclic
+        self.hide_first_and_last = (self.props.hide_first_and_last and self.props.include_position)
         self.prev_quat = None  # For smooth quaternion transitions
         self.array = None
 
@@ -76,7 +78,7 @@ class MotionPathArray:
             return None
         self.logger.info(f"Motion path array shape: {arr.shape}")
         self.array = arr
-        return self._pack_array()
+        return np.nan_to_num(self._pack_array()).astype(np.float16, copy=False)
 
     def _gather_flat(self, pc: bpy.types.PointCloud = None) -> np.ndarray:
         """
@@ -102,12 +104,12 @@ class MotionPathArray:
             return None
 
         self.logger.debug(f"Gathered {item_count} items for flat array.")
-        arr = np.zeros((item_count, 12), dtype=np.float16)
+        arr = np.zeros((item_count, 12), dtype=np.float32)
         for i, matrix in enumerate(item_matrices):
             position, orient, scale = self._get_item_data(matrix)
-            arr[i] = np.array(position + orient + scale, dtype=np.float16)
+            arr[i] = np.array(position + orient + scale, dtype=np.float32)
 
-        if self.props.hide_first_and_last:
+        if self.hide_first_and_last:
             arr[0, 3] = 0.0  # Hide first item's position.w
             if item_count > 1:
                 arr[-1, 3] = 0.0  # Hide last item's position.w
@@ -147,7 +149,7 @@ class MotionPathArray:
             self.logger.warning("No items found in Geometry Nodes data!")
             return None
 
-        arr = np.zeros((z_count, y_count, max_x, 12), dtype=np.float16)
+        arr = np.zeros((z_count, y_count, max_x, 12), dtype=np.float32)
         inst_xform_attr = pc.attributes["instance_transform"]
         for zi in range(z_count):
             for yj in range(y_count):
@@ -164,7 +166,7 @@ class MotionPathArray:
                     arr[zi, yj, xi] = position + orient + scale
 
                 # If hiding first and last items, set their position.w to 0
-                if self.props.hide_first_and_last and num_items > 0:
+                if self.hide_first_and_last and num_items > 0:
                     arr[zi, yj, 0, 3] = 0.0
                     if num_items > 1:
                         arr[zi, yj, num_items - 1, 3] = 0.0
@@ -174,18 +176,23 @@ class MotionPathArray:
                     last_item_data = arr[zi, yj, num_items - 1]
                     arr[zi, yj, num_items:max_x] = last_item_data
 
-            # Pad missing Y rows with the data from the last valid group in this pose
-            last_filled_group = -1
-            for yj in range(y_count):
-                if np.any(arr[zi, yj]):  # Check if this group has any non-zero data
-                    last_filled_group = yj
+            # If there are valid groups, fill any empty Y rows (leading, middle, trailing)
+            row_nonempty = np.array([np.any(arr[zi, y]) for y in range(y_count)])
+            if row_nonempty.any():
+                first = int(np.argmax(row_nonempty))  # first non-empty row
+                first_data = arr[zi, first].copy()
 
-            if last_filled_group != -1:
-                last_group_data = arr[zi, last_filled_group, :, :]
-                # Pad all subsequent empty groups
-                for yj in range(last_filled_group + 1, y_count):
-                    if not np.any(arr[zi, yj]):
-                        arr[zi, yj, :, :] = last_group_data
+                # Forward-propagate last seen data to fill middle/trailing holes
+                last_data = first_data
+                for y in range(first + 1, y_count):
+                    if not row_nonempty[y]:
+                        arr[zi, y] = last_data
+                    else:
+                        last_data = arr[zi, y]
+
+                # Prefill leading empties with the first non-empty row
+                for y in range(0, first):
+                    arr[zi, y] = first_data
 
         return arr
 
@@ -211,7 +218,7 @@ class MotionPathArray:
                 max_x = max(max_x, len(x_children))
 
         # Collect and pad data
-        arr = np.zeros((z_count, max_y, max_x, 12), dtype=np.float16)
+        arr = np.zeros((z_count, max_y, max_x, 12), dtype=np.float32)
         for zi, parent in enumerate(parents):
             # y_children are the 'groups' (Y axis)
             y_children = sort_blender_objects_by_outliner_ordering(parent.children)
@@ -225,7 +232,7 @@ class MotionPathArray:
                     arr[zi, yi, xi] = position + orient + scale
 
                 num_items = len(x_children)
-                if self.props.hide_first_and_last and num_items > 0:
+                if self.hide_first_and_last and num_items > 0:
                     arr[zi, yi, 0, 3] = 0.0  # Hide first item's position.w
                     if num_items > 1:
                         arr[zi, yi, num_items - 1, 3] = 0.0  # Hide last item's position.w
@@ -255,7 +262,6 @@ class MotionPathArray:
         Output:
             np.ndarray (num_poses * num_channels, Y, X, 4) for hierarchical arrays,
             or (num_channels, 1, N, 4) for flat arrays.
-            All values are float16, ready for R16G16B16A16_FLOAT DDS export.
 
         Note:
             Each "layer" in the DDS texture corresponds to a unique (pose, channel) combination,
@@ -276,8 +282,7 @@ class MotionPathArray:
         num_poses = self.array.shape[0]
         for pose_idx in range(num_poses):
             for start, end in channel_indices:
-                # NOTE: I am not sure why we need to reverse Y here, but giants do the same in their exporters
-                # and since there is no documentation on this, I guess its best to match their behavior
+                # Reverse Y so row 0 is at the top (matches Giants way of doing it in their tools)
                 reversed_slice = self.array[pose_idx, ::-1, :, start:end]
                 channel_slices.append(reversed_slice)
 
@@ -285,25 +290,34 @@ class MotionPathArray:
 
     def _get_item_data(self, matrix: mathutils.Matrix) -> tuple[list[float], list[float], list[float]]:
         """
-        Extracts position, quaternion (DDS order), and scale from the matrix.
-        For cyclic paths (normalized to [0, 2π) range), which is usually for "trackArrays" since they are continuous.
+        Extract position, orientation (quaternion in DDS XYZW order), and scale.
+
+        Cyclic (track) mode:
+        - Treat rotation as a continuous twist about X.
+        - Unwrap X by modulo into [0, 2π); keep Y/Z as authored in [-π, π].
+        - Build the quaternion from (x_unwrapped, y, z). DO NOT use make_compatible here
+            (avoid quaternion shortest-arc choices that can fight X continuity).
+
+        Non-cyclic mode:
+        - Use the full orientation from the matrix.
+        - Apply make_compatible with the previous quaternion for per-row continuity.
+
+        Notes:
+        - position.w is used by some shaders as a visibility mask.
+        - scale.w is unused but kept for consistent 4-component packing.
         """
-        matrix = CONVERSION_MATRIX @ matrix @ CONVERSION_MATRIX_INVERSE
+        conv_matrix = CONVERSION_MATRIX @ matrix @ CONVERSION_MATRIX_INVERSE
+        loc, rot_q, scale = conv_matrix.decompose()
+
         if self.is_cyclic:
-            # For cyclic curves/splines, matrix.to_euler() & to_quaternion() wraps angles to [-π, π] after muliplying,
-            # which causes sudden flips if the rotation crosses ±180 degrees.
-            # To ensure smooth, continuous rotation (0 to 2π) for export,
-            # normalize the X Euler angle to the [0, 2π) range before converting to quaternion.
-            euler = matrix.to_euler('XYZ')
-            x_unwrapped = euler.x % (2 * np.pi)
+            euler = rot_q.to_euler('XYZ')  # euler angles in [-π, π]
+            x_unwrapped = euler.x % tau  # Normalize to [0, 2π)
             quat = mathutils.Euler((x_unwrapped, euler.y, euler.z), 'XYZ').to_quaternion()
         else:
-            quat = matrix.to_quaternion()
+            quat = rot_q.normalized()
             if self.prev_quat is not None:
-                # Smooth quaternion transition from previous item
                 quat.make_compatible(self.prev_quat)
             self.prev_quat = quat
-        orient = [quat.x, quat.y, quat.z, quat.w]  # Giants/DDS order
-        position = list(matrix.to_translation()) + [1.0]  # Last value (.w) used for visibility in shader
-        scale = list(matrix.to_scale()) + [1.0]  # Last value (.w) is unused, but kept for consistency
-        return position, orient, scale
+
+        orient = [quat.x, quat.y, quat.z, quat.w]  # DDS order
+        return [*loc, 1.0], orient, [*scale, 1.0]
