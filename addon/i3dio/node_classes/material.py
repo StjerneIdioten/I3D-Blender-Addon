@@ -141,10 +141,7 @@ class Material(Node):
             for texture in self.i3d_attrs.shader_material_textures:
                 self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")
                 if '' != texture.source != texture.default_source:
-                    texture_dict = {'name': texture.name}
-                    texture_id = self.i3d.add_file_image(texture.source)
-                    texture_dict['fileId'] = str(texture_id)
-
+                    texture_dict = {'name': texture.name, 'fileId': str(self.i3d.add_file_image(texture.source))}
                     xml_i3d.SubElement(self.element, 'Custommap', texture_dict)
 
     def _write_texture_to_xml(self, texture_path: str, xml_key: str, bump_depth: float = None) -> None:
