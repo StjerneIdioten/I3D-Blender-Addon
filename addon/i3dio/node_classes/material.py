@@ -40,7 +40,7 @@ class Material(Node):
 
     def get_slot_name(self) -> str | None:
         """Returns the material slot name if it's set, otherwise returns the material name."""
-        if self.blender_material.i3d_attributes.use_material_slot_name:
+        if self.i3d_attrs.use_material_slot_name:
             return self.i3d_attrs.material_slot_name or self.blender_material.name
         return None
 
@@ -112,24 +112,23 @@ class Material(Node):
             pass
 
     def _export_shader_settings(self) -> None:
-        shader_settings = self.blender_material.i3d_attributes
-        if shader_settings.shader_name != SHADER_DEFAULT:
-            shaders = get_shader_dict(shader_settings.use_custom_shaders)
-            shader_path = str(shaders[shader_settings.shader_name].path)
+        if self.i3d_attrs.shader_name != SHADER_DEFAULT:
+            shaders = get_shader_dict(self.i3d_attrs.use_custom_shaders)
+            shader_path = str(shaders[self.i3d_attrs.shader_name].path)
             shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
-            self.logger.debug(f"Shader: '{shader_settings.shader_name}' with ID: {shader_file_id}")
+            self.logger.debug(f"Shader: '{self.i3d_attrs.shader_name}' with ID: {shader_file_id}")
 
-            if shader_settings.shader_name == "mirrorShader":
+            if self.i3d_attrs.shader_name == "mirrorShader":
                 params = {'type': 'planar', 'refractiveIndex': '10', 'bumpScale': '0.1'}
                 xml_i3d.SubElement(self.element, 'Reflectionmap', params)
 
-            if shader_settings.shader_variation_name != SHADER_DEFAULT:
-                self._write_attribute('customShaderVariation', shader_settings.shader_variation_name)
-            for pname in shader_settings.shader_material_params.keys():
+            if self.i3d_attrs.shader_variation_name != SHADER_DEFAULT:
+                self._write_attribute('customShaderVariation', self.i3d_attrs.shader_variation_name)
+            for pname in self.i3d_attrs.shader_material_params.keys():
                 parameter_dict = {'name': pname}
-                value = shader_settings.shader_material_params[pname]
-                default = shader_settings.shader_material_params.id_properties_ui(pname).as_dict().get('default')
+                value = self.i3d_attrs.shader_material_params[pname]
+                default = self.i3d_attrs.shader_material_params.id_properties_ui(pname).as_dict().get('default')
                 if len(value) == 1:
                     if not math.isclose(value[0], default[0], abs_tol=1e-7):
                         parameter_dict['value'] = f'{value[0]:.6g}'
@@ -139,7 +138,7 @@ class Material(Node):
                         parameter_dict['value'] = ' '.join(f'{v:.6g}' for v in value)
                         xml_i3d.SubElement(self.element, 'CustomParameter', parameter_dict)
 
-            for texture in shader_settings.shader_material_textures:
+            for texture in self.i3d_attrs.shader_material_textures:
                 self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")
                 if '' != texture.source != texture.default_source:
                     texture_dict = {'name': texture.name}
