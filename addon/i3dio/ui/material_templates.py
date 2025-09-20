@@ -2,6 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass, fields, field
 from pathlib import Path
 import bpy
+from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 
 from .. import xml_i3d
 from ..utility import get_fs_data_path
@@ -212,30 +213,17 @@ def ensure_base_color_texture(material: bpy.types.Material) -> None:
     loads the game's standard 'white_diffuse.dds', and connects it. This is a common requirement for
     game shaders that expect a texture in the primary diffuse/albedo slot.
     """
-    if not material.use_nodes or not material.node_tree:
-        return
-    nodes = material.node_tree.nodes
-    links = material.node_tree.links
-
-    if not (bsdf := next((node for node in nodes if node.bl_idname == "ShaderNodeBsdfPrincipled"), None)):
-        return  # No bsdf node found
-    if bsdf.inputs["Base Color"].is_linked:
-        return  # Base color is already linked, no need to add a texture node
-
+    principled = PrincipledBSDFWrapper(material, is_readonly=False)
+    diffuse_texture_node = principled.base_color_texture
+    if diffuse_texture_node.image:
+        return  # Base color already has an image assigned
     try:
         fs_data_dir = get_fs_data_path(as_path=True)
         texture_path = fs_data_dir / "shared" / "white_diffuse.dds"
-        texture_path_str = texture_path.as_posix()
+        image = bpy.data.images.load(texture_path.as_posix(), check_existing=True)
     except Exception:
         return
-    try:
-        image = bpy.data.images.load(texture_path_str, check_existing=True)
-    except Exception:
-        return
-    texture_node = nodes.new("ShaderNodeTexImage")
-    texture_node.image = image
-    texture_node.location = (bsdf.location.x - 400, bsdf.location.y + 400)
-    links.new(texture_node.outputs["Color"], bsdf.inputs["Base Color"])
+    diffuse_texture_node.image = image
 
 
 classes = []
@@ -344,7 +332,6 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
         new_material = bpy.data.materials.get(mat_name)
         if not new_material:
             new_material = bpy.data.materials.new(name=mat_name)
-            new_material.use_nodes = True
             ensure_base_color_texture(new_material)
             new_material.i3d_attributes.shader_name = 'vehicleShader'
             apply_template_to_material(new_material, template)
