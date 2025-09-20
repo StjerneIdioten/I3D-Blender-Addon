@@ -156,6 +156,17 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         poll=lambda self, obj: obj.type == 'MESH' and obj is not bpy.context.object
     )
 
+    color_export: EnumProperty(
+        name="Vertex Color Export",
+        description="Controls if vertex colors are exported for this mesh",
+        items=[
+            ('AUTO', "Auto (by Shader)", "Export only if any applied shader on the material requires colors "
+                                         "and the mesh has a color attribute layer"),
+            ('IF_PRESENT', "If Layer Exists", "Export when a color attribute layer exists, regardless of shader"),
+        ],
+        default='AUTO'
+    )
+
 
 @register
 class I3D_IO_PT_Mesh_Presets(presets.PresetPanel, Panel):
@@ -201,6 +212,9 @@ class I3D_IO_PT_shape_attributes(Panel):
         layout.use_property_decorate = False
         mesh = context.mesh
 
+        layout.separator(type='LINE')
+        layout.prop(mesh.i3d_attributes, "color_export", expand=True)
+        layout.separator(type='LINE')
         layout.prop(mesh.i3d_attributes, "casts_shadows")
         layout.prop(mesh.i3d_attributes, "receive_shadows")
         layout.prop(mesh.i3d_attributes, "rendered_in_viewports")

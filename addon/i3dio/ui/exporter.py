@@ -166,13 +166,15 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         default=False
     )
 
-    export_color_by_shader: BoolProperty(
-        name="Export Color Attribute by Shader",
-        description=(
-            "Only export color attributes for materials whose shader requires them.\n"
-            "Disable to always export color attributes if present."
-        ),
-        default=True
+    vertex_color_override: EnumProperty(
+        name="Vertex Color",
+        description="Override per-mesh settings for this export",
+        items=[
+            ('USE_MESH', "Use Mesh Settings", "Respect each mesh's Vertex Colors setting"),
+            ('FORCE_AUTO', "Force Auto (by Shader)", "Behave as if all meshes are AUTO"),
+            ('FORCE_IF_PRESENT', "Force If Present", "Behave as if all meshes are IF_PRESENT"),
+        ],
+        default='USE_MESH'
     )
 
     object_types_to_export: EnumProperty(
@@ -379,7 +381,7 @@ def export_options(layout: bpy.types.UILayout, operator):
         col.prop(operator, 'apply_modifiers')
         col.prop(operator, 'apply_unit_scale')
         col.prop(operator, 'alphabetic_uvs')
-        col.prop(operator, 'export_color_by_shader')
+        col.prop(operator, 'vertex_color_override')
         body.separator(type='LINE')
         body.prop(operator, 'object_types_to_export', expand=True)
         body.separator(type='LINE')

@@ -95,7 +95,7 @@ class TriangleAssignment:
 class IndexedTriangleSet(Node):
     """
     Represents a collection of triangles (possibly merged from multiple meshes) to be exported as a single
-    IdexedTriangleSet element in the I3D file. Handles mesh data extraction, attribute packing, material assignment,
+    IndexedTriangleSet element in the I3D file. Handles mesh data extraction, attribute packing, material assignment,
     vertex deduplication, and final XML output.
     """
     ELEMENT_TAG = 'IndexedTriangleSet'
@@ -129,7 +129,8 @@ class IndexedTriangleSet(Node):
 
         self.final_has_uvs: bool = False
         self.final_max_uv_layers: int = 0
-        self.final_has_colors: bool = False
+        self.should_pad_colors: bool = False
+        self.export_colors: bool = False
 
         self.final_vertices = np.array([])
         self.final_triangles = np.array([])
@@ -355,7 +356,7 @@ class IndexedTriangleSet(Node):
         ]
         for i in range(self.final_max_uv_layers):
             fields.append((f'uv{i}', '(2,)f4'))  # Each UV layer is a vector of 2 floats
-        if self.final_has_colors:
+        if self.export_colors:
             fields.append(('color', '(4,)f4'))  # RGBA color as a vector of 4 floats
         if self.is_merge_group or self.is_generic or self.is_geo_nodes_generic:
             fields.append(('id', 'f4'))
@@ -396,7 +397,7 @@ class IndexedTriangleSet(Node):
                                                  for _ in range(max_uvs - len(padded_uvs))]
                 nothing_to_pad = False
 
-        if self.final_has_colors and padded_colors is None:
+        if self.should_pad_colors and padded_colors is None:
             self.logger.warning(
                 f"{group_type} Inconsistency: Object {obj_name!r} has no color attributes, "
                 f"but other meshes in the group do. Padding with defaults."
@@ -440,8 +441,7 @@ class IndexedTriangleSet(Node):
         self.final_max_uv_layers = min(4, max((len(m['evaluated_mesh'].mesh.uv_layers) for m in meshes_to_process
                                                if m['evaluated_mesh'].mesh.uv_layers), default=0))
         self.final_has_uvs = self.final_max_uv_layers > 0
-        self.final_has_colors = any(m['evaluated_mesh'].mesh.color_attributes for m in meshes_to_process)
-        dot_dtype = self._get_vertex_buffer_dtype()
+        self.should_pad_colors = any((len(m['evaluated_mesh'].mesh.color_attributes) > 0 for m in meshes_to_process))
         # Padding only needed if there are multiple meshes to process
         needs_padding = len(meshes_to_process) > 1
 
@@ -516,10 +516,45 @@ class IndexedTriangleSet(Node):
 
         self.material_ids = [self.i3d.add_material(material_object_map[name]) for name in master_material_map.keys()]
         self.tangent = self.tangent or any(self.i3d.materials[mat_id].is_normalmapped() for mat_id in self.material_ids)
-        if self.i3d.get_setting("export_color_by_shader"):
-            self.final_has_colors = any(
-                self.i3d.materials[mat_id].requires_color_attribute() for mat_id in self.material_ids
+
+        def _decide_color_for_mesh(mesh_mode: str, override: str, shader_requires: bool, has_color_attr: bool) -> bool:
+            mode = 'IF_PRESENT' if override == 'FORCE_IF_PRESENT' else 'AUTO' if override == 'FORCE_AUTO' else mesh_mode
+            if mode == 'IF_PRESENT':
+                return has_color_attr
+            return shader_requires and has_color_attr
+
+        override = self.i3d.get_setting('vertex_color_override')
+        _mat_requires_color = any(self.i3d.materials[mat_id].requires_color_attribute() for mat_id in self.material_ids)
+        _should_export_color = False
+        _missing_auto = []
+        _always_missing = []
+        for entry in meshes_to_process:
+            _ev: EvaluatedMesh = entry['evaluated_mesh']
+            mesh_mode = _ev.source_object.data.i3d_attributes.color_export  # "ALWAYS" or "AUTO"
+            has_color_attr = len(_ev.mesh.color_attributes) > 0
+            eff_mode = 'ALWAYS' if override == 'FORCE_ALWAYS' else 'AUTO' if override == 'FORCE_AUTO' else mesh_mode
+
+            if eff_mode == 'AUTO' and _mat_requires_color and not has_color_attr:
+                _missing_auto.append(_ev.object.name)
+            elif eff_mode == 'ALWAYS' and _mat_requires_color and not has_color_attr:
+                _always_missing.append(_ev.object.name)
+
+            _should_export_color = \
+                _should_export_color or _decide_color_for_mesh(mesh_mode, override, _mat_requires_color, has_color_attr)
+
+        self.export_colors = _should_export_color
+        if _missing_auto:
+            self.logger.warning(
+                "Materials require vertex colors but these meshes have no color attribute: {:s}. "
+                "Add a color layer or set Vertex Colors=Always.".format(", ".join(sorted(set(_missing_auto)))),
             )
+        if _always_missing:
+            self.logger.warning(
+                "Vertex Colors=Always but these meshes have no color attribute: {:s}. "
+                "Add a color layer or set Vertex Colors=Auto.".format(", ".join(sorted(set(_always_missing)))),
+            )
+
+        dot_dtype = self._get_vertex_buffer_dtype()
 
         # Process material subsets to create contiguous buffers
         self.logger.debug("Processing subsets one by one to create contiguous vertex buffer...")
@@ -577,7 +612,7 @@ class IndexedTriangleSet(Node):
                 if self.final_has_uvs and mesh_data.uvs is not None:
                     for i in range(min(self.final_max_uv_layers, len(mesh_data.uvs))):
                         subset_dots[f'uv{i}'][mask] = mesh_data.uvs[i][indices_for_this_mesh]
-                if self.final_has_colors and mesh_data.colors is not None:
+                if self.export_colors and mesh_data.colors is not None:
                     subset_dots['color'][mask] = mesh_data.colors[indices_for_this_mesh]
                 if mesh_data.generic_values is not None:
                     subset_dots['id'][mask] = mesh_data.generic_values[vertex_indices_for_loops]
@@ -661,7 +696,7 @@ class IndexedTriangleSet(Node):
             for i in range(self.final_max_uv_layers):
                 if f'uv{i}' in final_verts_dtype.names:
                     self._write_attribute(f"uv{i}", True, 'vertices')
-        if self.final_has_colors:
+        if self.export_colors:
             self._write_attribute('color', True, 'vertices')
 
         if self.is_generic or self.is_geo_nodes_generic:
@@ -697,7 +732,7 @@ class IndexedTriangleSet(Node):
                 vertex_attributes['bw'] = " ".join(f"{w:.6g}" for w in vert_row['blend_weights'])
                 vertex_attributes['bi'] = " ".join(str(i) for i in vert_row['blend_indices'])
 
-            if self.final_has_colors:
+            if self.export_colors:
                 vertex_attributes['c'] = " ".join(f"{v:.6g}" for v in vert_row['color'])
 
             xml_i3d.SubElement(self.xml_elements['vertices'], 'v', vertex_attributes)
