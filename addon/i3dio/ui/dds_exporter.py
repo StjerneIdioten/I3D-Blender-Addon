@@ -43,7 +43,7 @@ def export_motion_path_array(obj: bpy.types.Object, depsgraph: bpy.types.Depsgra
 
 class I3D_IO_OT_motion_path_array(Operator):
     bl_idname = "i3dio.motion_path_array"
-    bl_label = "Export Motion Path Array"
+    bl_label = "Motion Path Array"
     bl_description = (
         "Triggers the export of Motion Path Array DDS textures for objects configured within the scene. "
         "Does not open a file browser, as file paths are defined per-object."
