@@ -115,20 +115,25 @@ class File(Node):
 
         # Ensure we do not overwrite the source file
         source_path = Path(bpy.path.abspath(self.blender_path))
-        if self.resolved_path != source_path:
-            # We write the file if it doesn't exist or if overwrite is allowed
-            write_path_full = write_directory / f"{self.file_name}{self.file_extension}"
-            overwrite_files = self.i3d.settings.get('overwrite_files', False)
-            if overwrite_files or not write_path_full.exists():
-                write_directory.mkdir(parents=True, exist_ok=True)
-                try:
-                    shutil.copy(source_path, write_directory)
-                except shutil.SameFileError:
-                    pass  # Ignore if source and destination is the same file
-                else:
-                    self.logger.info(f"copied to '{write_path_full}'")
+        if not source_path.exists():
+            self.logger.warning(f"File {source_path!r} does not exist, cannot copy")
+            return
+        if self.resolved_path == source_path:
+            self.logger.debug("Source and destination paths are the same, no need to copy")
+            return
+        # We write the file if it doesn't exist or if overwrite is allowed
+        write_path_full = write_directory / f"{self.file_name}{self.file_extension}"
+        overwrite_files = self.i3d.settings.get('overwrite_files', False)
+        if overwrite_files or not write_path_full.exists():
+            write_directory.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy(source_path, write_directory)
+            except shutil.SameFileError:
+                pass  # Ignore if source and destination is the same file
             else:
-                self.logger.debug("File already in correct path relative to i3d file and overwrite is turned off")
+                self.logger.info(f"copied to {write_path_full!r}")
+        else:
+            self.logger.debug("File already in correct path relative to i3d file and overwrite is turned off")
 
 
 class Image(File):
