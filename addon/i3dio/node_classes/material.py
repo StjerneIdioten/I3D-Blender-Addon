@@ -1,4 +1,5 @@
 import math
+from typing import ClassVar
 import bpy
 import mathutils
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper, ShaderImageTextureWrapper
@@ -10,9 +11,9 @@ from .node import Node
 
 
 class Material(Node):
-    ELEMENT_TAG = 'Material'
-    NAME_FIELD_NAME = 'name'
-    ID_FIELD_NAME = 'materialId'
+    ELEMENT_TAG: ClassVar[str] = 'Material'
+    NAME_FIELD_NAME: ClassVar[str] = 'name'
+    ID_FIELD_NAME: ClassVar[str] = 'materialId'
 
     def __init__(self, id_: int, i3d: I3D, blender_material: bpy.types.Material):
         self.blender_material = blender_material

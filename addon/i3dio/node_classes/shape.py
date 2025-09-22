@@ -1,6 +1,7 @@
 import logging
 import dataclasses
 from dataclasses import dataclass
+from typing import ClassVar
 import numpy as np
 import mathutils
 from collections import OrderedDict, ChainMap, defaultdict
@@ -98,9 +99,9 @@ class IndexedTriangleSet(Node):
     IndexedTriangleSet element in the I3D file. Handles mesh data extraction, attribute packing, material assignment,
     vertex deduplication, and final XML output.
     """
-    ELEMENT_TAG = 'IndexedTriangleSet'
-    NAME_FIELD_NAME = 'name'
-    ID_FIELD_NAME = 'shapeId'
+    ELEMENT_TAG: ClassVar[str] = 'IndexedTriangleSet'
+    NAME_FIELD_NAME: ClassVar[str] = 'name'
+    ID_FIELD_NAME: ClassVar[str] = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_mesh: EvaluatedMesh, *,
                  shape_name: str | None = None,
@@ -837,9 +838,9 @@ class EvaluatedNurbsCurve:
 
 
 class NurbsCurve(Node):
-    ELEMENT_TAG = 'NurbsCurve'
-    NAME_FIELD_NAME = 'name'
-    ID_FIELD_NAME = 'shapeId'
+    ELEMENT_TAG: ClassVar[str] = 'NurbsCurve'
+    NAME_FIELD_NAME: ClassVar[str] = 'name'
+    ID_FIELD_NAME: ClassVar[str] = 'shapeId'
 
     def __init__(self, id_: int, i3d: I3D, evaluated_curve_data: EvaluatedNurbsCurve, shape_name: str | None = None):
         self.id: int = id_
@@ -911,7 +912,7 @@ class NurbsCurve(Node):
 
 
 class ShapeNode(SceneGraphNode):
-    ELEMENT_TAG = 'Shape'
+    ELEMENT_TAG: ClassVar[str] = 'Shape'
 
     def __init__(self, id_: int, shape_object: bpy.types.Object | None, i3d: I3D, parent: SceneGraphNode | None = None):
         self.shape_id: int | None = None
