@@ -91,8 +91,7 @@ class I3D:
             self.processed_objects.setdefault(armature_object, node)
             if parent is not None and node.parent is None:
                 # Set Python parent only (never append here) final wiring happens in finalize_armature_parenting()
-                node.parent = parent
-                parent.add_child(node)
+                node.reparent(parent)
         return node
 
     # Public Methods ###################################################################################################

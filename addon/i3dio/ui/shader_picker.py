@@ -21,7 +21,6 @@ from .shader_migration_utils import (migrate_variation, migrate_material_paramet
 from .material_templates import TEMPLATES_GROUP_NAMES
 from .. import __package__ as base_package
 
-
 SHADER_DEFAULT = ''
 
 
@@ -31,6 +30,7 @@ def _clone_shader_texture(tex: I3DShaderTexture) -> dict:
 
 class ShaderManager:
     """Manages synchronization of material attributes and UI with parsed shader data."""
+
     def __init__(self, material: bpy.types.Material) -> None:
         self.attributes = material.i3d_attributes
         self.shader_dict = get_shader_dict(self.attributes.use_custom_shaders)
@@ -383,6 +383,16 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
     if params:
         param_header, param_panel = layout.panel(idname + "_params", default_closed=False)
         param_header.label(text=f"{header_label}Parameters")
+        if idname == 'shader_material_default':
+            if 'fs25_material_visualizer' in bpy.context.preferences.addons:
+                scene_mat = bpy.context.scene.i3d_material
+                param_header.prop(scene_mat, "show_scratches", text="", icon='EVENT_S', toggle=True)
+                param_header.prop(scene_mat, "show_dirt", text="", icon='EVENT_D', toggle=True)
+                param_header.prop(scene_mat, "show_snow", text="", icon='EVENT_S', toggle=True)
+                param_header.prop(scene_mat, "show_wetness", text="", icon='EVENT_W', toggle=True)
+                param_header.separator(type='LINE')
+                param_header.prop(scene_mat, "show_wetness_mask", text="", icon='EVENT_M', toggle=True)
+
         if idname == "shader_material_brandcolor":
             op = param_header.operator('i3dio.template_search_popup', text="", icon="EVENT_M", emboss=False)
             op.is_brand = False
@@ -390,6 +400,15 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
             op = param_header.operator('i3dio.template_search_popup', text="", icon="EVENT_B", emboss=False)
             op.is_brand = True
             op.single_param = ""
+
+            if 'fs25_material_visualizer' in bpy.context.preferences.addons:
+                mat = bpy.context.material
+                param_header.separator(type='LINE')
+                if bpy.context.material.i3d_visualized:
+                    param_header.operator('i3d_material_visualizer.get_set', text="", icon='EXPORT').mode = 'GET'
+                    param_header.operator('i3d_material_visualizer.get_set', text="", icon='IMPORT').mode = 'SET'
+                param_header.prop(mat, "i3d_visualized", text="", icon='MATERIAL', toggle=True)
+
         if not param_panel:
             return
         param_arrays = [i3d_attributes.shader_material_params[param] for param in params]
@@ -402,6 +421,16 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
                 op = row.operator('i3dio.template_search_popup', text="", icon="EVENT_B")
                 op.is_brand = True
                 op.single_param = param
+
+                if 'fs25_material_visualizer' in bpy.context.preferences.addons:
+                    if bpy.context.material.i3d_visualized:
+                        row.separator(type='LINE')
+                        op = row.operator('i3d_material_visualizer.get_set', text="", icon='EXPORT')
+                        op.mode = 'GET'
+                        op.single_param = param
+                        op = row.operator('i3d_material_visualizer.get_set', text="", icon='IMPORT')
+                        op.mode = 'SET'
+                        op.single_param = param
             for _ in range(max_param_length - len(i3d_attributes.shader_material_params[param])):
                 row.label(text="")  # pad with empty text to make everything align
     if textures:

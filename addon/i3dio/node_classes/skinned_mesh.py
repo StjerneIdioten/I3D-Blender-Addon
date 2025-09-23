@@ -123,7 +123,6 @@ class SkinnedMeshRootNode(TransformGroupNode):
         # Keep Python-side parent even when collapsed (no XML append happened above).
         if self.is_collapsed and parent is not None:
             self.parent = parent
-            parent.add_child(self)
 
         # Build the bone hierarchy from the armature's bones.
         # The parent for all root bones is initially set to the armature node itself.
@@ -142,6 +141,13 @@ class SkinnedMeshRootNode(TransformGroupNode):
         for child_bone in bone_object.children:
             self._add_bone(child_bone, bone_node)
 
+    def reparent(self, new_parent: SceneGraphNode | None) -> None:
+        if self.is_collapsed:
+            # Python-side reparenting only, no XML changes because armature is not exported.
+            self.parent = new_parent
+            return
+        return super().reparent(new_parent)
+
     def finalize_armature_parenting(self, final_parent: SceneGraphNode | None):
         """
         Finalizes the parenting for the armature and its bones in the scene graph.
@@ -150,16 +156,17 @@ class SkinnedMeshRootNode(TransformGroupNode):
         self.logger.debug(f"Finalizing hierarchy for armature '{self.name}' with final parent "
                           f"'{final_parent.name if final_parent else 'Scene Root'}'.")
 
+        # Make sure the armature node sits under the final parent in the Python graph (and xml if not collapsed).
+        self.reparent(final_parent)
+
         if self.is_collapsed:
-            # No armature element in XML, move each top-level bone under final parent and write transforms once.
+            # Move top-level bones under final parent, then add transforms
             for bone_node in self.bones:
                 # Skip bones parented through CHILD_OF constraints, they will be handled separately.
                 if bone_node.parent == self and not bone_node.is_child_of:
                     bone_node.reparent(final_parent)
                     bone_node.finalize_transform()
         else:
-            # Armature node included in the export: attach it directly to the final parent
-            self.reparent(final_parent)
             self.finalize_transform()
             for bone_node in self.bones:
                 bone_node.finalize_transform()
