@@ -157,8 +157,6 @@ class Material(Node):
         self._write_attribute(xml_key, " ".join(map('{0:.6g}'.format, color)))
 
     def _find_node_by_name(self, name: str) -> bpy.types.Node | None:
-        if self.blender_material.node_tree is None:
-            return None
         return next((node for node in self.blender_material.node_tree.nodes
                      if node.name.lower() == name or node.label.lower() == name), None)
 
