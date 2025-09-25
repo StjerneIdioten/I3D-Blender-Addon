@@ -540,7 +540,8 @@ class I3DReferenceData(bpy.types.PropertyGroup):
         name="Reference Path",
         description="The path to the .i3d file you want to reference",
         default='',
-        subtype='FILE_PATH'
+        subtype='FILE_PATH',
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
     )
     runtime_loaded: BoolProperty(
         name="Runtime Loaded",
