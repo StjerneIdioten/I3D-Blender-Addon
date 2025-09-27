@@ -13,10 +13,6 @@ from ..i3d import I3D
 
 
 class Node(ABC):
-    ELEMENT_TAG: ClassVar[str]
-    ID_FIELD_NAME: ClassVar[str]
-    NAME_FIELD_NAME: ClassVar[str]
-
     def __init_subclass__(cls, **kwargs):
         """Ensures that all subclasses define the required class variables."""
         if isabstract(cls):
