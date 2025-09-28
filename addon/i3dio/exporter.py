@@ -1,4 +1,5 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
+from pathlib import Path
 from typing import List
 import sys
 import subprocess
@@ -352,6 +353,13 @@ def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
     if not (converter_path := bpy.context.preferences.addons[__package__].preferences.i3d_converter_path):
         logger.error("No i3dConverter path set in preferences. Skipping binarization.")
         return
+    converter_exe_path = Path(converter_path)
+    if not converter_exe_path.exists():
+        logger.error(f"i3dConverter.exe path does not exist: {converter_exe_path!r}. Skipping binarization.")
+        return
+    if not converter_exe_path.is_file():
+        logger.error(f"i3dConverter.exe path is not a file: {converter_exe_path!r}. Skipping binarization.")
+        return
     if not (game_path := get_fs_data_path(as_path=True).parent):
         logger.error("No game data path set in preferences. Skipping binarization.")
         return
@@ -360,7 +368,7 @@ def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
     try:
         conversion_result = subprocess.run(
             args=[
-                str(converter_path),
+                str(converter_exe_path),
                 '-in', str(filepath),
                 '-out', str(filepath),
                 '-gamePath', f"{game_path}/"
@@ -372,7 +380,7 @@ def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
             stderr=subprocess.STDOUT
         )
     except FileNotFoundError:
-        logger.error(f"Invalid path to i3dConverter.exe: {converter_path!r}")
+        logger.error(f"Invalid path to i3dConverter.exe: {converter_exe_path!r}")
     except subprocess.TimeoutExpired as e:
         logger.error(f"i3dConverter.exe timed out after {BINARIZER_TIMEOUT_IN_SECONDS} seconds. Output: {e.output!r}")
     except subprocess.CalledProcessError as e:
