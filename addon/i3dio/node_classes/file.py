@@ -2,6 +2,7 @@ from abc import abstractmethod
 import logging
 from pathlib import Path
 import shutil
+from typing import ClassVar
 import bpy
 
 from .node import Node
@@ -15,9 +16,9 @@ from ..i3d import I3D
 
 
 class File(Node):
-    ELEMENT_TAG = 'File'
-    NAME_FIELD_NAME = 'filename'
-    ID_FIELD_NAME = 'fileId'
+    ELEMENT_TAG: ClassVar[str] = 'File'
+    NAME_FIELD_NAME: ClassVar[str] = 'filename'
+    ID_FIELD_NAME: ClassVar[str] = 'fileId'
 
     @property
     @classmethod

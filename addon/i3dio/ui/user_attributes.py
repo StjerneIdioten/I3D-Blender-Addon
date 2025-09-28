@@ -74,17 +74,8 @@ class I3DUserAttributes(bpy.types.PropertyGroup):
 @register
 class I3D_IO_UL_user_attributes(bpy.types.UIList):
     """UIList for i3d user attributes"""
-
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        # Code to specify custom icon
-        custom_icon = 'SCRIPT'
-
-        if self.layout_type in {'DEFAULT', 'COMPACT'}:
-            layout.prop(item, 'name', text='', icon=custom_icon, emboss=False, translate=False)
-
-        elif self.layout_type in {'GRID'}:
-            layout.alignment = 'CENTER'
-            layout.label(text="", icon=custom_icon)
+        layout.prop(item, 'name', text='', icon='SCRIPT', emboss=False, translate=False)
 
 
 @register

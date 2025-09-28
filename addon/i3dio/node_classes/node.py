@@ -1,7 +1,8 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 from abc import (ABC, abstractmethod)
+from inspect import isabstract
 import logging
-from typing import (Union, Dict)
+from typing import ClassVar
 import math
 import mathutils
 import bpy
@@ -12,25 +13,16 @@ from ..i3d import I3D
 
 
 class Node(ABC):
-    @property
-    @classmethod
-    @abstractmethod
-    def ELEMENT_TAG(cls):  # Every node type has a certain tag in the i3d-file fx. 'Shape' or 'Light'
-        return NotImplementedError
+    def __init_subclass__(cls, **kwargs):
+        """Ensures that all subclasses define the required class variables."""
+        if isabstract(cls):
+            return  # Skip abstract base classes
+        super().__init_subclass__(**kwargs)
+        missing = [var for var in ('ELEMENT_TAG', 'ID_FIELD_NAME', 'NAME_FIELD_NAME') if not hasattr(cls, var)]
+        if missing:
+            raise TypeError(f"{cls.__name__} must define: {', '.join(missing)}")
 
-    @property
-    @classmethod
-    @abstractmethod
-    def ID_FIELD_NAME(cls):  # The name of the id tag changes from node to node, but it is still an ID
-        return NotImplementedError
-
-    @property
-    @classmethod
-    @abstractmethod
-    def NAME_FIELD_NAME(cls):  # The name of the name tag can change from node to node
-        return NotImplementedError
-
-    def __init__(self, id_: int, i3d: I3D, parent: Union[Node, None] = None):
+    def __init__(self, id_: int, i3d: I3D, parent: Node | None = None):
         self.id = id_
         self.i3d = i3d
         self.parent = parent
@@ -79,8 +71,8 @@ class Node(ABC):
 
 
 class SceneGraphNode(Node):
-    NAME_FIELD_NAME = 'name'
-    ID_FIELD_NAME = 'nodeId'
+    NAME_FIELD_NAME: ClassVar[str] = 'name'
+    ID_FIELD_NAME: ClassVar[str] = 'nodeId'
 
     def __init__(self, id_: int,
                  blender_object: bpy.types.Object | bpy.types.Collection | None,
@@ -91,7 +83,7 @@ class SceneGraphNode(Node):
         self.blender_object = blender_object
         self.parent = parent
         self.defer_transform: bool = False  # bones may change parent which makes the first calculated transform invalid
-        self.xml_elements: Dict[str, Union[xml_i3d.XML_Element, None]] = {'Node': None}
+        self.xml_elements: dict[str, xml_i3d.XML_Element | None] = {'Node': None}
 
         self._name = self.blender_object.name
         prefix = i3d.settings.get('object_sorting_prefix', "")
@@ -119,7 +111,7 @@ class SceneGraphNode(Node):
         return self._name
 
     @property
-    def element(self) -> Union[xml_i3d.XML_Element, None]:
+    def element(self) -> xml_i3d.XML_Element | None:
         return self.xml_elements['Node']
 
     @element.setter
@@ -186,11 +178,11 @@ class SceneGraphNode(Node):
 
     @property
     @abstractmethod
-    def _transform_for_conversion(self) -> Union[mathutils.Matrix, None]:
+    def _transform_for_conversion(self) -> mathutils.Matrix | None:
         """Different node types have different requirements for getting converted into i3d coordinates"""
         raise NotImplementedError
 
-    def _add_transform_to_xml_element(self, object_transform: Union[mathutils.Matrix, None]) -> None:
+    def _add_transform_to_xml_element(self, object_transform: mathutils.Matrix | None) -> None:
         """This method checks the parent and adjusts the transform before exporting"""
         if object_transform is None:
             # This essentially sets the entire transform to be default. Since GE loads defaults when no data is present.
@@ -285,14 +277,14 @@ class SceneGraphNode(Node):
 
 
 class TransformGroupNode(SceneGraphNode):
-    ELEMENT_TAG = 'TransformGroup'
+    ELEMENT_TAG: ClassVar[str] = 'TransformGroup'
 
     def __init__(self, id_: int, empty_object: bpy.types.Object | bpy.types.Collection,
                  i3d: I3D, parent: SceneGraphNode | None = None):
         super().__init__(id_=id_, blender_object=empty_object, i3d=i3d, parent=parent)
 
     @property
-    def _transform_for_conversion(self) -> mathutils.Matrix:
+    def _transform_for_conversion(self) -> mathutils.Matrix | None:
         try:
             conversion_matrix = self.i3d.to_i3d(self._get_object_matrix())
         except AttributeError:
@@ -327,7 +319,7 @@ class TransformGroupNode(SceneGraphNode):
 
 
 class LightNode(SceneGraphNode):
-    ELEMENT_TAG = 'Light'
+    ELEMENT_TAG: ClassVar[str] = 'Light'
 
     def __init__(self, id_: int, light_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode or None = None):
         super().__init__(id_=id_, blender_object=light_object, i3d=i3d, parent=parent)
@@ -341,7 +333,7 @@ class LightNode(SceneGraphNode):
 
 
 class CameraNode(SceneGraphNode):
-    ELEMENT_TAG = 'Camera'
+    ELEMENT_TAG: ClassVar[str] = 'Camera'
 
     def __init__(self, id_: int, camera_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode or None = None):
         super().__init__(id_=id_, blender_object=camera_object, i3d=i3d, parent=parent)
