@@ -6,15 +6,12 @@ import subprocess
 import time
 import logging
 import bpy
-from bpy_extras.io_utils import (
-    axis_conversion
-)
-
+from bpy_extras.io_utils import axis_conversion
+from addon_utils import module_bl_info
 from . import (
     debugging,
     xml_i3d
 )
-
 from .utility import (BlenderObject, sort_blender_objects_by_outliner_ordering, get_fs_data_path)
 from .i3d import I3D
 from .node_classes.node import SceneGraphNode
@@ -45,7 +42,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
     # Output info about the addon
     debugging.addon_console_handler.setLevel(logging.INFO)
     logger.info(f"Blender version is: {bpy.app.version_string}")
-    logger.info(f"I3D Exporter version is: {sys.modules[__package__].__version__}")
+    logger.info(f"I3D Exporter version is: {module_bl_info(sys.modules[__package__])['version']}")
     logger.info(f"Exporting to {filepath}")
 
     if operator.verbose_output:
