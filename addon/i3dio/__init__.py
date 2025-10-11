@@ -1,18 +1,3 @@
-"""             ##### BEGIN GPL LICENSE BLOCK #####.
-  This program is free software; you can redistribute it and/or
-  modify it under the terms of the GNU General Public License
-  as published by the Free Software Foundation; either version 2
-  of the License, or (at your option) any later version.
-  This program is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-  GNU General Public License for more details.
-  You should have received a copy of the GNU General Public License
-  along with this program; if not, write to the Free Software Foundation,
-  Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
-                ##### END GPL LICENSE BLOCK #####
-"""
-
 # This fixes reloading, by deleting the module references and thus forcing a reload
 if "bpy" in locals():
     import sys
@@ -23,23 +8,6 @@ if "bpy" in locals():
 from . import ui
 
 import bpy
-
-__version__ = "0.0.0"  # This version number is used internally, since the bl_info one can't handle dev versions...
-
-bl_info = {
-    "name": "Unofficial GIANTS I3D Exporter Tools",
-    "author": "StjerneIdioten, original by GIANTS Software, Jason Oppermann",
-    "description": "Exports blender projects into GIANTS I3D format for use in Giants Engine based games such as "
-                   "Farming Simulator",
-    "version": (0, 0, 0),  # Always (0, 0, 0) since versioning is controlled by the CI
-    "blender": (4, 4, 0),
-    "location": "File > Import-Export",
-    "warning": "First Unofficial Alpha Version",
-    "support": "COMMUNITY",
-    "category": "Import-Export",
-    "tracker_url": "https://github.com/StjerneIdioten/I3D-Blender-Addon/issues",
-    "wiki_url": "https://stjerneidioten.github.io/I3D-Blender-Addon/"
-}
 
 def register():
     ui.helper_functions.register()

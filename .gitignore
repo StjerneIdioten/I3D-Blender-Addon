@@ -1,4 +1,5 @@
 /.worktrees/*
+/.blender/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

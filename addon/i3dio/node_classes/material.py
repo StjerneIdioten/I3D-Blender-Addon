@@ -1,4 +1,5 @@
 import math
+from typing import ClassVar
 import bpy
 import mathutils
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper, ShaderImageTextureWrapper
@@ -10,9 +11,9 @@ from .node import Node
 
 
 class Material(Node):
-    ELEMENT_TAG = 'Material'
-    NAME_FIELD_NAME = 'name'
-    ID_FIELD_NAME = 'materialId'
+    ELEMENT_TAG: ClassVar[str] = 'Material'
+    NAME_FIELD_NAME: ClassVar[str] = 'name'
+    ID_FIELD_NAME: ClassVar[str] = 'materialId'
 
     def __init__(self, id_: int, i3d: I3D, blender_material: bpy.types.Material):
         self.blender_material = blender_material
@@ -75,7 +76,7 @@ class Material(Node):
             self._write_texture_to_xml(normalmap_tex_path, 'Normalmap', bump_depth)
 
         gloss_path = None
-        if glossnode := self._find_node_by_name('glossmap', bsdf.node_tree if bsdf else None):
+        if glossnode := self._find_node_by_name('glossmap'):
             match glossnode.bl_idname:
                 case "ShaderNodeTexImage":
                     gloss_path = self._image_path(glossnode)
@@ -156,10 +157,10 @@ class Material(Node):
     def _write_color(self, color: list[float], xml_key: str) -> None:
         self._write_attribute(xml_key, " ".join(map('{0:.6g}'.format, color)))
 
-    def _find_node_by_name(self, name: str, node_tree: bpy.types.NodeTree | None = None) -> bpy.types.Node | None:
-        if node_tree is None:
+    def _find_node_by_name(self, name: str) -> bpy.types.Node | None:
+        if not self.blender_material.node_tree:
             return None
-        return next((node for node in node_tree.nodes
+        return next((node for node in self.blender_material.node_tree.nodes
                      if node.name.lower() == name or node.label.lower() == name), None)
 
     def _linked_rgb_color(self, socket: bpy.types.NodeSocket) -> list[float] | None:

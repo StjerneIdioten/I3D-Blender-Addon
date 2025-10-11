@@ -1,0 +1,8 @@
+{
+    "blender.addonFolders": [
+        "addon/i3dio"
+    ],
+    "blender.environmentVariables": {
+        "BLENDER_USER_RESOURCES": "${workspaceFolder}/.blender"
+    }
+}

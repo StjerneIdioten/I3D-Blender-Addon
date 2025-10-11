@@ -1,0 +1,27 @@
+schema_version = "1.0.0"
+id = "i3dio"
+version = "0.0.0"
+name = "GIANTS I3D Community Exporter"
+tagline = "Exports into GIANTS I3D format for use in eg. Farming Simulator"
+maintainer = "StjerneIdioten <stjerneidioten@gmail.com>"
+type = "add-on"
+website = "https://stjerneidioten.github.io/I3D-Blender-Addon/"
+tags = ["Import-Export"]
+blender_version_min = "4.4.0"
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+platforms = ["windows-x64"]
+
+[permissions]
+network = "To download i3d-converter from GDN if user allows"
+files = "Export I3D to disk"
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/*.zip",
+  ".gitignore",
+  "i3dConverter.exe",
+]
