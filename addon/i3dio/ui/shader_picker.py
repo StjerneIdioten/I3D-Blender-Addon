@@ -120,7 +120,8 @@ class I3DRequiredVertexAttribute(bpy.types.PropertyGroup):
 @register
 class I3DShaderTexture(bpy.types.PropertyGroup):
     name: StringProperty(default='Unnamed Texture')
-    source: StringProperty(name='Texture source', description='Path to the texture', default='', subtype='FILE_PATH')
+    source: StringProperty(name='Texture source', description='Path to the texture', default='',
+                           subtype='FILE_PATH', options={'PATH_SUPPORTS_BLEND_RELATIVE'})
     default_source: StringProperty()
     template: StringProperty()
 

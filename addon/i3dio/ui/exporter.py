@@ -52,7 +52,8 @@ class I3DShaderFolderEntry(bpy.types.PropertyGroup):
         description="Directory containing custom shader XML files",
         subtype='DIR_PATH',
         default='',
-        update=update_path
+        update=update_path,
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
     )
 
 
@@ -64,7 +65,8 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
                     "contain an '<i3dMapping> somewhere in the file",
         subtype='FILE_PATH',
-        default=''
+        default='',
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
     )
 
     def update_moddesc_path(self, context):
@@ -76,7 +78,8 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         description="Path to the modDesc.xml file. If set, Brand Material Templates will be loaded from it",
         subtype='FILE_PATH',
         default='',
-        update=update_moddesc_path
+        update=update_moddesc_path,
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
     )
 
     custom_shader_folders: CollectionProperty(
@@ -260,7 +263,8 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
                     "contain an '<i3dMapping> somewhere in the file",
         subtype='FILE_PATH',
-        default=''
+        default='',
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
     )
 
     scene_key = "i3dio_export_settings"

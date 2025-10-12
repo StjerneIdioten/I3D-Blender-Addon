@@ -8,8 +8,8 @@ set -x
 #
 # Authors: Michael Altfield <michael@michaelaltfield.net>
 # Created: 2020-07-17
-# Updated: 2020-07-17
-# Version: 0.1
+# Updated: 2023-03-26
+# Version: 0.3
 ################################################################################
  
 ###################
@@ -17,10 +17,8 @@ set -x
 ###################
  
 apt-get update
-apt-get -y install git rsync python3 python3-pip python3-sphinx python3-sphinx-rtd-theme
-
-python3 -m pip install sphinx-autodoc-typehints
-python3 -m pip install -r ./addon/requirements.txt
+apt-get -y install git rsync python3-pygments python3-sphinx python3-sphinx-rtd-theme python3-sphinx-autodoc-typehints python3-stemmer python3-git python3-pip python3-virtualenv python3-setuptools
+python3 -m pip install --break-system-packages -r ./addon/requirements.txt
 
 #####################
 # DECLARE VARIABLES #
@@ -33,6 +31,11 @@ pwd
 ls -lah
 export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
  
+# make a new temp dir which will be our GitHub Pages docroot
+docroot=`mktemp -d`
+
+export REPO_NAME="${GITHUB_REPOSITORY##*/}"
+
 ##############
 # BUILD DOCS #
 ##############
@@ -49,7 +52,6 @@ make -C docs html
 git config --global user.name "${GITHUB_ACTOR}"
 git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
  
-docroot=`mktemp -d`
 rsync -av "docs/_build/html/" "${docroot}/"
  
 pushd "${docroot}"

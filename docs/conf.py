@@ -20,7 +20,7 @@
 # -- Project information -----------------------------------------------------
 
 project = 'I3D Addon for Blender'
-copyright = '2020, StjerneIdioten'
+copyright = '2025, StjerneIdioten'
 author = 'StjerneIdioten'
 
 # The short X.Y version
@@ -66,7 +66,7 @@ master_doc = 'index'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = 'en'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
