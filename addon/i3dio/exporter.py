@@ -371,22 +371,48 @@ def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
                 '-gamePath', f"{game_path}/"
             ],
             timeout=BINARIZER_TIMEOUT_IN_SECONDS,
-            check=True,
+            check=False,  # inspect stdout even on non-zero exit code
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT
         )
+        raw = conversion_result.stdout or ""
+        lines = [ln.rstrip("\r\n") for ln in raw.splitlines() if ln.strip()]
+
+        # Some lines could be repeated multiple times, collapse them
+        collapsed: list[str] = []
+        last = None
+        for ln in lines:
+            if ln != last:
+                collapsed.append(ln)
+            last = ln
+
+        _UNIMPORTANT = ("render system", "driver: null", "nullconsoledevice initialized", "i3d contains non-binary")
+        def _emit(line: str) -> None:
+            msg = line.rstrip()
+            low = msg.lower().strip()
+            if any(s in low for s in _UNIMPORTANT):
+                return
+            if low.startswith("error:"):
+                logger.error(f"  {msg}", stacklevel=2)
+            elif low.startswith("warning:"):
+                logger.warning(msg, stacklevel=2)
+            else:
+                logger.info(f"   {msg}", stacklevel=2)
+        for line in collapsed:
+            _emit(line)
+
+        if conversion_result.returncode != 0:  # Non-zero exit
+            operator.report({'ERROR'}, "Binarization failed. See log for details.")
+            return
+        logger.info(f'Finished binarization of "{filepath}"')
+        operator.report({'INFO'}, "Binarization completed successfully.")
+
     except FileNotFoundError:
         logger.error(f"Invalid path to i3dConverter.exe: {converter_exe_path!r}")
     except subprocess.TimeoutExpired as e:
         logger.error(f"i3dConverter.exe timed out after {BINARIZER_TIMEOUT_IN_SECONDS} seconds. Output: {e.output!r}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"i3dConverter.exe failed to run with error code: {e.returncode}")
-    else:
-        error_messages = [f"\t{line}" for line in conversion_result.stdout.split('\n') if line.startswith("Error:")]
-        if error_messages:
-            logger.error("i3dConverter.exe produced errors:\n" + '\n'.join(error_messages))
-            operator.report({'ERROR'}, "i3dConverter.exe reported errors. See log for details.")
-        else:
-            logger.info(f'Finished binarization of "{filepath}"')
-            operator.report({'INFO'}, "Binarization completed successfully.")
+        operator.report({'ERROR'}, "Binarization timed out. See log for details.")
+    except Exception:
+        logger.exception("Unexpected error while running i3dConverter.exe")
+        operator.report({'ERROR'}, "Binarization crashed. See log for details.")
