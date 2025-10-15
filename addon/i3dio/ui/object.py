@@ -3,6 +3,7 @@ from bpy.types import (
     Operator,
     Panel
 )
+from bl_operators.presets import AddPresetBase
 from bpy.app.handlers import (
     persistent,
     load_post
@@ -1103,7 +1104,7 @@ class I3D_IO_PT_Object_Presets(presets.PresetPanel, Panel):
 
 
 @register
-class I3D_IO_OT_Object_Add_Preset(presets.AddPresetBase, Operator):
+class I3D_IO_OT_Object_Add_Preset(AddPresetBase, Operator):
     bl_idname = "i3dio.add_object_preset"
     bl_label = "Add an Object Preset"
     preset_menu = "I3D_IO_PT_Object_Presets"
