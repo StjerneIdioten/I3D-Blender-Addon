@@ -5,6 +5,7 @@ import bpy
 from bpy.types import AddonPreferences
 from bpy.props import (StringProperty, EnumProperty)
 from .. import __package__ as base_package
+from ..utility import ext_user_dir
 from .shader_parser import populate_game_shaders
 from .material_templates import parse_templates
 from .collision_data import populate_collision_cache
@@ -235,21 +236,19 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         try:
             # Create in-memory zipfile from downloaded content
             zipfile = ZipFile(BytesIO(request.content), 'r')
-            # Find path to this exporter addon
-            binary_path = 'i3dConverter.exe'
-            for addon in addon_utils.modules():
-                if addon.bl_info.get("name") == "Unofficial GIANTS I3D Exporter Tools":
-                    binary_path = pathlib.PurePath(addon.__file__).parent.joinpath(binary_path)
+            # Write under the per-extension user dir
+            binary_path = ext_user_dir("bin") / 'i3dConverter.exe'
+
             # Extract I3D Converter Binary from zipfile and save to disk
-            with zipfile.open('io_export_i3d/util/i3dConverter.exe') as zipped_binary, open(binary_path, 'wb') as saved_binary:
-                copyfileobj(zipped_binary, saved_binary)
+            with zipfile.open('io_export_i3d/util/i3dConverter.exe') as binary_zip, open(binary_path, 'wb') as saved:
+                copyfileobj(binary_zip, saved)
             # Set I3D Converter Binary path to newly downloaded converter
             context.preferences.addons[base_package].preferences.i3d_converter_path = str(binary_path)
         except (BadZipfile, KeyError, OSError) as e:
-            self.report({'WARNING'}, f"The Community I3D Exporter did not succesfully fetch and install the Giants I3D Converter binary! ({e})")
+            self.report({'WARNING'}, f"Failed to fetch/install the GIANTS I3D Converter: {e}")
             return {'CANCELLED'}
 
-        self.report({'INFO'}, f"Fetched i3dConverter.exe from version {exporter_version} of the Giants Exporter downloaded from {download_url}")
+        self.report({'INFO'}, f"Installed i3dConverter.exe (Exporter v{exporter_version}) to {binary_path}")
         return {'FINISHED'}
 
     def invoke(self, context, event):
