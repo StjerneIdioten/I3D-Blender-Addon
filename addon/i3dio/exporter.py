@@ -17,6 +17,7 @@ from .i3d import I3D
 from .node_classes.node import SceneGraphNode
 from .node_classes.skinned_mesh import SkinnedMeshRootNode
 from .node_classes.merge_group import MergeGroup
+from .ui.dds_exporter import export_motion_path_array
 
 logger = logging.getLogger(__name__)
 logger.debug(f"Loading: {__name__}")
@@ -209,6 +210,9 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
             i3d.logger.info(f"[{obj.name}] will be ignored and its children will be added to nearest parent")
         _process_collection_objects(i3d, obj, node)
         return  # Collections use a different hierarchy and are handled separately in _process_collection_objects
+
+    if obj.i3d_motion_path_array.enabled:
+        export_motion_path_array(obj)
 
     # Check if object should be excluded from export (including its children)
     if obj.i3d_attributes.exclude_from_export:
