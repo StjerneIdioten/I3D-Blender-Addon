@@ -212,7 +212,7 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
         return  # Collections use a different hierarchy and are handled separately in _process_collection_objects
 
     if obj.i3d_motion_path_array.enabled:
-        export_motion_path_array(obj)
+        export_motion_path_array(obj, i3d.depsgraph, logger=logger)
 
     # Check if object should be excluded from export (including its children)
     if obj.i3d_attributes.exclude_from_export:
