@@ -332,6 +332,7 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
                         param_name = f"colorMat{colormat_slot}"
                         work_order['param_name'] = param_name
 
+                        color_mat_vec = None
                         # Old system: 'source' in i3d_attrs
                         if 'source' in i3d_attrs:
                             shader_params_list = i3d_attrs.get('shader_parameters', [])
