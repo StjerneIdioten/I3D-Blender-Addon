@@ -384,8 +384,9 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
     if params:
         param_header, param_panel = layout.panel(idname + "_params", default_closed=False)
         param_header.label(text=f"{header_label}Parameters")
+        visualizer = any(a.module.endswith('.i3d_material_visualizer') for a in bpy.context.preferences.addons.values())
         if idname == 'shader_material_default':
-            if 'fs25_material_visualizer' in bpy.context.preferences.addons:
+            if visualizer:
                 scene_mat = bpy.context.scene.i3d_material
                 param_header.prop(scene_mat, "show_scratches", text="", icon='EVENT_S', toggle=True)
                 param_header.prop(scene_mat, "show_dirt", text="", icon='EVENT_D', toggle=True)
@@ -402,12 +403,13 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
             op.is_brand = True
             op.single_param = ""
 
-            if 'fs25_material_visualizer' in bpy.context.preferences.addons:
+            if visualizer:
                 mat = bpy.context.material
                 param_header.separator(type='LINE')
                 if bpy.context.material.i3d_visualized:
-                    param_header.operator('i3d_material_visualizer.get_set', text="", icon='EXPORT').mode = 'GET'
-                    param_header.operator('i3d_material_visualizer.get_set', text="", icon='IMPORT').mode = 'SET'
+                    param_header.operator('i3d_material_visualizer.sync_shader', text="", icon='EXPORT')
+                    op = param_header.operator('i3d_material_visualizer.sync_shader', text="", icon='IMPORT')
+                    op.direction = "NODES_TO_PROPS"
                 param_header.prop(mat, "i3d_visualized", text="", icon='MATERIAL', toggle=True)
 
         if not param_panel:
@@ -423,14 +425,14 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
                 op.is_brand = True
                 op.single_param = param
 
-                if 'fs25_material_visualizer' in bpy.context.preferences.addons:
+                if visualizer:
                     if bpy.context.material.i3d_visualized:
                         row.separator(type='LINE')
-                        op = row.operator('i3d_material_visualizer.get_set', text="", icon='EXPORT')
-                        op.mode = 'GET'
+                        op = row.operator('i3d_material_visualizer.sync_shader', text="", icon='EXPORT')
+                        op.direction = "PROPS_TO_NODES"
                         op.single_param = param
-                        op = row.operator('i3d_material_visualizer.get_set', text="", icon='IMPORT')
-                        op.mode = 'SET'
+                        op = row.operator('i3d_material_visualizer.sync_shader', text="", icon='IMPORT')
+                        op.direction = "NODES_TO_PROPS"
                         op.single_param = param
             for _ in range(max_param_length - len(i3d_attributes.shader_material_params[param])):
                 row.label(text="")  # pad with empty text to make everything align
