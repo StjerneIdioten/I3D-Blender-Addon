@@ -375,11 +375,11 @@ class I3D_IO_PT_material_shader(Panel):
             column.separator(factor=2.5, type='LINE')
 
         if not shaderdefault:
-            draw_shader_group_panels(layout, i3d_attributes)
+            draw_shader_group_panels(layout, material)
             draw_refraction_attributes(layout, i3d_attributes)
 
 
-def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_label: str, i3d_attributes,
+def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_label: str, material: bpy.types.Material,
                             params: list[str], textures: list[I3DShaderTexture]) -> None:
     if params:
         param_header, param_panel = layout.panel(idname + "_params", default_closed=False)
@@ -404,29 +404,28 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
             op.single_param = ""
 
             if visualizer:
-                mat = bpy.context.material
                 param_header.separator(type='LINE')
-                if bpy.context.material.i3d_visualized:
+                if material.i3d_visualized:
                     param_header.operator('i3d_material_visualizer.sync_shader', text="", icon='EXPORT')
                     op = param_header.operator('i3d_material_visualizer.sync_shader', text="", icon='IMPORT')
                     op.direction = "NODES_TO_PROPS"
-                param_header.prop(mat, "i3d_visualized", text="", icon='MATERIAL', toggle=True)
+                param_header.prop(material, "i3d_visualized", text="", icon='MATERIAL', toggle=True)
 
         if not param_panel:
             return
-        param_arrays = [i3d_attributes.shader_material_params[param] for param in params]
+        param_arrays = [material.i3d_attributes.shader_material_params[param] for param in params]
         max_param_length = max((len(arr) for arr in param_arrays), default=4)
         column = param_panel.column(align=False)
         for param in params:
             row = column.row(align=True)
-            row.prop(i3d_attributes.shader_material_params, f'["{param}"]')
+            row.prop(material.i3d_attributes.shader_material_params, f'["{param}"]')
             if idname == "shader_material_brandcolor":
                 op = row.operator('i3dio.template_search_popup', text="", icon="EVENT_B")
                 op.is_brand = True
                 op.single_param = param
 
                 if visualizer:
-                    if bpy.context.material.i3d_visualized:
+                    if material.i3d_visualized:
                         row.separator(type='LINE')
                         op = row.operator('i3d_material_visualizer.sync_shader', text="", icon='EXPORT')
                         op.direction = "PROPS_TO_NODES"
@@ -434,7 +433,7 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
                         op = row.operator('i3d_material_visualizer.sync_shader', text="", icon='IMPORT')
                         op.direction = "NODES_TO_PROPS"
                         op.single_param = param
-            for _ in range(max_param_length - len(i3d_attributes.shader_material_params[param])):
+            for _ in range(max_param_length - len(material.i3d_attributes.shader_material_params[param])):
                 row.label(text="")  # pad with empty text to make everything align
     if textures:
         texture_header, texture_panel = layout.panel(idname + "_textures", default_closed=False)
@@ -447,17 +446,17 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
             column.row(align=True).prop(texture, 'source', text=texture.name, placeholder=placeholder)
 
 
-def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes) -> None:
-    shader_dict = get_shader_dict(i3d_attributes.use_custom_shaders)
-    shader_data = shader_dict.get(i3d_attributes.shader_name)
+def draw_shader_group_panels(layout: bpy.types.UILayout, material: bpy.types.Material) -> None:
+    shader_dict = get_shader_dict(material.i3d_attributes.use_custom_shaders)
+    shader_data = shader_dict.get(material.i3d_attributes.shader_name)
     lookup = shader_data.param_lookup
 
     params_by_template = {}
-    for pname in i3d_attributes.shader_material_params.keys():
+    for pname in material.i3d_attributes.shader_material_params.keys():
         if (param := lookup.get(pname)) is not None:
             params_by_template.setdefault(param.template, []).append(pname)
     textures_by_template = {}
-    for texture in i3d_attributes.shader_material_textures:
+    for texture in material.i3d_attributes.shader_material_textures:
         textures_by_template.setdefault(texture.template, []).append(texture)
 
     all_templates = set(params_by_template) | set(textures_by_template)
@@ -472,7 +471,7 @@ def draw_shader_group_panels(layout: bpy.types.UILayout, i3d_attributes) -> None
         friendly_name = TEMPLATES_GROUP_NAMES.get(template, humanize_template(template))
         group_label = "" if single_template else friendly_name + " "
         idname = f"shader_material_{template.lower()}"
-        draw_shader_group_panel(layout, idname, group_label, i3d_attributes, params, textures)
+        draw_shader_group_panel(layout, idname, group_label, material, params, textures)
 
 
 def draw_refraction_attributes(layout: bpy.types.UILayout, i3d_attributes: I3DMaterialShader) -> None:
