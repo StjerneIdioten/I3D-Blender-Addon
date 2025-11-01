@@ -169,11 +169,29 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
     bl_description = "Get the i3d converter path from the Giants exporter addon"
     bl_options = {'INTERNAL'}
 
+    MIN_VERSION = (10, 0, 0)
+    ADDON_NAME = "GIANTS I3D Exporter Tools"
+
     def execute(self, context):
-        if addon := next((addon for addon in addon_utils.modules()
-                          if addon.bl_info.get("name") == "GIANTS I3D Exporter Tools"), None):
-            path = str(pathlib.PurePath(addon.__file__).parent.joinpath('util/i3dConverter.exe'))
-            context.preferences.addons[base_package].preferences.i3d_converter_path = path
+        latest = None
+        for addon in addon_utils.modules():
+            info = getattr(addon, "bl_info", {})
+            if info.get("name") == self.ADDON_NAME:
+                version = tuple(info.get("version", (0, 0, 0)))
+                if version >= self.MIN_VERSION:
+                    if not latest or version > latest[0]:
+                        latest = (version, addon)
+        if not latest:
+            self.report({"WARNING"}, "No GIANTS I3D Exporter Tools v10+ addon found.")
+            return {"CANCELLED"}
+        addon = latest[1]
+        path = pathlib.Path(addon.__file__).parent.joinpath('util/i3dConverter.exe')
+        if not path.exists():
+            self.report({"WARNING"}, f"Converter not found at: {path}")
+            return {"CANCELLED"}
+
+        context.preferences.addons[base_package].preferences.i3d_converter_path = str(path)
+        self.report({"INFO"}, f"Found converter from version {latest[0]} at: {path}")
         return {"FINISHED"}
 
 
@@ -252,9 +270,12 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         return {'FINISHED'}
 
     def invoke(self, context, event):
-        wm = context.window_manager
-        # Width increased to fit the warning about the download freezing the UI
-        return wm.invoke_props_dialog(self, width=360)
+        bin_path = ext_user_dir("bin") / 'i3dConverter.exe'
+        if bin_path.exists():
+            context.preferences.addons[base_package].preferences.i3d_converter_path = str(bin_path)
+            self.report({"INFO"}, f"Existing i3dConverter.exe found at: {bin_path}")
+            return {'FINISHED'}
+        return context.window_manager.invoke_props_dialog(self, width=360)
 
     def draw(self, _context):
         layout = self.layout
