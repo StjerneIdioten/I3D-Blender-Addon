@@ -66,7 +66,7 @@ Ongoing development will, from time to time, be discussed/shared through develop
 * **#000** - [Status of Exporter Development](https://github.com/StjerneIdioten/I3D-Blender-Addon/discussions/129) *(22/04-2021)*
 
 ## Material Visualizer
-The exporter is supported by [Material Visualizer](https://github.com/LKAMinco/FS25-Material-Visualizer/releases/tag/v1.0) tool which can visualize VehicleShader for FS25.
+The exporter is fully compatible with the [Material Visualizer](https://github.com/LKAMinco/FS25-Material-Visualizer/releases/latest), a tool that visualizes the FS25 vehicleShader.
 
 
 ## Mod Showcase

@@ -441,12 +441,14 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
         if context.area:
             context.area.tag_redraw()  # Ensures the set values are updated in the UI
 
-        if 'fs25_material_visualizer' in bpy.context.preferences.addons:
+        if any(a.module.endswith('.i3d_material_visualizer') for a in context.preferences.addons):
             if context.material.i3d_visualized:
-                bpy.ops.i3d_material_visualizer.get_set(mode='GET',
-                                                        skip_color_scale=self.skip_color_scale,
-                                                        only_color_scale=self.only_color_scale,
-                                                        single_param=self.single_param)
+                bpy.ops.i3d_material_visualizer.sync_shader(
+                    direction="PROPS_TO_NODES",
+                    skip_color_scale=self.skip_color_scale,
+                    only_color_scale=self.only_color_scale,
+                    single_param=self.single_param
+                )
 
         info_str = " | ".join(info_parts)
         msg = f"Set {'brand' if self.is_brand else 'material'} template: {self.template_name}"
