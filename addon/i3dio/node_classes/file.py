@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from inspect import isabstract
 import logging
 from pathlib import Path
 import shutil
@@ -20,15 +20,16 @@ class File(Node):
     NAME_FIELD_NAME: ClassVar[str] = 'filename'
     ID_FIELD_NAME: ClassVar[str] = 'fileId'
 
-    @property
-    @classmethod
-    @abstractmethod
-    def MODHUB_FOLDER(cls):  # The name of the folder that it should go in for the modhub export type
-        return NotImplementedError
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if isabstract(cls):
+            return
+        if "MODHUB_FOLDER" not in cls.__dict__:
+            raise TypeError(f"{cls.__name__} must define MODHUB_FOLDER")
 
     def __init__(self, id_: int, i3d: I3D, filepath: str):
         self.blender_path = filepath  # This should be supplied as the normal blender relative path
-        self.resolved_path: Path = None
+        self.resolved_path: Path | None = None
         self.file_name = bpy.path.display_name_from_filepath(self.blender_path)
         self.file_extension = self.blender_path[self.blender_path.rfind('.'):len(self.blender_path)]
         self._xml_element = None
