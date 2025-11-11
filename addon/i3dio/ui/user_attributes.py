@@ -81,7 +81,7 @@ class I3D_IO_UL_user_attributes(bpy.types.UIList):
         sub = split.split(factor=0.5, align=True)
         sub.prop(item, "type", text="")
         if item.type == "data_boolean":
-            sub.prop(item, item.type, text="True" if item.data_boolean else "False", toggle=True)
+            sub.prop(item, item.type, text=str(item.data_boolean), toggle=True)
         else:
             sub.prop(item, item.type, text="")
 
