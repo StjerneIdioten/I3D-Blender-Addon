@@ -14,7 +14,7 @@ from bpy.props import (
     CollectionProperty,
 )
 
-attribute_default_name = 'Attribute'
+ATTRIBUTE_DEFAULT_NAME = 'Attribute'
 
 
 classes = []
@@ -29,20 +29,18 @@ def register(cls):
 class I3DUserAttributeItem(bpy.types.PropertyGroup):
 
     def name_update(self, context):
-        attribute_list = context.active_object.i3d_user_attributes.attribute_list
-
-        # Maintain unique user attribute names. This implementation is very rudimentary, but it is limited how many
-        # attributes people are adding and naming the same exact thing. Especially since giants does not support
-        # attributes with the same name anyway (on the same object)
-        if len([attribute for attribute in attribute_list if attribute.name == self.name]) > 1:
-            idx = 1
-            while idx < 1000:
-                new_name = self.name + '.' + str(idx).zfill(3)
-                if not any(attribute.name == new_name for attribute in attribute_list):
-                    self['name'] = new_name
-                    break
-                else:
-                    idx += 1
+        attrs = self.id_data.i3d_user_attributes.attribute_list
+        names = {a.name for a in attrs if a.as_pointer() != self.as_pointer()}
+        if (base := (self.name or ATTRIBUTE_DEFAULT_NAME).strip()) not in names:
+            return
+        # GE requires unique attribute names per object, so append number until it's unique
+        idx = 1
+        while idx < 1000:
+            candidate = f"{base}.{idx:03}"
+            if candidate not in names:
+                self["name"] = candidate
+                break
+            idx += 1
 
     name: StringProperty(
         name="Name",
@@ -95,7 +93,7 @@ class I3D_IO_OT_new_user_attribute(Operator):
 
     def execute(self, context):
         attrs = context.object.i3d_user_attributes
-        attrs.attribute_list.add().name = attribute_default_name
+        attrs.attribute_list.add().name = ATTRIBUTE_DEFAULT_NAME
         attrs.active_attribute = len(attrs.attribute_list) - 1
         return {'FINISHED'}
 
