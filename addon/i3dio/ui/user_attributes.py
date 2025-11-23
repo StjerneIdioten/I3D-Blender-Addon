@@ -75,7 +75,15 @@ class I3DUserAttributes(bpy.types.PropertyGroup):
 class I3D_IO_UL_user_attributes(bpy.types.UIList):
     """UIList for i3d user attributes"""
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
-        layout.prop(item, 'name', text='', icon='SCRIPT', emboss=False, translate=False)
+        split = layout.split(factor=0.35, align=True)
+        split.prop(item, "name", text="", icon="SCRIPT", emboss=False)
+
+        sub = split.split(factor=0.5, align=True)
+        sub.prop(item, "type", text="")
+        if item.type == "data_boolean":
+            sub.prop(item, item.type, text=str(item.data_boolean), toggle=True)
+        else:
+            sub.prop(item, item.type, text="")
 
 
 @register
@@ -112,11 +120,11 @@ class I3D_IO_OT_delete_user_attribute(Operator):
 
 @register
 class I3D_IO_PT_user_attributes(Panel):
-    bl_space_type = 'PROPERTIES'
-    bl_region_type = 'WINDOW'
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
     bl_label = "I3D User Attributes"
-    bl_context = 'object'
-    bl_parent_id = 'I3D_IO_PT_object_attributes'
+    bl_context = "object"
+    bl_parent_id = "I3D_IO_PT_object_attributes"
 
     @classmethod
     def poll(cls, context):
@@ -127,18 +135,11 @@ class I3D_IO_PT_user_attributes(Panel):
         attrs = context.object.i3d_user_attributes
 
         row = layout.row()
-        row.template_list("I3D_IO_UL_user_attributes", "The_List", attrs, "attribute_list", attrs, 'active_attribute')
+        row.template_list("I3D_IO_UL_user_attributes", "", attrs, "attribute_list", attrs, "active_attribute")
 
         column = row.column(align=True)
-        column.operator('i3dio_user_attribute_list.new_item', text='', icon='ADD')
-        column.operator('i3dio_user_attribute_list.delete_item', text='', icon='REMOVE')
-
-        if 0 <= attrs.active_attribute < len(attrs.attribute_list):
-            attr = attrs.attribute_list[attrs.active_attribute]
-            row = layout.row()
-            row.alignment = 'RIGHT'
-            row.prop(attr, 'type')
-            row.prop(attr, attr.type, text='')
+        column.operator(I3D_IO_OT_new_user_attribute.bl_idname, text="", icon="ADD")
+        column.operator(I3D_IO_OT_delete_user_attribute.bl_idname, text="", icon="REMOVE")
 
 
 def register():
