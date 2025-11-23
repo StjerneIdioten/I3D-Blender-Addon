@@ -839,7 +839,7 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
         panel.prop(i3d_attributes, 'solver_iteration_count')
 
         # Split Type Panel
-        header, panel = layout.panel('i3d_split_type_panel', default_closed=True)
+        header, panel = panel.panel('i3d_split_type_panel', default_closed=True)
         header.label(text="Split Type")
         header.emboss = 'NONE'
         header.menu(I3D_IO_MT_split_type_presets.bl_idname, icon='PRESET', text="")
