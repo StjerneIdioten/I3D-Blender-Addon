@@ -449,6 +449,8 @@ def draw_shader_group_panel(layout: bpy.types.UILayout, idname: str, header_labe
 def draw_shader_group_panels(layout: bpy.types.UILayout, material: bpy.types.Material) -> None:
     shader_dict = get_shader_dict(material.i3d_attributes.use_custom_shaders)
     shader_data = shader_dict.get(material.i3d_attributes.shader_name)
+    if not shader_data:
+        return  # No shader data found, nothing to draw
     lookup = shader_data.param_lookup
 
     params_by_template = {}
