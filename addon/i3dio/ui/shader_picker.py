@@ -330,7 +330,7 @@ class I3D_IO_PT_material_shader(Panel):
         box.prop(material.i3d_attributes, 'use_material_slot_name')
         row = box.row()
         row.enabled = material.i3d_attributes.use_material_slot_name
-        row.prop(material.i3d_attributes, 'material_slot_name', text="Custom Name:", placeholder=material.name)
+        row.prop(material.i3d_attributes, 'material_slot_name', text="Custom Name", placeholder=material.name)
 
         layout.separator(type='LINE')
 
