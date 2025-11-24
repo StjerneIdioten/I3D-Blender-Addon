@@ -1,15 +1,16 @@
-import addon_utils
 import pathlib
 
+import addon_utils
 import bpy
+from bpy.props import EnumProperty, StringProperty
 from bpy.types import AddonPreferences
-from bpy.props import (StringProperty, EnumProperty)
+
 from .. import __package__ as base_package
 from ..utility import ext_user_dir
-from .shader_parser import populate_game_shaders
-from .material_templates import parse_templates
-from .collision_data import populate_collision_cache
 from .bit_mask_editor import get_bitmask_flags
+from .collision_data import populate_collision_cache
+from .material_templates import parse_templates
+from .shader_parser import populate_game_shaders
 
 
 class I3D_IO_AddonPreferences(AddonPreferences):
@@ -74,7 +75,7 @@ class I3D_IO_AddonPreferences(AddonPreferences):
 
         col.separator(factor=1.5)
         box = col.box()
-        box.label(text="Binary I3D Converter:")
+        box.label(text="I3D Converter (i3dConverter.exe):")
 
         giants_exist = any(addon.bl_info.get("name") == "GIANTS I3D Exporter Tools" for addon in addon_utils.modules())
         path = pathlib.Path(self.i3d_converter_path)
@@ -89,28 +90,30 @@ class I3D_IO_AddonPreferences(AddonPreferences):
             info_box.row().prop(self, "converter_mode_tabs", expand=True)
             if self.converter_mode_tabs == "AUTOMATIC":
                 if giants_exist:
-                    info_box.label(text="GIANTS I3D Exporter is installed.", icon="TRIA_RIGHT")
-                    info_box.label(text="Click below to set the path automatically:")
+                    info_box.label(text="GIANTS I3D Exporter add-on detected.", icon="CHECKMARK")
+                    info_box.label(text="Use its bundled i3dConverter.exe path:")
                     row = info_box.row()
-                    row.operator('i3dio.i3d_converter_path_from_giants_addon',
-                                 text="Get Path from GIANTS Addon", icon="FILE_ALIAS")
+                    row.operator(
+                        'i3dio.i3d_converter_path_from_giants_addon',
+                        text="Use Path from GIANTS Add-on",
+                        icon="FILE_ALIAS",
+                    )
                     info_box.separator()
-                info_box.label(text="Automatically download and set up the I3D Converter (GDN login required):",
-                               icon="TRIA_RIGHT")
+                info_box.label(text="Automatically download and set up the I3D Converter:", icon="TRIA_RIGHT")
                 row = info_box.row()
-                row.operator("i3dio.download_i3d_converter",
-                             text="Download I3D Converter (GDN Login)...", icon='INTERNET')
+                row.operator("i3dio.download_i3d_converter", text="Download / Update from GDN...", icon='INTERNET')
             else:
                 info_box.label(text="Manually download and set up the I3D Converter:", icon="TRIA_RIGHT")
-                info_box.label(text="1. Download the GIANTS I3D Exporter addon:")
+                info_box.label(text="1. Open the GDN downloads page:")
                 row = info_box.row()
                 props = row.operator("wm.url_open", text="gdn.giants-software.com", icon='URL')
                 props.url = "https://gdn.giants-software.com/downloads.php"
 
-                info_box.label(text="2. Extract the .zip file.")
-                info_box.label(text="3. Locate io_export_i3d/util/i3dConverter.exe.")
-                info_box.label(text="4. Move it to a convenient location.")
-                info_box.label(text="5. Use the file browser icon below to set the path manually.")
+                info_box.label(text="2. Download the GIANTS Blender Exporter .zip for your FS version.")
+                info_box.label(text="3. Extract the .zip file.")
+                info_box.label(text="4. Locate io_export_i3d/util/i3dConverter.exe.")
+                info_box.label(text="5. Move it to a convenient location.")
+                info_box.label(text="6. Use the file browser below to set the path manually.")
         row = box.row(align=True)
         row.use_property_split = True
         row.prop(self, 'i3d_converter_path', placeholder="Path to i3dConverter.exe")
@@ -195,17 +198,27 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
         return {"FINISHED"}
 
 
+DOWNLOADS_URL = 'https://gdn.giants-software.com/downloads.php'
+PATTERN_EXPORTER_TEXT = r'Blender Exporter Plugins v[0-9]+\.[0-9]+\.[0-9]+'
+PATTERN_EXPORTER = (
+    r'href="download\.php\?downloadId=([0-9]+)">'
+    r'Blender Exporter Plugins v([0-9]+\.[0-9]+\.[0-9]+)'
+)
+LOGIN_URL = 'https://gdn.giants-software.com/index.php'
+
 class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
     bl_idname = "i3dio.download_i3d_converter"
-    bl_label = "Download I3D Converter (GDN Login Required)"
+    bl_label = "Download I3D Converter"
     bl_description = (
-        "Download from Giants Developer Network. "
-        "Requires a registered account at https://gdn.giants-software.com/."
+        "Download i3dConverter.exe from the Giants Developer Network.\n"
+        "The downloads page is usually public, but GDN account credentials can be used if login is required."
     )
     bl_options = {'INTERNAL'}
 
     email: StringProperty(name="GDN Email", default="")
     password: StringProperty(name="GDN Password", default="", subtype="PASSWORD")
+
+    _login_required: bool = False
 
     @classmethod
     def poll(cls, context):
@@ -213,54 +226,90 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
                              "enable it in the Blender System Preferences to use this feature!")
         return bpy.app.online_access
 
+    def _probe_login_required(self):
+        import re
+
+        from requests import Session
+
+        session = Session()
+        try:
+            resp = session.get(DOWNLOADS_URL, timeout=3.0)
+        except Exception:
+            # On any error, assume login is required
+            return True
+        if re.search(PATTERN_EXPORTER_TEXT, resp.text):
+            # Exporter text visible, page likely does not require login
+            return False
+        return True
+
     def execute(self, context):
         import re
         from io import BytesIO
-        from requests import Session
-        from zipfile import (ZipFile, BadZipfile)
         from shutil import copyfileobj
+        from zipfile import BadZipfile, ZipFile
 
-        # Attempt to login using provided credentials
-        session = Session()
-        request = session.post('https://gdn.giants-software.com/index.php',
-                               data={'greenstoneX': '1', 'redstoneX': self.email, 'bluestoneX': self.password})
+        from requests import Session
 
-        # Clear email and password after usage
+        email = (self.email or "").strip()
+        password = (self.password or "").strip()
         self.email = ""
         self.password = ""
 
-        # Check if login was successful
-        if not re.search(r'href="index\.php\?logout=true"', request.text):
-            self.report({'WARNING'}, "Could not log in to Giants Developer Network (GDN). "
-                        "Make sure you enter your account email and password from https://gdn.giants-software.com/")
+        session = Session()
+
+        def fetch_latest_exporter() -> list[tuple[str, str]]:
+            """Return list[(download_id, version)] for Blender exporters."""
+            request = session.get(DOWNLOADS_URL)
+            return re.findall(PATTERN_EXPORTER, request.text)
+
+        def pick_latest_exporter(matches):
+            """Given list[(download_id, version)], return the latest by version."""
+            def parse_version(v: str) -> tuple[int, int, int]:
+                try:
+                    major, minor, patch = (int(p) for p in v.split("."))
+                    return major, minor, patch
+                except Exception:
+                    # If parsing fails, treat as 0.0.0 so valid versions win
+                    return (0, 0, 0)
+
+            # If multiple entries have same version, higher downloadId wins
+            return max(matches, key=lambda item: (parse_version(item[1]), int(item[0])))
+
+        result = fetch_latest_exporter()
+        if not result and email and password:
+            request = session.post(LOGIN_URL, data={'greenstoneX': '1', 'redstoneX': email, 'bluestoneX': password})
+
+            if not re.search(r'href="index\.php\?logout=true"', request.text):
+                self.report(
+                    {'WARNING'},
+                    "Could not log in to Giants Developer Network (GDN). "
+                    "Make sure you enter your account email and password from "
+                    "https://gdn.giants-software.com/."
+                )
+                return {'CANCELLED'}
+            result = fetch_latest_exporter()
+
+        if not result:
+            if getattr(self, "_login_required", False) and not (email and password):
+                self.report(
+                    {'WARNING'},
+                    "The GDN downloads page likely requires login. "
+                    "Please run this again and enter your GDN email & password."
+                )
+            else:
+                self.report({'WARNING'}, "Could not find the GIANTS Blender Exporter download link.")
             return {'CANCELLED'}
 
-        # Get download page
-        request = session.get('https://gdn.giants-software.com/downloads.php')
-
-        # Find the download IDs for the all Giants Blender Exporters (As long as Giants names them the same way)
-        result = re.findall(
-            r'href="download.php\?downloadId=([0-9]+)">Blender Exporter Plugins v([0-9]+.[0-9]+.[0-9]+)',
-            request.text
-        )
-
-        # Assume the first found is the newest
-        download_id, exporter_version = result[0]
-
-        # Request download of Giants I3D Exporter
-        download_url = f'https://gdn.giants-software.com/download.php?downloadId={download_id}'
+        download_id, exporter_version = pick_latest_exporter(result)
+        download_url = f"https://gdn.giants-software.com/download.php?downloadId={download_id}"
         request = session.get(download_url)
 
         try:
-            # Create in-memory zipfile from downloaded content
             zipfile = ZipFile(BytesIO(request.content), 'r')
-            # Write under the per-extension user dir
-            binary_path = ext_user_dir("bin") / 'i3dConverter.exe'
-
-            # Extract I3D Converter Binary from zipfile and save to disk
-            with zipfile.open('io_export_i3d/util/i3dConverter.exe') as binary_zip, open(binary_path, 'wb') as saved:
+            binary_path = ext_user_dir("bin") / "i3dConverter.exe"
+            with zipfile.open("io_export_i3d/util/i3dConverter.exe") as binary_zip, open(binary_path, "wb") as saved:
                 copyfileobj(binary_zip, saved)
-            # Set I3D Converter Binary path to newly downloaded converter
+
             context.preferences.addons[base_package].preferences.i3d_converter_path = str(binary_path)
         except (BadZipfile, KeyError, OSError) as e:
             self.report({'WARNING'}, f"Failed to fetch/install the GIANTS I3D Converter: {e}")
@@ -275,18 +324,27 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
             context.preferences.addons[base_package].preferences.i3d_converter_path = str(bin_path)
             self.report({"INFO"}, f"Existing i3dConverter.exe found at: {bin_path}")
             return {'FINISHED'}
+        self._login_required = self._probe_login_required()
         return context.window_manager.invoke_props_dialog(self, width=360)
 
     def draw(self, _context):
         layout = self.layout
         box = layout.box()
-        box.label(text="Enter your GDN (Giants Developer Network) login details:", icon='INFO')
-        box.label(text="You need a free account at https://gdn.giants-software.com/")
-        box.prop(self, "email")
-        box.prop(self, "password")
+
+        if getattr(self, "_login_required", False):
+            box.label(
+                text="GDN downloads may require login.",
+                icon='INFO',
+            )
+            box.label(text="Enter your GDN account details:")
+            box.prop(self, "email")
+            box.prop(self, "password")
+        else:
+            box.label(text="Click OK to download.")
+
         row = box.row()
         row.alignment = "CENTER"
-        row.label(text="Blender UI will appear frozen during file download (~15MB) ", icon="ERROR")
+        row.label(text="Blender UI will appear frozen during file download (~18MB)", icon="ERROR")
 
 
 classes = (
