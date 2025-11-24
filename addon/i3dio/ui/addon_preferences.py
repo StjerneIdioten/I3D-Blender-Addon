@@ -235,7 +235,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         try:
             resp = session.get(DOWNLOADS_URL, timeout=3.0)
         except Exception:
-            # On any error, assume login is required
+            # Any error, assume login is required
             return True
         if re.search(PATTERN_EXPORTER_TEXT, resp.text):
             # Exporter text visible, page likely does not require login
@@ -272,8 +272,10 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
                     # If parsing fails, treat as 0.0.0 so valid versions win
                     return (0, 0, 0)
 
-            # If multiple entries have same version, higher downloadId wins
-            return max(matches, key=lambda item: (parse_version(item[1]), int(item[0])))
+            # Determine latest version
+            latest_version = max(matches, key=lambda item: parse_version(item[1]))[1]
+            # Get the first entry matching the latest version
+            return [m for m in matches if m[1] == latest_version][0]
 
         result = fetch_latest_exporter()
         if not result and email and password:
