@@ -202,7 +202,8 @@ DOWNLOADS_URL = 'https://gdn.giants-software.com/downloads.php'
 PATTERN_EXPORTER_TEXT = r'Blender Exporter Plugins v[0-9]+\.[0-9]+\.[0-9]+'
 PATTERN_EXPORTER = (
     r'href="download\.php\?downloadId=([0-9]+)">'
-    r'Blender Exporter Plugins v([0-9]+\.[0-9]+\.[0-9]+)'
+    r'Blender Exporter Plugins v([0-9]+\.[0-9]+\.[0-9]+) '
+    r'\(([^)]+)\)'
 )
 LOGIN_URL = 'https://gdn.giants-software.com/index.php'
 
@@ -257,13 +258,15 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
 
         session = Session()
 
-        def fetch_latest_exporter() -> list[tuple[str, str]]:
-            """Return list[(download_id, version)] for Blender exporters."""
+        def fetch_latest_exporter() -> list[tuple[str, str, str]]:
+            """Return list[(download_id, version, game)] for Blender exporters."""
             request = session.get(DOWNLOADS_URL)
-            return re.findall(PATTERN_EXPORTER, request.text)
+            matches = re.findall(PATTERN_EXPORTER, request.text)
+            fs_matches = [m for m in matches if m[2].startswith("Farming Simulator")]
+            return fs_matches or matches
 
-        def pick_latest_exporter(matches):
-            """Given list[(download_id, version)], return the latest by version."""
+        def pick_latest_exporter(matches: list[tuple[str, str, str]]) -> tuple[str, str, str]:
+            """Given list[(download_id, version, game)], return the latest by version."""
             def parse_version(v: str) -> tuple[int, int, int]:
                 try:
                     major, minor, patch = (int(p) for p in v.split("."))
@@ -272,10 +275,13 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
                     # If parsing fails, treat as 0.0.0 so valid versions win
                     return (0, 0, 0)
 
-            # Determine latest version
+            # Determine latest version among the filtered matches
             latest_version = max(matches, key=lambda item: parse_version(item[1]))[1]
-            # Get the first entry matching the latest version
-            return [m for m in matches if m[1] == latest_version][0]
+            # Return first entry matching that version
+            for m in matches:
+                if m[1] == latest_version:
+                    return m
+            return matches[0]  # Fallback, should not happen
 
         result = fetch_latest_exporter()
         if not result and email and password:
@@ -302,7 +308,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
                 self.report({'WARNING'}, "Could not find the GIANTS Blender Exporter download link.")
             return {'CANCELLED'}
 
-        download_id, exporter_version = pick_latest_exporter(result)
+        download_id, exporter_version, game_name = pick_latest_exporter(result)
         download_url = f"https://gdn.giants-software.com/download.php?downloadId={download_id}"
         request = session.get(download_url)
 
@@ -317,7 +323,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
             self.report({'WARNING'}, f"Failed to fetch/install the GIANTS I3D Converter: {e}")
             return {'CANCELLED'}
 
-        self.report({'INFO'}, f"Installed i3dConverter.exe (Exporter v{exporter_version}) to {binary_path}")
+        self.report({'INFO'}, f"Installed I3D Converter (v{exporter_version}, {game_name}).")
         return {'FINISHED'}
 
     def invoke(self, context, event):
