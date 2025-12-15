@@ -198,12 +198,6 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
         return {"FINISHED"}
 
 
-PATTERN_EXPORTER = (
-    r'href="download\.php\?downloadId=([0-9]+)">'
-    r'Blender Exporter Plugins v([0-9]+\.[0-9]+\.[0-9]+) '
-    r'\(([^)]+)\)'
-)
-
 class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
     bl_idname = "i3dio.download_i3d_converter"
     bl_label = "Download I3D Converter"
@@ -226,75 +220,58 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         from urllib.request import Request, urlopen
         from zipfile import BadZipFile, ZipFile
 
+        pattern_exporter = re.compile(
+            r'href="download\.php\?downloadId=(\d+)"[^>]*>\s*'
+            r'Blender Exporter Plugins v(\d+\.\d+\.\d+)\s*'
+            r'\(([^)]+)\)',
+            flags=re.IGNORECASE,
+        )
+        ua = {"User-Agent": "Blender I3D IO Addon"}
+
         def _parse_version(version_str: str) -> tuple[int, int, int]:
             try:
-                major, minor, patch = (int(p) for p in version_str.split("."))
-                return major, minor, patch
+                return tuple((int(p) for p in version_str.split(".")))
             except Exception:
                 # If parsing fails, treat as 0.0.0 so valid versions win
                 return (0, 0, 0)
 
-        def _fetch_latest_exporter() -> list[tuple[str, str, str]]:
-            """Return list[(download_id, version, game)] for Blender exporters."""
-            req = Request(
-                "https://gdn.giants-software.com/downloads.php",
-                headers={"User-Agent": "Blender I3D IO Addon"},
-            )
-            with urlopen(req, timeout=10.0) as resp:
-                html = resp.read().decode('utf-8', errors="replace")
-            matches = re.findall(PATTERN_EXPORTER, html, flags=re.DOTALL)
-            fs_matches = [m for m in matches if m[2].startswith("Farming Simulator")]
-            return fs_matches or matches
-
-        def _pick_latest_exporter(matches: list[tuple[str, str, str]]) -> tuple[str, str, str]:
-            """Given list[(download_id, version, game)], return the latest by version."""
-            return max(matches, key=lambda item: _parse_version(item[1]))
+        def _latest_exporter(html: str) -> tuple[str, str, str]:
+            matches = [m.groups() for m in pattern_exporter.finditer(html)]
+            if not matches:
+                raise ValueError("No exporter matches found")
+            fs = [m for m in matches if m[2].startswith("Farming Simulator")]
+            candidates = fs or matches
+            return max(candidates, key=lambda t: _parse_version(t[1]))
 
         try:
-            matches = _fetch_latest_exporter()
+            req = Request("https://gdn.giants-software.com/downloads.php", headers=ua)
+            with urlopen(req, timeout=10.0) as resp:
+                html = resp.read().decode("utf-8", errors="replace")
+            download_id, exporter_version, game_name = _latest_exporter(html)
+
+            zip_url = f"https://gdn.giants-software.com/download.php?downloadId={download_id}"
+            req = Request(zip_url, headers=ua)
+            with urlopen(req, timeout=20.0) as resp:
+                zip_data = resp.read()
+
+            with ZipFile(BytesIO(zip_data), 'r') as zf:
+                exe_member = next((n for n in zf.namelist() if n.lower().endswith("i3dconverter.exe")), None)
+                if not exe_member:
+                    raise KeyError("i3dConverter.exe not found in ZIP archive")
+                binary_path = ext_user_dir("bin") / "i3dConverter.exe"
+                with zf.open(exe_member) as binary_zip, open(binary_path, "wb") as saved:
+                    copyfileobj(binary_zip, saved)
         except HTTPError as e:
             self.report({'WARNING'}, f"GDN returned HTTP error {e.code}.")
             return {'CANCELLED'}
         except URLError as e:
             self.report({'WARNING'}, f"Failed to reach GDN downloads page: {e.reason}.")
             return {'CANCELLED'}
+        except (BadZipFile, KeyError, OSError, ValueError) as e:
+            self.report({'WARNING'}, f"Failed to install i3dConverter.exe: {e}")
+            return {'CANCELLED'}
         except Exception as e:
             self.report({'WARNING'}, f"Unexpected error while fetching exporter list: {e}")
-            return {'CANCELLED'}
-
-        if not matches:
-            self.report({'WARNING'}, "Could not find the GIANTS Blender Exporter download link.")
-            return {'CANCELLED'}
-
-        download_id, exporter_version, game_name = _pick_latest_exporter(matches)
-        download_url = f"https://gdn.giants-software.com/download.php?downloadId={download_id}"
-        try:
-            req = Request(
-                download_url,
-                headers={"User-Agent": "Blender I3D IO Addon"},
-            )
-            with urlopen(req, timeout=20.0) as resp:
-                zip_data = resp.read()
-        except HTTPError as e:
-            self.report({'WARNING'}, f"Failed to download exporter ZIP (HTTP {e.code}).")
-            return {'CANCELLED'}
-        except URLError as e:
-            self.report({'WARNING'}, f"Network error while downloading exporter ZIP: {e.reason}")
-            return {'CANCELLED'}
-        except Exception as e:
-            self.report({'WARNING'}, f"Unexpected error while downloading exporter ZIP: {e}")
-            return {'CANCELLED'}
-
-        try:
-            with ZipFile(BytesIO(zip_data), 'r') as zf:
-                binary_path = ext_user_dir("bin") / "i3dConverter.exe"
-                exe_member = next((n for n in zf.namelist() if n.lower().endswith("i3dconverter.exe")), None)
-                if not exe_member:
-                    raise KeyError("i3dConverter.exe not found in ZIP archive")
-                with zf.open(exe_member) as binary_zip, open(binary_path, "wb") as saved:
-                    copyfileobj(binary_zip, saved)
-        except (BadZipFile, KeyError, OSError) as e:
-            self.report({'WARNING'}, f"Failed to extract i3dConverter.exe: {e}")
             return {'CANCELLED'}
 
         context.preferences.addons[base_package].preferences.i3d_converter_path = str(binary_path)
