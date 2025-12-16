@@ -169,14 +169,15 @@ class I3D_IO_OT_reset_i3d_converter_path(bpy.types.Operator):
 
 class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
     bl_idname = "i3dio.i3d_converter_path_from_giants_addon"
-    bl_label = "Get I3D converter path from Giants addon"
-    bl_description = "Get the i3d converter path from the Giants exporter addon"
+    bl_label = "Get I3D converter path from Giants Add-on"
+    bl_description = "Copy i3dConverter.exe from the GIANTS exporter add-on into the add-on bin folder"
     bl_options = {'INTERNAL'}
 
     MIN_VERSION = (10, 0, 0)
     ADDON_NAME = "GIANTS I3D Exporter Tools"
 
     def execute(self, context):
+        import shutil
         latest = None
         for addon in addon_utils.modules():
             info = getattr(addon, "bl_info", {})
@@ -186,17 +187,23 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
                     if not latest or version > latest[0]:
                         latest = (version, addon)
         if not latest:
-            self.report({"WARNING"}, "No GIANTS I3D Exporter Tools v10+ addon found.")
-            return {"CANCELLED"}
-        addon = latest[1]
-        path = pathlib.Path(addon.__file__).parent.joinpath('util/i3dConverter.exe')
-        if not path.exists():
-            self.report({"WARNING"}, f"Converter not found at: {path}")
-            return {"CANCELLED"}
+            self.report({'WARNING'}, "No GIANTS I3D Exporter Tools v10+ addon found.")
+            return {'CANCELLED'}
+        version, addon = latest
+        src = pathlib.Path(addon.__file__).parent / "util" / "i3dConverter.exe"
+        if not src.exists():
+            self.report({'WARNING'}, f"Converter not found at: {src}")
+            return {'CANCELLED'}
+        dst = ext_user_dir("bin") / "i3dConverter.exe"
+        try:
+            shutil.copyfile(src, dst)
+        except OSError as e:
+            self.report({'WARNING'}, f"Failed to copy converter: {e}")
+            return {'CANCELLED'}
 
-        context.preferences.addons[base_package].preferences.i3d_converter_path = str(path)
-        self.report({"INFO"}, f"Found converter from version {latest[0]} at: {path}")
-        return {"FINISHED"}
+        context.preferences.addons[base_package].preferences.i3d_converter_path = str(dst)
+        self.report({'INFO'}, f"Imported I3D Converter from GIANTS exporter v{version}")
+        return {'FINISHED'}
 
 
 class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
