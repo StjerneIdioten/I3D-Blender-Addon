@@ -100,6 +100,7 @@ class I3D_IO_AddonPreferences(AddonPreferences):
                     )
                     info_box.separator()
                 info_box.label(text="Automatically download and set up the I3D Converter:", icon="TRIA_RIGHT")
+                info_box.label(text="Note: Blender may appear frozen during download (~18MB).", icon="INFO")
                 row = info_box.row()
                 row.operator("i3dio.download_i3d_converter", text="Download / Update from GDN...", icon='INTERNET')
             else:
@@ -201,7 +202,10 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
 class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
     bl_idname = "i3dio.download_i3d_converter"
     bl_label = "Download I3D Converter"
-    bl_description = "Download i3dConverter.exe from the Giants Developer Network.\nRequires online access."
+    bl_description = (
+        "Download i3dConverter.exe from the Giants Developer Network.\nRequires online access.\n"
+        "Note: Blender may appear frozen during download."
+    )
     bl_options = {'INTERNAL'}
 
     @classmethod
@@ -239,7 +243,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
             matches = [m.groups() for m in pattern_exporter.finditer(html)]
             if not matches:
                 raise ValueError("No exporter matches found")
-            fs = [m for m in matches if m[2].startswith("Farming Simulator")]
+            fs = [m for m in matches if m[2].lower().startswith("farming simulator")]
             candidates = fs or matches
             return max(candidates, key=lambda t: _parse_version(t[1]))
 
@@ -277,17 +281,6 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         context.preferences.addons[base_package].preferences.i3d_converter_path = str(binary_path)
         self.report({'INFO'}, f"Installed I3D Converter (v{exporter_version}, {game_name}).")
         return {'FINISHED'}
-
-    def invoke(self, context, event):
-        return context.window_manager.invoke_props_dialog(self, width=360)
-
-    def draw(self, _context):
-        layout = self.layout
-        box = layout.box()
-        box.label(text="Click OK to download.")
-        row = box.row()
-        row.alignment = "CENTER"
-        row.label(text="Blender UI may appear frozen during file download (~18MB)", icon="INFO")
 
 
 classes = (
