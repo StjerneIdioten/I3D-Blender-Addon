@@ -518,6 +518,15 @@ class I3DMergeChildren(bpy.types.PropertyGroup):
         min=1,
         max=10
     )
+    reverse_order: bpy.props.BoolProperty(
+        name="Reverse Order",
+        description=(
+            "If enabled, child objects are processed in reverse order based on their appearance in the outliner. "
+            "This affects the assignment of generic values used in shaders, "
+            "which can influence rendering order or animation sequences."
+        ),
+        default=False
+    )
 
 
 @register
@@ -963,6 +972,7 @@ def draw_merge_children_attributes(layout: bpy.types.UILayout, i3d_merge_childre
         panel.enabled = i3d_merge_children.enabled
         panel.prop(i3d_merge_children, 'apply_transforms')
         panel.prop(i3d_merge_children, 'interpolation_steps')
+        panel.prop(i3d_merge_children, 'reverse_order')
 
 
 def draw_motion_path_array_attrs(layout: bpy.types.UILayout, i3d_motion_path_array: bpy.types.PropertyGroup) -> None:

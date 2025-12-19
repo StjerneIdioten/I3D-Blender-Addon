@@ -58,11 +58,14 @@ class MergeChildrenRoot(ShapeNode):
         apply_child_transforms = root_obj.i3d_merge_children.apply_transforms
         root_world_matrix = root_obj.matrix_world
         interpolation_steps = root_obj.i3d_merge_children.interpolation_steps
+        child_objects = sort_blender_objects_by_outliner_ordering(root_obj.children)
+        if root_obj.i3d_merge_children.reverse_order:
+            child_objects.reverse()
 
         self.logger.debug(f"Merging child meshes (Interpolation steps: {interpolation_steps})")
 
         g_value_index = 0
-        for child in sort_blender_objects_by_outliner_ordering(root_obj.children):
+        for child in child_objects:
             # Both mesh and non-mesh objects are processed; non-mesh objects only affect interpolation steps.
             # Generic value for this child and its descendants.
             generic_value = g_value_index / MERGE_CHILDREN_MAX_INDEX
