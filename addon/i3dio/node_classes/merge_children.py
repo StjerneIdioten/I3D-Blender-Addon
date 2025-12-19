@@ -1,9 +1,10 @@
-import mathutils
 import bpy
+import mathutils
 
-from .node import SceneGraphNode
-from .shape import (ShapeNode, EvaluatedMesh)
 from ..i3d import I3D
+from ..utility import sort_blender_objects_by_outliner_ordering
+from .node import SceneGraphNode
+from .shape import EvaluatedMesh, ShapeNode
 
 # Maximum index value for `mergeChildren` objects, used to normalize
 # generic values (g_value) for shaders. This constant is critical for:
@@ -61,7 +62,7 @@ class MergeChildrenRoot(ShapeNode):
         self.logger.debug(f"Merging child meshes (Interpolation steps: {interpolation_steps})")
 
         g_value_index = 0
-        for child in root_obj.children:
+        for child in sort_blender_objects_by_outliner_ordering(root_obj.children):
             # Both mesh and non-mesh objects are processed; non-mesh objects only affect interpolation steps.
             # Generic value for this child and its descendants.
             generic_value = g_value_index / MERGE_CHILDREN_MAX_INDEX
