@@ -1,7 +1,10 @@
 from __future__ import annotations
-from dataclasses import dataclass, fields, field
+
+from dataclasses import dataclass, field, fields
 from pathlib import Path
+
 import bpy
+import bpy.utils.previews
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 
 from .. import xml_i3d

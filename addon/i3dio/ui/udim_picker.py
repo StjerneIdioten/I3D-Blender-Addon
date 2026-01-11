@@ -23,6 +23,28 @@ def register(cls):
     return cls
 
 
+def uv_loop_selected(bm, loop, loop_uv, face, *, sync_enabled: bool) -> bool:
+    """Returns True if this UV loop should be considered selected, supporting both Blender 4.x and 5.0+."""
+    # Sync enabled = mesh selection drives UV selection
+    if sync_enabled:
+        return loop.vert.select and face.select
+    # When sync is disabled, UV selection drives it (if available), else fallback to mesh selection
+    # Blender 5.0+
+    if hasattr(loop, "uv_select_vert"):
+        # Ensure selection state is valid
+        if hasattr(bm, "uv_select_sync_valid") and not bm.uv_select_sync_valid:
+            bm.uv_select_sync_from_mesh()
+        if loop.uv_select_vert or loop.uv_select_edge or face.uv_select:
+            return True
+        # No UV selection, fall back to mesh selection
+        return loop.vert.select and face.select
+    # Fallback for Blender 4.x, where selection lives on the UV loop
+    if getattr(loop_uv, "select", False):
+        return True
+    # No UV selection, fall back to mesh selection
+    return loop.vert.select and face.select
+
+
 @register
 class I3D_IO_OT_udim_mover(Operator):
     bl_idname = "i3dio.udim_mover"
@@ -39,35 +61,42 @@ class I3D_IO_OT_udim_mover(Operator):
         return obj and obj.type == "MESH" and obj.mode == "EDIT"
 
     def execute(self, context):
-        # Grab the current sync setting, instead of looking it up all the time
-        sync_enabled = bpy.context.scene.tool_settings.use_uv_select_sync
+        sync_enabled = context.scene.tool_settings.use_uv_select_sync
         if not sync_enabled and "UV Editing" not in [screen.name for screen in context.workspace.screens]:
             self.report({"INFO"}, "UDIM Picker was used within mesh editor, but UV sync is disabled!")
             # Technically I could return the operator, but I will allow it to run just in case someone has some
             # other way of selecting uv's outside of the uv-editor screen
 
-        # Grabs only unique meshes (no instances) and weeds out any objects without selected vertices
-        objects = [obj for obj in bpy.context.objects_in_mode_unique_data if obj.data.total_vert_sel]
+        # If sync is OFF, user may have UV-only selection, so don't filter by total_vert_sel
+        if sync_enabled:
+            objects = [obj for obj in context.objects_in_mode_unique_data if obj.data.total_vert_sel]
+        else:
+            objects = list(context.objects_in_mode_unique_data)
+
         for obj in objects:
             bm = bmesh.from_edit_mesh(obj.data)
             uv_layer = bm.loops.layers.uv.verify()
+
+            # If sync is enabled, restrict to selected faces only
+            # else UV selection may exist without face.select, so iterate all faces
+            faces_iter = [f for f in bm.faces if f.select] if sync_enabled else bm.faces
+
             if self.mode == "RELATIVE":
-                for face in [face for face in bm.faces if face.select]:
+                for face in faces_iter:
                     for loop in face.loops:
                         loop_uv = loop[uv_layer]
-                        # If sync is enabled, loop_uv.select isn't set on selection
-                        if loop.vert.select and (sync_enabled or loop_uv.select):
+                        if uv_loop_selected(bm, loop, loop_uv, face, sync_enabled=sync_enabled):
                             loop_uv.uv += Vector(self.uv_offset)
+
             elif self.mode == "ABSOLUTE":
                 # Could use a bidict for this, if I want to install the extra dependency
                 faces_to_verts = defaultdict(set)
                 verts_to_faces = defaultdict(set)
-                for face in [face for face in bm.faces if face.select]:
-                    # print(f"Face {face.index}")
+                for face in faces_iter:
                     # Calculate lists of unique vert uv's and make a reverse lookup between faces and verts
                     for loop in face.loops:
                         loop_uv = loop[uv_layer]
-                        if loop.vert.select and (sync_enabled or loop_uv.select):
+                        if uv_loop_selected(bm, loop, loop_uv, face, sync_enabled=sync_enabled):
                             unique_uv_id = loop_uv.uv.to_tuple(5), loop.vert.index
                             faces_to_verts[face.index].add(unique_uv_id)
                             verts_to_faces[unique_uv_id].add(face.index)
@@ -89,7 +118,7 @@ class I3D_IO_OT_udim_mover(Operator):
                     for face in island:
                         for loop in face.loops:
                             loop_uv = loop[uv_layer]
-                            if loop.vert.select and (sync_enabled or loop_uv.select):
+                            if uv_loop_selected(bm, loop, loop_uv, face, sync_enabled=sync_enabled):
                                 uvs_to_move.append(loop_uv)
                                 cumulative_uv_position += loop_uv.uv
 
