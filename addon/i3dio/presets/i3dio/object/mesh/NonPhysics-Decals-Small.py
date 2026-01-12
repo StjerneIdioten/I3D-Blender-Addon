@@ -1,8 +1,9 @@
 import bpy
+
 obj = bpy.context.object
 
 obj.i3d_attributes.visibility = True
-obj.i3d_attributes.clip_distance = 300
+obj.i3d_attributes.clip_distance = 30
 obj.i3d_attributes.rigid_body_type = 'none'
 obj.data.i3d_attributes.casts_shadows = True
 obj.data.i3d_attributes.receive_shadows = True
