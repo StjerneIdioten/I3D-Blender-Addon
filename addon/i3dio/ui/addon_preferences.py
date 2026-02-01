@@ -224,6 +224,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         return bpy.app.online_access
 
     def execute(self, context):
+        import html as _html
         import re
         from io import BytesIO
         from shutil import copyfileobj
@@ -231,12 +232,6 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
         from urllib.request import Request, urlopen
         from zipfile import BadZipFile, ZipFile
 
-        pattern_exporter = re.compile(
-            r'href="download\.php\?downloadId=(\d+)"[^>]*>\s*'
-            r'Blender Exporter Plugins v(\d+\.\d+\.\d+)\s*'
-            r'\(([^)]+)\)',
-            flags=re.IGNORECASE,
-        )
         ua = {"User-Agent": "Blender I3D IO Addon"}
 
         def _parse_version(version_str: str) -> tuple[int, int, int]:
@@ -246,19 +241,66 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
                 # If parsing fails, treat as 0.0.0 so valid versions win
                 return (0, 0, 0)
 
-        def _latest_exporter(html: str) -> tuple[str, str, str]:
-            matches = [m.groups() for m in pattern_exporter.finditer(html)]
-            if not matches:
-                raise ValueError("No exporter matches found")
-            fs = [m for m in matches if m[2].lower().startswith("farming simulator")]
-            candidates = fs or matches
-            return max(candidates, key=lambda t: _parse_version(t[1]))
+        _re_exporter_table = re.compile(
+            r"<h2>\s*Exporter\s*</h2>\s*(<table.*?</table>)",
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        _re_tr = re.compile(r"<tr[^>]*>(.*?)</tr>", flags=re.IGNORECASE | re.DOTALL)
+        _re_td = re.compile(r"<t[dh][^>]*>(.*?)</t[dh]>", flags=re.IGNORECASE | re.DOTALL)
+        _re_download_id = re.compile(r'href="download\.php\?downloadId=(\d+)"', flags=re.IGNORECASE)
+        _re_version_in_name = re.compile(r"\bv(\d+\.\d+\.\d+)\b", flags=re.IGNORECASE)
+
+        def _strip_tags(s: str) -> str:
+            return _html.unescape(re.sub(r"<[^>]+>", "", s).strip())
+
+        def _latest_blender_exporter(html: str) -> tuple[str, str, str]:
+            """Returns: (download_id, exporter_version, compatibility) Prefers FS* rows over PMR rows."""
+            m = _re_exporter_table.search(html)
+            if not m:
+                raise ValueError("Exporter table not found (page layout changed?)")
+
+            table_html = m.group(1)
+            rows = _re_tr.findall(table_html)
+
+            found: list[tuple[str, str, str]] = []  # (download_id, version, compatibility)
+            for row_html in rows:
+                dm = _re_download_id.search(row_html)
+                if not dm:
+                    continue
+
+                cells = [_strip_tags(c) for c in _re_td.findall(row_html)]
+                if len(cells) < 2:
+                    continue
+
+                product_name = cells[0]
+                compatibility = cells[1]
+
+                if not product_name.lower().startswith("blender exporter plugins"):
+                    continue
+
+                vm = _re_version_in_name.search(product_name)
+                if not vm:
+                    continue
+
+                download_id = dm.group(1)
+                version = vm.group(1)
+                found.append((download_id, version, compatibility))
+
+            if not found:
+                raise ValueError("No Blender Exporter rows found")
+
+            # Only keep FS25 entries
+            fs25 = [t for t in found if t[2].strip().upper().startswith("FS25") or "FS25" in t[2].strip().upper()]
+            if not fs25:
+                raise ValueError("No FS25 Blender Exporter entry found on GDN downloads page")
+
+            return max(fs25, key=lambda t: _parse_version(t[1]))
 
         try:
             req = Request("https://gdn.giants-software.com/downloads.php", headers=ua)
             with urlopen(req, timeout=10.0) as resp:
-                html = resp.read().decode("utf-8", errors="replace")
-            download_id, exporter_version, game_name = _latest_exporter(html)
+                page_html = resp.read().decode("utf-8", errors="replace")
+            download_id, exporter_version, compatibility = _latest_blender_exporter(page_html)
 
             zip_url = f"https://gdn.giants-software.com/download.php?downloadId={download_id}"
             req = Request(zip_url, headers=ua)
@@ -286,7 +328,7 @@ class I3D_IO_OT_download_i3d_converter(bpy.types.Operator):
             return {'CANCELLED'}
 
         context.preferences.addons[base_package].preferences.i3d_converter_path = str(binary_path)
-        self.report({'INFO'}, f"Installed I3D Converter (v{exporter_version}, {game_name}).")
+        self.report({"INFO"}, f"Installed I3D Converter (Exporter v{exporter_version}, {compatibility}).")
         return {'FINISHED'}
 
 
