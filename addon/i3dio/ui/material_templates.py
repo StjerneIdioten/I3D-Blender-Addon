@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
+import logging
+import math
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 
@@ -11,10 +15,26 @@ from .. import xml_i3d
 from ..utility import get_fs_data_path
 from .helper_functions import humanize_template
 
+logger = logging.getLogger(__name__)
+
 TEMPLATES_GROUP_NAMES: dict[str, str] = {}  # template_id -> friendly name
 MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}
 BRAND_MATERIAL_TEMPLATES: dict[str, BrandMaterialTemplate] = {}
 preview_collections = {}
+
+def _warn_invalid_template_attr(
+    template_name: str,
+    attr_name: str,
+    attr_value: object,
+    reason: str = "invalid value",
+) -> None:
+    logger.warning(
+        "Skipping material template %r attribute %r with %s %r. Keeping inherited/default value.",
+        template_name,
+        attr_name,
+        reason,
+        attr_value,
+    )
 
 
 @dataclass
@@ -29,21 +49,61 @@ class TemplateBase:
     porosity: float = 0.0
     from_moddesc: bool = False  # Indicates if the template was loaded from modDesc.xml
 
-    def _initialize_from_elem(self, elem: xml_i3d.XML_Element):
-        """Overwrites instance attributes with values explicitly defined in the provided XML element's attributes."""
-        type_converters = {
-            "colorScale": lambda v: tuple(float(c) for c in v.split()),
-            "clearCoatIntensity": float,
-            "clearCoatSmoothness": float,
-            "smoothnessScale": float,
-            "metalnessScale": float,
-            "porosity": float
-        }
+    XML_IGNORED_ATTRS: ClassVar[frozenset[str]] = frozenset({"from_moddesc", "declared_fields"})
+
+    def _xml_field_names(self) -> set[str]:
+        return {f.name for f in fields(self) if f.name not in self.XML_IGNORED_ATTRS}
+
+    def _parse_xml_attr(self, attr_name: str, attr_value: str, template_name: str) -> object | None:
+        current_value = getattr(self, attr_name)
+
+        try:
+            if isinstance(current_value, str):
+                return attr_value
+
+            if isinstance(current_value, float):
+                value = float(attr_value)
+                if not math.isfinite(value):
+                    raise ValueError("non-finite value")
+                return value
+
+            if isinstance(current_value, int):
+                return int(attr_value)
+
+            if attr_name == "colorScale":
+                values = tuple(float(component) for component in attr_value.split())
+                if len(values) != 3:
+                    raise ValueError(f"expected 3 numbers but got {len(values)}")
+
+                if not all(math.isfinite(value) for value in values):
+                    raise ValueError("non-finite value")
+
+                return values
+
+        except (TypeError, ValueError) as error:
+            _warn_invalid_template_attr(template_name, attr_name, attr_value, str(error))
+            return None
+
+        return None
+
+    def _initialize_from_elem(self, elem: xml_i3d.XML_Element) -> set[str]:
+        """Overwrite instance attributes with valid values explicitly defined in the XML element."""
+
+        invalid_fields: set[str] = set()
+        template_name = elem.attrib.get("name", self.name)
+        xml_field_names = self._xml_field_names()
+
         for attr_name, attr_value in elem.attrib.items():
-            if attr_name in type_converters:
-                setattr(self, attr_name, type_converters[attr_name](attr_value))
-            elif attr_name == "name":
-                setattr(self, attr_name, attr_value)
+            if attr_name not in xml_field_names:
+                continue
+
+            if (value := self._parse_xml_attr(attr_name, attr_value, template_name)) is None:
+                invalid_fields.add(attr_name)
+                continue
+
+            setattr(self, attr_name, value)
+
+        return invalid_fields
 
 
 @dataclass
@@ -58,10 +118,6 @@ class MaterialTemplate(TemplateBase):
         """Create a MaterialTemplate instance from an XML element."""
         instance = cls()
         instance._initialize_from_elem(elem)
-        instance.category = elem.attrib.get("category", cls.category)
-        for field_name in ("detailDiffuse", "detailNormal", "detailSpecular"):
-            if field_name in elem.attrib:
-                setattr(instance, field_name, elem.attrib[field_name])
         return instance
 
 
@@ -76,17 +132,20 @@ class BrandMaterialTemplate(MaterialTemplate):
     @classmethod
     def from_elem(cls, elem: xml_i3d.XML_Element, default_parent: str) -> BrandMaterialTemplate:
         """Create a BrandMaterialTemplate instance from an XML element."""
+
         parent_template_name = elem.attrib.get("parentTemplate", default_parent)
         parent_template = get_template_by_name(parent_template_name)
         parent_props = {f.name: getattr(parent_template, f.name) for f in fields(MaterialTemplate)}
+
         instance = cls(**parent_props)
-        instance._initialize_from_elem(elem)
-        instance.usage = int(elem.attrib.get("usage", 0))
-        instance.brand = elem.attrib.get("brand", "")
-        instance.description = elem.attrib.get("description", "")
         instance.parentTemplate = parent_template_name
-        # Track which fields were actually declared in the XML element
-        instance.declared_fields = set(elem.attrib)
+        invalid_fields = instance._initialize_from_elem(elem)
+
+        # Track only supported fields that were actually declared in the XML element.
+        # Invalid fields are removed, so overlay mode will not apply broken values.
+        declared_fields = set(elem.attrib).intersection(instance._xml_field_names())
+        instance.declared_fields = declared_fields - invalid_fields
+
         return instance
 
 
