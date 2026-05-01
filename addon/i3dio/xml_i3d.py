@@ -28,6 +28,15 @@ def parse(*argv, **kwargs) -> ET.ElementTree:
     return tree
 
 
+def iter_section(root: XML_Element, section_name: str, child_tag: str) -> ET.Element | None:
+    section = root.find(section_name)
+    if section is None:
+        return None
+    for child in section:
+        if child.tag == child_tag:
+            yield child
+
+
 def SubElement(*args, **kwargs) -> ET.Element:
     return ET.SubElement(*args, **kwargs)
 
