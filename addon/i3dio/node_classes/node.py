@@ -197,7 +197,7 @@ class SceneGraphNode(Node):
 
         translation = matrix.to_translation()
         self.logger.debug(f"translation is {translation}")
-        if not utility.vector_compare(translation, mathutils.Vector((0, 0, 0))):
+        if not utility.isclose_value(translation, (0.0, 0.0, 0.0)):
             translation = "{0:.6g} {1:.6g} {2:.6g}".format(
                 *[x * bpy.context.scene.unit_settings.scale_length for x in translation])
 
@@ -208,7 +208,7 @@ class SceneGraphNode(Node):
 
         # Rotation, no unit scaling since it will always be degrees.
         rotation = [math.degrees(axis) for axis in matrix.to_euler('XYZ')]
-        if not utility.vector_compare(mathutils.Vector(rotation), mathutils.Vector((0, 0, 0))):
+        if not utility.isclose_value(rotation, (0.0, 0.0, 0.0)):
             rotation = "{0:.6g} {1:.6g} {2:.6g}".format(*rotation)
             self._write_attribute('rotation', rotation)
             self.logger.debug(f"has rotation(degrees): [{rotation}]")
@@ -219,7 +219,7 @@ class SceneGraphNode(Node):
                               "which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
         else:
             scale = matrix.to_scale()
-            if not utility.vector_compare(scale, mathutils.Vector((1, 1, 1))):
+            if not utility.isclose_value(scale, (1.0, 1.0, 1.0)):
                 scale = "{0:.6g} {1:.6g} {2:.6g}".format(*scale)
 
                 self._write_attribute('scale', scale)

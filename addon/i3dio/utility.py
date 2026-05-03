@@ -2,7 +2,8 @@
 This module contains various small utility functions, that don't really belong anywhere else
 """
 from __future__ import annotations
-from typing import Union, List
+from typing import Any, Union, List
+from numbers import Real
 import logging
 import math
 import mathutils
@@ -10,37 +11,67 @@ import bpy
 from pathlib import Path
 import os
 import re
+from idprop.types import IDPropertyArray
 
 logger = logging.getLogger(__name__)
 
 BlenderObject = Union[bpy.types.Object, bpy.types.Collection]
 
+FLOAT_EXPORT_TOLERANCE = 1e-6
 
-def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon: float = 0.0000001) -> bool:
-    """Compares two vectors elementwise, to see if they are equal
+def _is_number(value: object) -> bool:
+    return isinstance(value, Real) and not isinstance(value, bool)  # bool is a subclass of int
 
-    The function will run through the elements of vector a and compare them with vector b elementwise. If the function
-    reaches a set of values not within epsilon, it will return immediately.
 
-    Args:
-        a: The first vector
-        b: The second vector
-        epsilon: The absolute tolerance to which the elements should be within
+def _as_export_sequence(value: object) -> tuple[Any, ...] | None:
+    if isinstance(
+        value,
+        (
+            tuple,
+            list,
+            mathutils.Vector,
+            mathutils.Euler,
+            mathutils.Color,
+            bpy.types.bpy_prop_array,
+            IDPropertyArray,
+        ),
+    ):
+        return tuple(value)
+    return None
 
-    Returns:
-        True if the vectors are elementwise equal to the precision of epsilon
 
-    Raises:
-        TypeError: If the vectors aren't vectors with equal length
+def _isclose_item(a: object, b: object, *, abs_tol: float = FLOAT_EXPORT_TOLERANCE, rel_tol: float) -> bool:
+    a_is_number = _is_number(a)
+    b_is_number = _is_number(b)
+    if a_is_number and b_is_number:
+        return math.isclose(float(a), float(b), abs_tol=abs_tol, rel_tol=rel_tol)
+    if a_is_number != b_is_number:
+        return False  # One is a number and the other isn't
+    return a == b  # Fallback to equality for non-numeric items
+
+def isclose_value(a: object, b: object, *, abs_tol: float = FLOAT_EXPORT_TOLERANCE, rel_tol: float = 0.0) -> bool:
+    """Compares export values using target-format-friendly tolerance.
+
+    - numbers are compared with math.isclose
+    - vectors/colors/eulers/property arrays/lists/tuples are compared componentwise
+    - numeric items use math.isclose
+    - non-numeric items use ==
+    - fallback uses ==
+
+    This is intended for default-value/export checks, not geometric distance checks.
     """
-    if len(a) != len(b) or not isinstance(a, mathutils.Vector) or not isinstance(b, mathutils.Vector):
-        raise TypeError("Both arguments must be vectors of equal length!")
+    a_seq = _as_export_sequence(a)
+    b_seq = _as_export_sequence(b)
+    if a_seq is None and b_seq is None:
+        return _isclose_item(a, b, abs_tol=abs_tol, rel_tol=rel_tol)
 
-    for idx in range(0, len(a)):
-        if not math.isclose(a[idx], b[idx], abs_tol=epsilon):
-            return False
+    if a_seq is None or b_seq is None:
+        return False  # One is a sequence and the other isn't
 
-    return True
+    if len(a_seq) != len(b_seq):
+        return False  # Sequences of different lengths are not close
+
+    return all(_isclose_item(x, y, abs_tol=abs_tol, rel_tol=rel_tol) for x, y in zip(a_seq, b_seq))
 
 
 def ext_user_dir(subpath: str = "", create: bool = True) -> Path:

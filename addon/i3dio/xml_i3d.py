@@ -176,15 +176,7 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
         # Conversion Checks
 
         # Special case of checking floats, since these can be not equal due to floating point errors
-        if isinstance(value, float):
-            if math.isclose(value, default, abs_tol=0.0000001):
-                continue
-        elif isinstance(value, (bpy.types.bpy_prop_array, mathutils.Color)):
-            value = tuple(value)
-            if utility.vector_compare(mathutils.Vector(value), mathutils.Vector(default)):
-                continue
-        # In the case that the value is default, then just ignore it
-        elif value == default:
+        if utility.isclose_value(value, default):
             continue
         # In some cases of enums the i3d_name is actually the enum value itself. It is signaled by not having a name
         elif i3d_name is None:
