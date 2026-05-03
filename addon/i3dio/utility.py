@@ -2,18 +2,16 @@
 This module contains various small utility functions, that don't really belong anywhere else
 """
 from __future__ import annotations
-from typing import Union, List
-import logging
+
 import math
-import mathutils
-import bpy
-from pathlib import Path
 import os
 import re
+from pathlib import Path
 
-logger = logging.getLogger(__name__)
+import bpy
+import mathutils
 
-BlenderObject = Union[bpy.types.Object, bpy.types.Collection]
+BlenderObject = bpy.types.Object | bpy.types.Collection
 
 
 def vector_compare(a: mathutils.Vector, b: mathutils.Vector, epsilon: float = 0.0000001) -> bool:
@@ -51,7 +49,48 @@ def ext_user_dir(subpath: str = "", create: bool = True) -> Path:
     return Path(bpy.utils.extension_path_user(__package__, path=subpath, create=create))
 
 
-def as_fs_relative_path(filepath: str) -> Path:
+def normalize_path_separators(filepath: str | Path) -> str:
+    """Normalizes slashes for export-style path checks."""
+    return str(filepath).replace("\\", "/")
+
+
+def is_fs_builtin_path(filepath: str | Path) -> bool:
+    """
+    Returns True if the path uses the Farming Simulator '$data' prefix.
+    This only checks path syntax. It does not check whether the file exists.
+    """
+    path_str = normalize_path_separators(filepath)
+    return path_str == "$data" or path_str.startswith("$data/")
+
+
+def fs_builtin_to_disk_path(filepath: str | Path) -> Path | None:
+    """
+    Converts a '$data/...' path to a real disk path using the configured FS data path.
+    Returns None if the supplied path is not a '$data' path or if the FS data path is not configured.
+    """
+    if not is_fs_builtin_path(filepath):
+        return None
+    if not (fs_data_path := get_fs_data_path()):
+        return None
+    relative_path = normalize_path_separators(filepath).removeprefix("$data").lstrip("/")
+    return Path(bpy.path.abspath(fs_data_path)).resolve(strict=False) / relative_path
+
+
+def as_source_path(filepath: str | Path) -> Path | None:
+    """
+    Resolves a Blender/user path to the actual disk path used for validation/copying.
+    - '$data/...' paths are resolved through the configured FS data path.
+    - Blender relative paths like '//textures/foo.dds' are resolved with bpy.path.abspath.
+    - Absolute paths stay absolute.
+
+    Returns None if the source cannot be resolved, e.g. '$data' path but no FS data path is configured.
+    """
+    if is_fs_builtin_path(filepath):
+        return fs_builtin_to_disk_path(filepath)
+    return Path(bpy.path.abspath(str(filepath))).resolve(strict=False)
+
+
+def as_fs_relative_path(filepath: str | Path) -> Path:
     """
     Checks if a filepath is relative to the FS data directory
 
@@ -59,16 +98,17 @@ def as_fs_relative_path(filepath: str) -> Path:
     originates from within that directory.
 
     Args:
-        filepath (str): The filepath to check.
-
+        filepath (str | Path): The filepath to check.
     Returns:
-        str: The `$data`-replaced filepath if applicable, or a cleaned-up absolute path.
+        Path: The `$data`-replaced path if applicable, or a cleaned-up absolute path.
     """
+    if is_fs_builtin_path(filepath):
+        return Path(normalize_path_separators(filepath))
     # Resolve the absolute, normalized path to the FS data directory (if set)
     fs_data_pref = get_fs_data_path()
-    target_path = Path(bpy.path.abspath(filepath)).resolve(strict=False)
+    target_path = Path(bpy.path.abspath(str(filepath))).resolve(strict=False)
     if fs_data_pref:
-        fs_data_path = Path(bpy.path.abspath(fs_data_pref)).resolve(strict=False)
+        fs_data_path = Path(bpy.path.abspath(str(fs_data_pref))).resolve(strict=False)
         try:  # Return $data-prefixed path if inside FS data directory
             relative_to_fs = target_path.relative_to(fs_data_path)
             return (Path('$data') / relative_to_fs)
@@ -77,7 +117,7 @@ def as_fs_relative_path(filepath: str) -> Path:
     return target_path
 
 
-def as_export_path(filepath: str) -> Path:
+def as_export_path(filepath: str | Path) -> Path:
     """
     Resolves the export path for a file, for compatibility with Giants Editor and modding workflows.
 
@@ -87,14 +127,13 @@ def as_export_path(filepath: str) -> Path:
       - Otherwise, returns an absolute path.
 
     Args:
-        filepath (str): The path to the file, as used or stored by/in Blender.
-
+        filepath (str | Path): The path to the file, as used or stored by/in Blender.
     Returns:
         Path: The resolved path, either as a relative path (to the blend file) or an absolute path.
     """
-    if filepath.startswith('$data'):
+    if is_fs_builtin_path(filepath):
         # Already $data-prefixed (can happen from certain shader textures)
-        return Path(filepath)
+        return Path(normalize_path_separators(filepath))
 
     # Check if inside FS data directory
     if (fs_path := as_fs_relative_path(filepath)).parts and fs_path.parts[0] == '$data':
@@ -102,7 +141,7 @@ def as_export_path(filepath: str) -> Path:
 
     # Try to make path relative to the .blend file
     blend_dir = Path(bpy.data.filepath).parent.resolve()
-    target_path = Path(bpy.path.abspath(filepath)).resolve(strict=False)
+    target_path = Path(bpy.path.abspath(str(filepath))).resolve(strict=False)
     try:
         # NOTE: Path.relative_to (pathlib) does not support paths outside its base location before Python 3.12
         # https://docs.python.org/3.12/library/pathlib.html#pathlib.PurePath.relative_to
@@ -112,20 +151,15 @@ def as_export_path(filepath: str) -> Path:
         return target_path  # Happens if on another drive
 
 
-def sort_blender_objects_by_name(objects: List[BlenderObject]) -> List[BlenderObject]:
-    return sorted(objects, key=lambda x: x.name)
-
-
-"""
-Blenders outliner does not follow a stricly lexographical ordering, but rather what is called a "natural" ordering.
-This function implements the same ordering as per:
-https://github.com/blender/blender/blob/b0e7a6db56caf6669b6fade1622710d70b96483e/source/blender/blenlib/intern/string.c#L727,
-with the use of a regex as detailed in this answer on stackoverflow https://stackoverflow.com/a/16090640
-"""
-
-
-def sort_blender_objects_by_outliner_ordering(objects: List[BlenderObject]) -> List[BlenderObject]:
-    return sorted(objects, key=lambda s: [int(t) if t.isdigit() else t.lower() for t in re.split(r'(\d+)', s.name)])
+def sort_blender_objects_by_outliner_ordering(objects: list[BlenderObject]) -> list[BlenderObject]:
+    """
+    Blenders outliner does not follow a stricly lexographical ordering, but rather what is called a "natural" ordering.
+    This function implements the same ordering as per:
+    https://github.com/blender/blender/blob/b0e7a6db56caf6669b6fade1622710d70b96483e/source/blender/blenlib/intern/string.c#L727
+    with the use of a regex as detailed in this answer on stackoverflow https://stackoverflow.com/a/16090640
+    """
+    _split_num = re.compile(r'(\d+)')
+    return sorted(objects, key=lambda s: [int(t) if t.isdigit() else t.lower() for t in _split_num.split(s.name)])
 
 
 def get_fs_data_path(as_path: bool = False) -> str | Path:
