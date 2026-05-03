@@ -49,9 +49,9 @@ def _isclose_item(a: object, b: object, *, abs_tol: float = FLOAT_EXPORT_TOLERAN
         return False  # One is a number and the other isn't
     return a == b  # Fallback to equality for non-numeric items
 
+
 def isclose_value(a: object, b: object, *, abs_tol: float = FLOAT_EXPORT_TOLERANCE, rel_tol: float = 0.0) -> bool:
     """Compares export values using target-format-friendly tolerance.
-
     - numbers are compared with math.isclose
     - vectors/colors/eulers/property arrays/lists/tuples are compared componentwise
     - numeric items use math.isclose
