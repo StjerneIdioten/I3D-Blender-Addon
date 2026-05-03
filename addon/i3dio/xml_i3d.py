@@ -202,7 +202,7 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
                 value_to_write = property_group.i3d_map[prop_key].get('override')
             elif field_type == 'ANGLE':
                 value_to_write = math.degrees(value)
-                if math.isclose(value_to_write, default, abs_tol=0.0001):
+                if utility.isclose_value(value_to_write, default, abs_tol=0.0001):
                     continue
 
         logger.debug(f"Property '{prop_name}' with value '{value}'. Default is '{default}'")
