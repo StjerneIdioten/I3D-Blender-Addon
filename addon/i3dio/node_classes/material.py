@@ -124,17 +124,12 @@ class Material(Node):
 
             if self.i3d_attrs.shader_variation_name != SHADER_DEFAULT:
                 self._write_attribute('customShaderVariation', self.i3d_attrs.shader_variation_name)
-            for pname in self.i3d_attrs.shader_material_params.keys():
-                value = self.i3d_attrs.shader_material_params[pname]
+            for pname, value in self.i3d_attrs.shader_material_params.items():
                 default = self.i3d_attrs.shader_material_params.id_properties_ui(pname).as_dict().get('default')
                 if default is not None and utility.isclose_value(value, default):
                     continue
-                values = tuple(value)    
-                if len(values) == 1:
-                    value_str = f'{values[0]:.6g}'
-                else:
-                    value_str = ' '.join(f'{v:.6g}' for v in values)
-                xml_i3d.SubElement(self.element, 'CustomParameter', {'name': pname, "value": value_str})
+                elem = xml_i3d.SubElement(self.element, 'CustomParameter', {'name': pname})
+                xml_i3d.write_attribute(elem, "value", value)
 
             for texture in self.i3d_attrs.shader_material_textures:
                 self.logger.debug(f"Texture: '{texture.source}', default: {texture.default_source}")

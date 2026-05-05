@@ -24,23 +24,12 @@ def _is_number(value: object) -> bool:
 
 
 def _as_export_sequence(value: object) -> tuple[Any, ...] | None:
-    if isinstance(
-        value,
-        (
-            tuple,
-            list,
-            mathutils.Vector,
-            mathutils.Euler,
-            mathutils.Color,
-            bpy.types.bpy_prop_array,
-            IDPropertyArray,
-        ),
-    ):
+    if isinstance(value, (tuple, list, mathutils.Vector, mathutils.Color, bpy.types.bpy_prop_array, IDPropertyArray)):
         return tuple(value)
     return None
 
 
-def _isclose_item(a: object, b: object, *, abs_tol: float = FLOAT_EXPORT_TOLERANCE, rel_tol: float) -> bool:
+def _isclose_item(a: object, b: object, *, abs_tol: float = FLOAT_EXPORT_TOLERANCE, rel_tol: float = 0.0) -> bool:
     a_is_number = _is_number(a)
     b_is_number = _is_number(b)
     if a_is_number and b_is_number:

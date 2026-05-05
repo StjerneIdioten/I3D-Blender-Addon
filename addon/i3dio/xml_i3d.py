@@ -6,6 +6,7 @@ import math
 import logging
 import bpy
 import mathutils
+from idprop.types import IDPropertyArray
 
 from . import utility
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
@@ -99,7 +100,7 @@ def write_attribute(element: XML_Element, attribute: str, value) -> None:
         write_int(element, attribute, value)
     elif isinstance(value, str):
         write_string(element, attribute, value)
-    elif isinstance(value, (list, tuple, bpy.types.bpy_prop_array, mathutils.Color, mathutils.Vector)):
+    elif isinstance(value, (list, tuple, bpy.types.bpy_prop_array, IDPropertyArray, mathutils.Color, mathutils.Vector)):
         write_vector(element, attribute, tuple(value))
     else:
         logger.warning(f"No xml attribute writing function for attribute of type '{type(value)}'")
