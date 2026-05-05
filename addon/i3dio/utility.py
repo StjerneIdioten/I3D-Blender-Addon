@@ -18,13 +18,25 @@ logger = logging.getLogger(__name__)
 BlenderObject = Union[bpy.types.Object, bpy.types.Collection]
 
 FLOAT_EXPORT_TOLERANCE = 1e-6
+_EXPORT_SEQUENCE_TYPES = (
+    tuple,
+    list,
+    mathutils.Vector,
+    mathutils.Color,
+    mathutils.Euler,
+    mathutils.Quaternion,
+    bpy.types.bpy_prop_array,
+    IDPropertyArray,
+)
 
 def _is_number(value: object) -> bool:
+    """Return True for real numeric values, but not bools."""
     return isinstance(value, Real) and not isinstance(value, bool)  # bool is a subclass of int
 
 
-def _as_export_sequence(value: object) -> tuple[Any, ...] | None:
-    if isinstance(value, (tuple, list, mathutils.Vector, mathutils.Color, bpy.types.bpy_prop_array, IDPropertyArray)):
+def _as_export_tuple(value: object) -> tuple[Any, ...] | None:
+    """Convert supported export sequences to tuples for componentwise comparison."""
+    if isinstance(value, _EXPORT_SEQUENCE_TYPES):
         return tuple(value)
     return None
 
@@ -34,23 +46,21 @@ def _isclose_item(a: object, b: object, *, abs_tol: float = FLOAT_EXPORT_TOLERAN
     b_is_number = _is_number(b)
     if a_is_number and b_is_number:
         return math.isclose(float(a), float(b), abs_tol=abs_tol, rel_tol=rel_tol)
-    if a_is_number != b_is_number:
+    if a_is_number or b_is_number:
         return False  # One is a number and the other isn't
     return a == b  # Fallback to equality for non-numeric items
 
 
 def isclose_value(a: object, b: object, *, abs_tol: float = FLOAT_EXPORT_TOLERANCE, rel_tol: float = 0.0) -> bool:
-    """Compares export values using target-format-friendly tolerance.
-    - numbers are compared with math.isclose
-    - vectors/colors/eulers/property arrays/lists/tuples are compared componentwise
-    - numeric items use math.isclose
-    - non-numeric items use ==
-    - fallback uses ==
-
-    This is intended for default-value/export checks, not geometric distance checks.
+    """Compare export/default values using a target-format-friendly tolerance.
+    Intended for default-value/export checks, not geometric distance checks.
+    Rules:
+    - Numeric values are compared with math.isclose().
+    - Supported vector-like values are compared componentwise.
+    - Non-numeric values fall back to normal equality.
     """
-    a_seq = _as_export_sequence(a)
-    b_seq = _as_export_sequence(b)
+    a_seq = _as_export_tuple(a)
+    b_seq = _as_export_tuple(b)
     if a_seq is None and b_seq is None:
         return _isclose_item(a, b, abs_tol=abs_tol, rel_tol=rel_tol)
 
