@@ -1,6 +1,7 @@
 from inspect import isabstract
 import logging
 from pathlib import Path
+import os
 import shutil
 from typing import ClassVar
 import bpy
@@ -31,7 +32,7 @@ class File(Node):
         self.blender_path = filepath  # This should be supplied as the normal blender relative path
         self.resolved_path: Path | None = None
         self.file_name = bpy.path.display_name_from_filepath(self.blender_path)
-        self.file_extension = self.blender_path[self.blender_path.rfind('.'):len(self.blender_path)]
+        self.file_extension = Path(self.blender_path).suffix
         self._xml_element = None
         super().__init__(id_, i3d, None)
 
@@ -65,73 +66,97 @@ class File(Node):
         - Other files are copied if copy_files is enabled.
         - Otherwise, relative to blend or absolute.
         """
-        self.resolved_path = utility.as_export_path(self.blender_path)
+        if (source_path := utility.as_source_path(self.blender_path)) is None:
+            self.logger.warning(
+                f"Could not resolve source path for {self.blender_path!r}. "
+                "If this is a $data path, check that the FS data path is configured."
+            )
+        elif not source_path.exists():
+            self.logger.warning(f"File {source_path!r} does not exist. The exported I3D may reference a missing file.")
 
-        if str(self.resolved_path).startswith('$data'):
-            # Game asset, always reference with $data prefix and never copy
+        self.resolved_path = utility.as_export_path(self.blender_path)
+        if utility.is_fs_builtin_path(self.resolved_path):
             self.logger.info(f"Resolved as FS $data path: {self.resolved_path}")
             return
 
         if self.i3d.settings.get('copy_files', False):
-            self._copy_file()
+            self._copy_file(source_path)
             return
 
         self.logger.info(f"Resolved filepath: {self.resolved_path}")
+
         if self.resolved_path.is_absolute():
             self.logger.warning(
                 f"File {self.blender_path!r} is outside the blend file folder; using absolute path in I3D."
             )
 
-    def _copy_file(self):
-        resolved_directory = Path()
-        write_directory = Path(self.i3d.paths['i3d_folder'])
+    def _copy_file(self, source_path: Path | None):
+        i3d_folder = Path(self.i3d.paths['i3d_folder'])
+        write_directory = i3d_folder
+        write_path_full: Path | None = None
         self.logger.info("is not an FS builtin and will be copied")
+
+        if source_path is None:
+            self.logger.warning(f"Cannot copy {self.blender_path!r} because the source path could not be resolved")
+            return
+
+        if not source_path.exists():
+            self.logger.warning(f"File {source_path!r} does not exist, cannot copy")
+            return
 
         match self.i3d.settings.get('file_structure', 'MODHUB'):
             case 'FLAT':
                 self.logger.debug("will be copied using the 'FLAT' hierarchy structure")
+                self.resolved_path = Path(f"{self.file_name}{self.file_extension}")
+                write_path_full = i3d_folder / self.resolved_path
             case 'MODHUB':
                 self.logger.debug("will be copied using the 'MODHUB' hierarchy structure")
-                resolved_directory = Path(type(self).MODHUB_FOLDER)
-                write_directory /= resolved_directory
+                self.resolved_path = Path(type(self).MODHUB_FOLDER) / f"{self.file_name}{self.file_extension}"
+                write_path_full = i3d_folder / self.resolved_path
             case 'BLENDER':
-                self.logger.debug("'will be copied using the 'BLENDER' hierarchy structure")
-                # TODO: Rewrite this to make it more than three levels above the blend file but allow deeper nesting
-                #  ,since current code just counts number of slashes
-                blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
-                blender_path = Path(self.blender_path)
-                # relative steps to avoid copying entire folder structures ny mistake. Defaults to an absolute path.
-                if self.blender_path.count("..\\") <= blender_relative_distance_limit:
-                    # Remove relative notation and get the directory path
-                    resolved_directory = Path(*blender_path.parts[2:])
-                    write_directory /= resolved_directory
-                else:
+                self.logger.debug("will be copied using the 'BLENDER' hierarchy structure")
+
+                blend_dir = Path(bpy.data.filepath).parent.resolve(strict=False)
+                try:
+                    relative_file_path = Path(os.path.relpath(source_path, blend_dir))
+                except ValueError:
                     self.logger.debug(
-                        f"exists more than {blender_relative_distance_limit} folders away from .blend file. "
-                        f"Defaulting to absolute path and no copying."
+                        "File is on another drive than the .blend file. Defaulting to absolute path and no copying."
                     )
-                    self.resolved_path = Path(bpy.path.abspath(self.blender_path))
+                    self.resolved_path = source_path
                     return
+                
+                parent_steps = sum(1 for part in relative_file_path.parts if part == "..")
+                blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
 
-        self.resolved_path = resolved_directory / f"{self.file_name}{self.file_extension}"
+                if parent_steps > blender_relative_distance_limit:
+                    self.logger.debug(
+                        f"File exists more than {blender_relative_distance_limit} folders away from .blend file. "
+                        "Defaulting to absolute path and no copying."
+                    )
+                    self.resolved_path = source_path
+                    return
+                
+                self.resolved_path = relative_file_path
+                write_path_full = i3d_folder / relative_file_path
 
-        # Ensure we do not overwrite the source file
-        source_path = Path(bpy.path.abspath(self.blender_path))
-        if not source_path.exists():
-            self.logger.warning(f"File {source_path!r} does not exist, cannot copy")
+        if write_path_full is None:
+            self.logger.warning("Could not resolve write path for file %r", self.blender_path)
             return
-        if self.resolved_path == source_path:
+
+        write_path_full = write_path_full.resolve(strict=False)
+        write_directory = write_path_full.parent
+
+        if write_path_full == source_path.resolve(strict=False):
             self.logger.debug("Source and destination paths are the same, no need to copy")
             return
-        # We write the file if it doesn't exist or if overwrite is allowed
-        write_path_full = write_directory / f"{self.file_name}{self.file_extension}"
-        overwrite_files = self.i3d.settings.get('overwrite_files', False)
-        if overwrite_files or not write_path_full.exists():
+
+        if self.i3d.settings.get('overwrite_files', False) or not write_path_full.exists():
             write_directory.mkdir(parents=True, exist_ok=True)
             try:
-                shutil.copy(source_path, write_directory)
+                shutil.copy(source_path, write_path_full)
             except shutil.SameFileError:
-                pass  # Ignore if source and destination is the same file
+                pass
             else:
                 self.logger.info(f"copied to {write_path_full!r}")
         else:
