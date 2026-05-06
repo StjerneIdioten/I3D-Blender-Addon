@@ -213,6 +213,27 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         default=""
     )
 
+    i3d_diffuse_map: PointerProperty(
+        type=bpy.types.Image,
+        name="Diffuse Map",
+        description="Manual Diffuse/Base Color texture override for i3D export. Overrides shader node detection"
+    )
+    i3d_gloss_map: PointerProperty(
+        type=bpy.types.Image,
+        name="Gloss Map",
+        description="Manual Gloss/Specular texture override for i3D export. Overrides shader node detection"
+    )
+    i3d_normal_map: PointerProperty(
+        type=bpy.types.Image,
+        name="Normal Map",
+        description="Manual Normal Map texture override for i3D export. Overrides shader node detection"
+    )
+    i3d_emissive_map: PointerProperty(
+        type=bpy.types.Image,
+        name="Emissive Map",
+        description="Manual Emissive texture override for i3D export. Overrides shader node detection"
+    )
+
     i3d_map = {
         'alpha_blending': {'name': 'alphaBlending', 'default': False},
         'shading_rate': {'name': 'shadingRate', 'default': '1x1'},
@@ -331,6 +352,14 @@ class I3D_IO_PT_material_shader(Panel):
         row = box.row()
         row.enabled = material.i3d_attributes.use_material_slot_name
         row.prop(material.i3d_attributes, 'material_slot_name', text="Custom Name", placeholder=material.name)
+
+        box = layout.box()
+        box.label(text="Base Textures", icon='IMAGE_DATA')
+        col = box.column(align=True)
+        col.prop(i3d_attributes, 'i3d_diffuse_map')
+        col.prop(i3d_attributes, 'i3d_gloss_map')
+        col.prop(i3d_attributes, 'i3d_normal_map')
+        col.prop(i3d_attributes, 'i3d_emissive_map')
 
         layout.separator(type='LINE')
 

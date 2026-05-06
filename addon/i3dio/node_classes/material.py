@@ -45,52 +45,84 @@ class Material(Node):
             return self.i3d_attrs.material_slot_name or self.blender_material.name
         return None
 
+    @staticmethod
+    def _path_from_blender_image(image: 'bpy.types.Image | None') -> str | None:
+        """Get filepath from a direct bpy.types.Image reference (used by manual override PointerProperties)."""
+        if not image:
+            return None
+        return image.filepath_from_user() or (image.filepath if image.filepath else None)
+
     def populate_xml_element(self) -> None:
         vehicle_shader = (self.i3d_attrs.shader_name == "vehicleShader")
+
+        # Manual texture overrides take priority over shader node detection.
+        # If a PointerProperty is set, that image is used and node detection is skipped for that slot.
+        override_diffuse  = self._path_from_blender_image(getattr(self.i3d_attrs, 'i3d_diffuse_map',  None))
+        override_gloss    = self._path_from_blender_image(getattr(self.i3d_attrs, 'i3d_gloss_map',    None))
+        override_normal   = self._path_from_blender_image(getattr(self.i3d_attrs, 'i3d_normal_map',   None))
+        override_emissive = self._path_from_blender_image(getattr(self.i3d_attrs, 'i3d_emissive_map', None))
+
         principled = PrincipledBSDFWrapper(self.blender_material, is_readonly=True)
         bsdf = principled.node_principled_bsdf
 
-        emission_tex_path = self._image_path(principled.emission_color_texture)
+        # EMISSIVE
         skip_diffuse = False
-        if emission_tex_path:
-            self._write_texture_to_xml(emission_tex_path, 'Emissivemap')
+        if override_emissive:
+            self._write_texture_to_xml(override_emissive, 'Emissivemap')
             skip_diffuse = True
-        elif principled.emission_strength > 0:
-            emis_color = (
-                self._linked_rgb_color(bsdf.inputs['Emission Color'] if bsdf else None) or principled.emission_color
-            )
-            self._write_color(emis_color, 'emissiveColor')
-            skip_diffuse = True
-
-        if not skip_diffuse:
-            base_tex_path = self._image_path(principled.base_color_texture)
-            if base_tex_path:
-                self._write_texture_to_xml(base_tex_path, 'Texture')
-            else:
-                base_col = self._linked_rgb_color(bsdf.inputs['Base Color'] if bsdf else None) or principled.base_color
-                self._write_color(base_col, 'diffuseColor')
-
-        normalmap_tex_path = self._image_path(principled.normalmap_texture)
-        if normalmap_tex_path:
-            bump_depth = principled.normalmap_strength if principled.normalmap_strength != 1.0 else None
-            self._write_texture_to_xml(normalmap_tex_path, 'Normalmap', bump_depth)
-
-        gloss_path = None
-        if glossnode := self._find_node_by_name('glossmap'):
-            match glossnode.bl_idname:
-                case "ShaderNodeTexImage":
-                    gloss_path = self._image_path(glossnode)
-                case "ShaderNodeSeparateColor":
-                    input = glossnode.inputs['Color']
-                    if input.is_linked and (source := input.links[0].from_node).bl_idname == "ShaderNodeTexImage":
-                        gloss_path = self._image_path(source)
         else:
-            gloss_path = self._image_path(principled.specular_texture)
+            emission_tex_path = self._image_path(principled.emission_color_texture)
+            if emission_tex_path:
+                self._write_texture_to_xml(emission_tex_path, 'Emissivemap')
+                skip_diffuse = True
+            elif principled.emission_strength > 0:
+                emis_color = (
+                    self._linked_rgb_color(bsdf.inputs['Emission Color'] if bsdf else None) or principled.emission_color
+                )
+                self._write_color(emis_color, 'emissiveColor')
+                skip_diffuse = True
 
-        if gloss_path:
-            self._write_texture_to_xml(gloss_path, 'Glossmap')
-        elif not gloss_path and not vehicle_shader:
-            self._write_color([1.0 - principled.roughness, principled.specular, principled.metallic], 'specularColor')
+        # DIFFUSE
+        if not skip_diffuse:
+            if override_diffuse:
+                self._write_texture_to_xml(override_diffuse, 'Texture')
+            else:
+                base_tex_path = self._image_path(principled.base_color_texture)
+                if base_tex_path:
+                    self._write_texture_to_xml(base_tex_path, 'Texture')
+                else:
+                    base_col = self._linked_rgb_color(bsdf.inputs['Base Color'] if bsdf else None) or principled.base_color
+                    self._write_color(base_col, 'diffuseColor')
+
+        # NORMAL MAP
+        if override_normal:
+            self._write_texture_to_xml(override_normal, 'Normalmap')
+        else:
+            normalmap_tex_path = self._image_path(principled.normalmap_texture)
+            if normalmap_tex_path:
+                bump_depth = principled.normalmap_strength if principled.normalmap_strength != 1.0 else None
+                self._write_texture_to_xml(normalmap_tex_path, 'Normalmap', bump_depth)
+
+        # GLOSS MAP
+        if override_gloss:
+            self._write_texture_to_xml(override_gloss, 'Glossmap')
+        else:
+            gloss_path = None
+            if glossnode := self._find_node_by_name('glossmap'):
+                match glossnode.bl_idname:
+                    case "ShaderNodeTexImage":
+                        gloss_path = self._image_path(glossnode)
+                    case "ShaderNodeSeparateColor":
+                        input = glossnode.inputs['Color']
+                        if input.is_linked and (source := input.links[0].from_node).bl_idname == "ShaderNodeTexImage":
+                            gloss_path = self._image_path(source)
+            else:
+                gloss_path = self._image_path(principled.specular_texture)
+
+            if gloss_path:
+                self._write_texture_to_xml(gloss_path, 'Glossmap')
+            elif not gloss_path and not vehicle_shader:
+                self._write_color([1.0 - principled.roughness, principled.specular, principled.metallic], 'specularColor')
 
         if vehicle_shader:
             if "Texture" not in self.xml_elements:
