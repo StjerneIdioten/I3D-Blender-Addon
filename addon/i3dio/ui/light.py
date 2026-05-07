@@ -1,21 +1,11 @@
 import bpy
-from bpy.types import (
-    Operator,
-    Panel
-)
 from bl_operators.presets import AddPresetBase
-from bpy.props import (
-    PointerProperty,
-    FloatProperty,
-    EnumProperty,
-    FloatVectorProperty,
-    BoolProperty
-)
+from bpy.props import BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, PointerProperty
+from bpy.types import Operator, Panel
 
-from .helper_functions import i3d_property
 from ..xml_i3d import i3d_max
-
 from . import presets
+from .helper_functions import i3d_property
 
 classes = []
 
@@ -28,56 +18,92 @@ def register(cls):
 @register
 class I3DNodeLightAttributes(bpy.types.PropertyGroup):
     i3d_map = {
-        'type_of_light': {'name': 'type',
-                          'default': 'point',
-                          'tracking': {'member_path': 'type',
-                                       'mapping': {'POINT': 'point',
-                                                   'SUN': 'directional',
-                                                   'SPOT': 'spot',
-                                                   'AREA': 'directional'}
-                                       }
-                          },
+        'type_of_light': {
+            'name': 'type',
+            'default': 'point',
+            'tracking': {
+                'member_path': 'type',
+                'mapping': {'POINT': 'point', 'SUN': 'directional', 'SPOT': 'spot', 'AREA': 'directional'},
+            },
+        },
         'emit_diffuse': {'name': 'emitDiffuse', 'default': True},
         'emit_specular': {'name': 'emitSpecular', 'default': True},
-        'scattering': {'name': 'scattering', 'default': False,
-                       'depends': [{'name': 'type_of_light', 'value': 'directional'}]},
+        'scattering': {
+            'name': 'scattering',
+            'default': False,
+            'depends': [{'name': 'type_of_light', 'value': 'directional'}],
+        },
         'range': {'name': 'range', 'default': 1, 'tracking': {'member_path': 'cutoff_distance'}},
         'color': {'name': 'color', 'default': (1.0, 1.0, 1.0), 'tracking': {'member_path': 'color'}},
-        'cone_angle': {'name': 'coneAngle', 'default': 1.047198, 'type': 'ANGLE',
-                       'depends': [{'name': 'type_of_light', 'value': 'spot'}],
-                       'tracking': {'member_path': 'spot_size'}
-                       },
+        'cone_angle': {
+            'name': 'coneAngle',
+            'default': 1.047198,
+            'type': 'ANGLE',
+            'depends': [{'name': 'type_of_light', 'value': 'spot'}],
+            'tracking': {'member_path': 'spot_size'},
+        },
         'drop_off': {'name': 'dropOff', 'default': 4, 'depends': [{'name': 'type_of_light', 'value': 'spot'}]},
         'cast_shadow_map': {'name': 'castShadowMap', 'default': False, 'tracking': {'member_path': 'use_shadow'}},
-        'shadow_map_bias': {'name': 'depthMapBias', 'default': 0.005,
-                            'depends': [{'name': 'cast_shadow_map', 'value': True}]},
-        'shadow_map_slope_scale_bias': {'name': 'depthMapSlopeScaleBias', 'default': 0.005,
-                                        'depends': [{'name': 'cast_shadow_map', 'value': True}]},
-        'shadow_map_slope_clamp': {'name': 'depthMapSlopeClamp', 'default': 0.02,
-                                           'depends': [{'name': 'cast_shadow_map', 'value': True}]},
-        'shadow_map_resolution': {'name': 'depthMapResolution', 'default': '512',
-                                  'depends': [{'name': 'cast_shadow_map', 'value': True}]},
-        'shadow_map_perspective': {'name': 'shadowPerspective', 'default': False,
-                                   'depends': [{'name': 'cast_shadow_map', 'value': True}]},
-        'shadow_far_distance': {'name': 'shadowFarDistance', 'default': 80,
-                                'depends': [{'name': 'cast_shadow_map', 'value': True}]},
-        'shadow_extrusion_distance': {'name': 'shadowExtrusionDistance', 'default': 200,
-                                      'depends': [{'name': 'cast_shadow_map', 'value': True}]},
-        'shadow_map_num_splits': {'name': 'numShadowMapSplits', 'default': '1',
-                                  'depends': [{'name': 'cast_shadow_map', 'value': True}]},
-        'split_distance_1': {'name': 'shadowMapSplitDistance0', 'default': 80,
-                             'depends': [{'name': 'shadow_map_num_splits', 'value': '4'},
-                                         {'name': 'cast_shadow_map', 'value': True}]},
-        'split_distance_2': {'name': 'shadowMapSplitDistance1', 'default': 80,
-                             'depends': [{'name': 'shadow_map_num_splits', 'value': '4'},
-                                         {'name': 'cast_shadow_map', 'value': True}]},
-        'split_distance_3': {'name': 'shadowMapSplitDistance2', 'default': 80,
-                             'depends': [{'name': 'shadow_map_num_splits', 'value': '4'},
-                                         {'name': 'cast_shadow_map', 'value': True}]},
-        'split_distance_4': {'name': 'shadowMapSplitDistance3', 'default': 80,
-                             'depends': [{'name': 'shadow_map_num_splits', 'value': '4'},
-                                         {'name': 'cast_shadow_map', 'value': True}]},
-
+        'shadow_map_bias': {
+            'name': 'depthMapBias',
+            'default': 0.005,
+            'depends': [{'name': 'cast_shadow_map', 'value': True}],
+        },
+        'shadow_map_slope_scale_bias': {
+            'name': 'depthMapSlopeScaleBias',
+            'default': 0.005,
+            'depends': [{'name': 'cast_shadow_map', 'value': True}],
+        },
+        'shadow_map_slope_clamp': {
+            'name': 'depthMapSlopeClamp',
+            'default': 0.02,
+            'depends': [{'name': 'cast_shadow_map', 'value': True}],
+        },
+        'shadow_map_resolution': {
+            'name': 'depthMapResolution',
+            'default': '512',
+            'depends': [{'name': 'cast_shadow_map', 'value': True}],
+        },
+        'shadow_map_perspective': {
+            'name': 'shadowPerspective',
+            'default': False,
+            'depends': [{'name': 'cast_shadow_map', 'value': True}],
+        },
+        'shadow_far_distance': {
+            'name': 'shadowFarDistance',
+            'default': 80,
+            'depends': [{'name': 'cast_shadow_map', 'value': True}],
+        },
+        'shadow_extrusion_distance': {
+            'name': 'shadowExtrusionDistance',
+            'default': 200,
+            'depends': [{'name': 'cast_shadow_map', 'value': True}],
+        },
+        'shadow_map_num_splits': {
+            'name': 'numShadowMapSplits',
+            'default': '1',
+            'depends': [{'name': 'cast_shadow_map', 'value': True}],
+        },
+        'split_distance_1': {
+            'name': 'shadowMapSplitDistance0',
+            'default': 80,
+            'depends': [{'name': 'shadow_map_num_splits', 'value': '4'}, {'name': 'cast_shadow_map', 'value': True}],
+        },
+        'split_distance_2': {
+            'name': 'shadowMapSplitDistance1',
+            'default': 80,
+            'depends': [{'name': 'shadow_map_num_splits', 'value': '4'}, {'name': 'cast_shadow_map', 'value': True}],
+        },
+        'split_distance_3': {
+            'name': 'shadowMapSplitDistance2',
+            'default': 80,
+            'depends': [{'name': 'shadow_map_num_splits', 'value': '4'}, {'name': 'cast_shadow_map', 'value': True}],
+        },
+        'split_distance_4': {
+            'name': 'shadowMapSplitDistance3',
+            'default': 80,
+            'depends': [{'name': 'shadow_map_num_splits', 'value': '4'}, {'name': 'cast_shadow_map', 'value': True}],
+        },
     }
 
     type_of_light: EnumProperty(
@@ -86,15 +112,13 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         items=[
             ('point', 'Point', "Point Light"),
             ('spot', 'Spot', "Spot Light"),
-            ('directional', 'Directional', "Directional Light")
+            ('directional', 'Directional', "Directional Light"),
         ],
-        default=i3d_map['type_of_light']['default']
+        default=i3d_map['type_of_light']['default'],
     )
 
     type_of_light_tracking: BoolProperty(
-        name="Type",
-        description="Can be found at: Object Data Properties -> Light",
-        default=True
+        name="Type", description="Can be found at: Object Data Properties -> Light", default=True
     )
 
     color: FloatVectorProperty(
@@ -107,31 +131,21 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         size=3,
         precision=3,
         subtype='COLOR',
-        default=i3d_map['color']['default']
+        default=i3d_map['color']['default'],
     )
 
     color_tracking: BoolProperty(
-        name="Color",
-        description="Can be found at: Object Data Properties -> Light -> Color",
-        default=True
+        name="Color", description="Can be found at: Object Data Properties -> Light -> Color", default=True
     )
 
-    emit_diffuse: BoolProperty(
-        name="Diffuse",
-        description="Diffuse",
-        default=i3d_map['emit_diffuse']['default']
-    )
+    emit_diffuse: BoolProperty(name="Diffuse", description="Diffuse", default=i3d_map['emit_diffuse']['default'])
 
-    emit_specular: BoolProperty(
-        name="Specular",
-        description="Specular",
-        default=i3d_map['emit_specular']['default']
-    )
+    emit_specular: BoolProperty(name="Specular", description="Specular", default=i3d_map['emit_specular']['default'])
 
     scattering: BoolProperty(
         name="Light Scattering",
         description="Depends on 'Type' being 'Directional'",
-        default=i3d_map['scattering']['default']
+        default=i3d_map['scattering']['default'],
     )
 
     range: FloatProperty(
@@ -148,7 +162,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
     range_tracking: BoolProperty(
         name="Custom Distance",
         description="Can be found at: Object Data Properties -> Light -> Custom Distance -> Distance",
-        default=True
+        default=True,
     )
 
     cone_angle: FloatProperty(
@@ -160,7 +174,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=0,
         max=i3d_max,
         soft_min=0,
-        soft_max=180
+        soft_max=180,
     )
 
     cone_angle_tracking: BoolProperty(
@@ -177,7 +191,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=0,
         max=5,
         soft_min=0,
-        soft_max=5
+        soft_max=5,
     )
 
     cast_shadow_map: BoolProperty(
@@ -198,7 +212,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['shadow_map_bias']['default'],
         precision=3,
         min=0.0,
-        max=10.0
+        max=10.0,
     )
 
     shadow_map_slope_scale_bias: FloatProperty(
@@ -209,7 +223,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=-i3d_max,
         max=i3d_max,
         soft_min=-10,
-        soft_max=10
+        soft_max=10,
     )
 
     shadow_map_slope_clamp: FloatProperty(
@@ -220,7 +234,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=-i3d_max,
         max=i3d_max,
         soft_min=-10,
-        soft_max=10
+        soft_max=10,
     )
 
     shadow_map_resolution: EnumProperty(
@@ -233,7 +247,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
             ('2048', '2048', "2048"),
             ('4096', '4096', "4096"),
         ],
-        default=i3d_map['shadow_map_resolution']['default']
+        default=i3d_map['shadow_map_resolution']['default'],
     )
 
     shadow_map_perspective: BoolProperty(
@@ -250,7 +264,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=0,
         max=i3d_max,
         soft_min=0,
-        soft_max=65535
+        soft_max=65535,
     )
 
     shadow_extrusion_distance: FloatProperty(
@@ -261,17 +275,14 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=0,
         max=i3d_max,
         soft_min=0,
-        soft_max=100
+        soft_max=100,
     )
 
     shadow_map_num_splits: EnumProperty(
         name="Shadow Map Num Splits",
         description="Depends on 'Cast Shadow Map' being 'True'",
-        items=[
-            ('1', '1', "1"),
-            ('4', '4', "4")
-        ],
-        default=i3d_map['shadow_map_num_splits']['default']
+        items=[('1', '1', "1"), ('4', '4', "4")],
+        default=i3d_map['shadow_map_num_splits']['default'],
     )
 
     split_distance_1: FloatProperty(
@@ -282,7 +293,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=0,
         max=i3d_max,
         soft_min=0,
-        soft_max=500
+        soft_max=500,
     )
 
     split_distance_2: FloatProperty(
@@ -293,7 +304,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=0,
         max=i3d_max,
         soft_min=0,
-        soft_max=500
+        soft_max=500,
     )
 
     split_distance_3: FloatProperty(
@@ -304,7 +315,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=0,
         max=i3d_max,
         soft_min=0,
-        soft_max=500
+        soft_max=500,
     )
 
     split_distance_4: FloatProperty(
@@ -315,7 +326,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         min=0,
         max=i3d_max,
         soft_min=0,
-        soft_max=500
+        soft_max=500,
     )
 
 
@@ -328,7 +339,7 @@ class I3D_IO_PT_Light_Presets(presets.PresetPanel, Panel):
     @property
     def preset_subdir(self):
         return presets.PresetSubdir() / 'light'
-        
+
 
 @register
 class I3D_IO_OT_Light_Add_Preset(AddPresetBase, Operator):
@@ -353,7 +364,7 @@ class I3D_IO_PT_light_attributes(Panel):
     @classmethod
     def poll(cls, context):
         return context.light
-    
+
     def draw_header_preset(self, context):
         I3D_IO_PT_Light_Presets.draw_panel_header(self.layout)
 

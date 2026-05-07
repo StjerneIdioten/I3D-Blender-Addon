@@ -1,11 +1,12 @@
-import bpy
 from pathlib import Path
+
+import bpy
+
 from .. import __package__ as base_package
 from .. import xml_i3d
-from .object import I3DNodeObjectAttributes
-from .mesh import I3DNodeShapeAttributes
 from .collision_data import COLLISIONS
-
+from .mesh import I3DNodeShapeAttributes
+from .object import I3DNodeObjectAttributes
 
 classes = []
 
@@ -84,7 +85,7 @@ def get_bit_names(target_prop: str) -> list[str]:
         "viewer_spaciality_prevent_mask": "viewerSpatialityFlags",
         "object_mask": "objectMaskFlags",
         "collision_filter_group": COLLISIONS['flags'],  # Reuse the cached collision data
-        "collision_filter_mask": COLLISIONS['flags']
+        "collision_filter_mask": COLLISIONS['flags'],
     }
     category = category_map.get(target_prop)
     if isinstance(category, dict):  # Handling COLLISIONS['flags']
@@ -95,6 +96,7 @@ def get_bit_names(target_prop: str) -> list[str]:
 def message_box(message: str, title: str = "Info", icon: str = 'INFO') -> None:
     def draw(self, _context):
         self.layout.label(text=message)
+
     bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
 
@@ -109,6 +111,7 @@ class I3D_IO_OT_handle_invalid_bit_mask(bpy.types.Operator):
 
     def execute(self, _context):
         import json
+
         args = json.loads(self.args)
         if is_data_attribute(bpy.context.object, args["target_prop"]):
             default_prop_val = I3DNodeShapeAttributes.i3d_map.get(args["target_prop"], {}).get("default", "0")
@@ -144,7 +147,7 @@ class I3D_IO_OT_bit_mask_editor(bpy.types.Operator):
             ("HORIZONTAL", "Horizontal Rows", "Arrange bits in horizontal rows (default)"),
             ("VERTICAL", "Vertical Columns", "Arrange bits in vertical columns"),
         ],
-        default="HORIZONTAL"
+        default="HORIZONTAL",
     )
 
     def update_placeholder(self, _context):
@@ -226,6 +229,7 @@ class I3D_IO_OT_bit_mask_editor(bpy.types.Operator):
         if not is_valid_hex(hex_value):
             # Open a dialog to continue with default prop value & to let user know their input was invalid
             import json
+
             include = {"internal_value", "target_prop", "dialog_width", "used_bits", "layout_mode"}
             filtered_args = {k: v for k, v in self.as_keywords().items() if k in include}
             bpy.ops.i3dio.handle_invalid_bit_mask('INVOKE_DEFAULT', args=json.dumps(filtered_args))
@@ -239,8 +243,9 @@ class I3D_IO_OT_bit_mask_editor(bpy.types.Operator):
         bit_names = get_bit_names(self.target_prop)
 
         columns = 8 if self.layout_mode == "HORIZONTAL" else 4  # Horizontal: 8 cols, Vertical: 4 cols
-        grid = layout.grid_flow(row_major=(self.layout_mode == "HORIZONTAL"),
-                                columns=columns, even_columns=True, even_rows=True, align=True)
+        grid = layout.grid_flow(
+            row_major=(self.layout_mode == "HORIZONTAL"), columns=columns, even_columns=True, even_rows=True, align=True
+        )
         for i in range(32):
             if self.layout_mode == "VERTICAL":
                 bit_index = (i % 8) + (i // 8) * 8  # Vertical order
@@ -307,9 +312,7 @@ def get_bitmask_flags():
     ]
 
     global BITMASK_FLAGS
-    BITMASK_FLAGS = parse_flags_from_xml(
-        xml_files, ["weatherFlags", "viewerSpatialityFlags", "objectMaskFlags"]
-    )
+    BITMASK_FLAGS = parse_flags_from_xml(xml_files, ["weatherFlags", "viewerSpatialityFlags", "objectMaskFlags"])
     return BITMASK_FLAGS
 
 

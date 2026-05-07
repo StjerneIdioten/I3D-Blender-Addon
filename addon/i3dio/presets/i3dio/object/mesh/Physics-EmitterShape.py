@@ -1,4 +1,5 @@
 import bpy
+
 obj = bpy.context.object
 
 obj.i3d_attributes.visibility = True

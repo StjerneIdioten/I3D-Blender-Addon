@@ -1,15 +1,16 @@
-import bpy
-from .. import xml_i3d
-from pathlib import Path
-from bpy.app.handlers import (persistent, load_post)
 from collections import namedtuple
-from .. import __package__ as base_package
+from pathlib import Path
 
+import bpy
+from bpy.app.handlers import load_post, persistent
+
+from .. import __package__ as base_package
+from .. import xml_i3d
 
 COLLISIONS = {
     'flags': {},  # {name: bit}
     'presets': {},  # {name: CollisionPreset}
-    'rules': []  # List[CollisionRule]
+    'rules': [],  # List[CollisionRule]
 }
 
 CollisionPreset = namedtuple('CollisionPreset', ['name', 'group', 'group_hex', 'mask', 'mask_hex', 'desc'])
@@ -58,8 +59,9 @@ def parse_collision_mask_flags(filepath) -> None:
                     continue
             else:
                 # If no single value attribute, compute the bitmask from the flags
-                mask_value = compute_bitmask([flag.get('name') for flag in
-                                              mask_element.findall('./flag')], COLLISIONS['flags'])
+                mask_value = compute_bitmask(
+                    [flag.get('name') for flag in mask_element.findall('./flag')], COLLISIONS['flags']
+                )
 
         mask_hex = f"{mask_value:x}"
         COLLISIONS['presets'][name] = CollisionPreset(name, group_flags, group_hex, mask_value, mask_hex, desc)
@@ -133,7 +135,7 @@ def apply_rule_to_mask(rule: CollisionRule, is_trigger: bool) -> dict[str, str]:
         bitmask = 0
         for flag in flags:
             if flag in flag_map:
-                bitmask |= (1 << flag_map[flag])
+                bitmask |= 1 << flag_map[flag]
             else:
                 print(f"Unknown flag '{flag}'.")
         return bitmask

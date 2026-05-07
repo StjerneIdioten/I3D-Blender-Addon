@@ -1,19 +1,10 @@
 """
 This module contains various small ui helper functions.
 """
+
 from __future__ import annotations
-from pathlib import Path
+
 import re
-import bpy
-from .. import __package__ as base_package
-
-
-classes = []
-
-
-def register(cls):
-    classes.append(cls)
-    return cls
 
 
 def i3d_property(layout, attributes, attribute: str, obj):
@@ -23,7 +14,6 @@ def i3d_property(layout, attributes, attribute: str, obj):
 
     # Check if this i3d attribute has a dependency on another property being a certain value
     if i3d_map.get('depends'):
-
         # Get list of depending values
         dependants = i3d_map['depends']
 
@@ -72,8 +62,10 @@ def i3d_property(layout, attributes, attribute: str, obj):
                 attrib_row.prop(obj, attributes.i3d_map[attribute]['tracking']['member_path'], text='')
                 mapping = attributes.i3d_map[attribute]['tracking'].get('mapping')
                 if mapping is not None:
-                    attrib_row.label(text=f"'{mapping[getattr(obj, attributes.i3d_map[attribute]['tracking']['member_path'])]}' "
-                                          f"in GE")
+                    attrib_row.label(
+                        text=f"'{mapping[getattr(obj, attributes.i3d_map[attribute]['tracking']['member_path'])]}' "
+                        f"in GE"
+                    )
 
                 attrib_row.label(text=f"Follows '{attributes.i3d_map[attribute]['tracking']['member_path']}")
             else:
@@ -116,13 +108,3 @@ def is_version_compatible(old_ver: str | None, current_ver: str | None) -> bool:
     if current_ver == "22" and old_ver in ("19", "22"):
         return True
     return False
-
-
-def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
-
-
-def unregister():
-    for cls in classes:
-        bpy.utils.unregister_class(cls)

@@ -1,19 +1,18 @@
-from inspect import isabstract
 import logging
-from pathlib import Path
 import os
 import shutil
+from inspect import isabstract
+from pathlib import Path
 from typing import ClassVar
-import bpy
 
-from .node import Node
+import bpy
 
 from .. import (
     debugging,
     utility,
 )
-
 from ..i3d import I3D
+from .node import Node
 
 
 class File(Node):
@@ -50,8 +49,10 @@ class File(Node):
 
     # The log gets to scrambled if files are referred by their full path, so just use the filename instead
     def _set_logging_output_name_field(self):
-        return debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                           {'object_name': self.file_name + self.file_extension})
+        return debugging.ObjectNameAdapter(
+            logging.getLogger(f"{__name__}.{type(self).__name__}"),
+            {'object_name': self.file_name + self.file_extension},
+        )
 
     def _create_xml_element(self):
         # In files, the node name attribute (filename) is also the path to the file. So this needs to be resolved
@@ -125,7 +126,7 @@ class File(Node):
                     )
                     self.resolved_path = source_path
                     return
-                
+
                 parent_steps = sum(1 for part in relative_file_path.parts if part == "..")
                 blender_relative_distance_limit = 3  # Limits the distance a file can be from the blend file
 
@@ -136,7 +137,7 @@ class File(Node):
                     )
                     self.resolved_path = source_path
                     return
-                
+
                 self.resolved_path = relative_file_path
                 write_path_full = i3d_folder / relative_file_path
 

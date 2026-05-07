@@ -1,18 +1,14 @@
 import bpy
-from bpy.types import (
-    Panel,
-    Operator
-)
-
 from bpy.props import (
-    StringProperty,
     BoolProperty,
+    CollectionProperty,
     EnumProperty,
-    PointerProperty,
     FloatProperty,
     IntProperty,
-    CollectionProperty,
+    PointerProperty,
+    StringProperty,
 )
+from bpy.types import Operator, Panel
 
 ATTRIBUTE_DEFAULT_NAME = 'Attribute'
 
@@ -27,7 +23,6 @@ def register(cls):
 
 @register
 class I3DUserAttributeItem(bpy.types.PropertyGroup):
-
     def name_update(self, context):
         attrs = self.id_data.i3d_user_attributes.attribute_list
         names = {a.name for a in attrs if a.as_pointer() != self.as_pointer()}
@@ -42,25 +37,24 @@ class I3DUserAttributeItem(bpy.types.PropertyGroup):
                 break
             idx += 1
 
-    name: StringProperty(
-        name="Name",
-        description="Name of the user attribute",
-        default='',
-        update=name_update
+    name: StringProperty(name="Name", description="Name of the user attribute", default='', update=name_update)
+    type: EnumProperty(
+        name='Type',
+        items=[
+            ('data_scriptCallback', 'scriptCallback', ''),
+            ('data_string', 'string', ''),
+            ('data_float', 'float', ''),
+            ('data_integer', 'integer', ''),
+            ('data_boolean', 'boolean', ''),
+        ],
+        default='data_boolean',
     )
-    type: EnumProperty(name='Type',
-                       items=[('data_scriptCallback', 'scriptCallback', ''),
-                              ('data_string', 'string', ''),
-                              ('data_float', 'float', ''),
-                              ('data_integer', 'integer', ''),
-                              ('data_boolean', 'boolean', '')],
-                       default='data_boolean')
 
     data_boolean: BoolProperty(default=False)
     data_integer: IntProperty(default=0, min=-200, max=200)
     data_float: FloatProperty(default=0, min=-200, max=200)
     data_string: StringProperty(default='')
-    data_scriptCallback: StringProperty(default='')
+    data_scriptCallback: StringProperty(default='')  # noqa: N815
 
 
 @register
@@ -72,6 +66,7 @@ class I3DUserAttributes(bpy.types.PropertyGroup):
 @register
 class I3D_IO_UL_user_attributes(bpy.types.UIList):
     """UIList for i3d user attributes"""
+
     def draw_item(self, context, layout, data, item, icon, active_data, active_propname, index):
         split = layout.split(factor=0.35, align=True)
         split.prop(item, "name", text="", icon="SCRIPT", emboss=False)
@@ -87,6 +82,7 @@ class I3D_IO_UL_user_attributes(bpy.types.UIList):
 @register
 class I3D_IO_OT_new_user_attribute(Operator):
     """Add a new user attribute to the list"""
+
     bl_idname = 'i3dio_user_attribute_list.new_item'
     bl_label = "Add a new user attribute"
     bl_options = {'INTERNAL', 'UNDO'}
@@ -101,6 +97,7 @@ class I3D_IO_OT_new_user_attribute(Operator):
 @register
 class I3D_IO_OT_delete_user_attribute(Operator):
     """Delete the selected user attribute"""
+
     bl_idname = "i3dio_user_attribute_list.delete_item"
     bl_label = "Delete selected user attribute"
     bl_options = {'INTERNAL', 'UNDO'}

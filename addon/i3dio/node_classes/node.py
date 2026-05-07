@@ -1,14 +1,15 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from abc import (ABC, abstractmethod)
-from inspect import isabstract
+
 import logging
-from typing import ClassVar
 import math
-import mathutils
+from abc import ABC, abstractmethod
+from inspect import isabstract
+from typing import ClassVar
+
 import bpy
+import mathutils
 
-from .. import (debugging, utility, xml_i3d)
-
+from .. import debugging, utility, xml_i3d
 from ..i3d import I3D
 
 
@@ -46,8 +47,9 @@ class Node(ABC):
         raise NotImplementedError
 
     def _set_logging_output_name_field(self):
-        return debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                           {'object_name': self.name})
+        return debugging.ObjectNameAdapter(
+            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': self.name}
+        )
 
     def _create_xml_element(self):
         self.logger.debug(f"Filling out basic attributes, {{name='{self.name}', nodeId='{self.id}'}}")
@@ -74,11 +76,13 @@ class SceneGraphNode(Node):
     NAME_FIELD_NAME: ClassVar[str] = 'name'
     ID_FIELD_NAME: ClassVar[str] = 'nodeId'
 
-    def __init__(self, id_: int,
-                 blender_object: bpy.types.Object | bpy.types.Collection | None,
-                 i3d: I3D,
-                 parent: SceneGraphNode | None = None,
-                 ):
+    def __init__(
+        self,
+        id_: int,
+        blender_object: bpy.types.Object | bpy.types.Collection | None,
+        i3d: I3D,
+        parent: SceneGraphNode | None = None,
+    ):
         self.children: list[SceneGraphNode] = []
         self.blender_object = blender_object
         self.parent = parent
@@ -88,7 +92,7 @@ class SceneGraphNode(Node):
         self._name = self.blender_object.name
         prefix = i3d.settings.get('object_sorting_prefix', "")
         if prefix and (prefix_index := self._name.find(prefix)) > -1 and prefix_index < len(self._name) - 1:
-            self._name = self._name[prefix_index + 1:]
+            self._name = self._name[prefix_index + 1 :]
 
         super().__init__(id_, i3d, parent)
 
@@ -199,7 +203,8 @@ class SceneGraphNode(Node):
         self.logger.debug(f"translation is {translation}")
         if not utility.isclose_value(translation, (0.0, 0.0, 0.0)):
             translation = "{0:.6g} {1:.6g} {2:.6g}".format(
-                *[x * bpy.context.scene.unit_settings.scale_length for x in translation])
+                *[x * bpy.context.scene.unit_settings.scale_length for x in translation]
+            )
 
             self._write_attribute('translation', translation)
             self.logger.debug(f"has translation: [{translation}]")
@@ -215,8 +220,10 @@ class SceneGraphNode(Node):
 
         # Scale
         if matrix.is_negative:
-            self.logger.error("has one or more negative scaling components, "
-                              "which is not supported in Giants Engine. Scale reset to (1, 1, 1)")
+            self.logger.error(
+                "has one or more negative scaling components, "
+                "which is not supported in Giants Engine. Scale reset to (1, 1, 1)"
+            )
         else:
             scale = matrix.to_scale()
             if not utility.isclose_value(scale, (1.0, 1.0, 1.0)):
@@ -279,8 +286,13 @@ class SceneGraphNode(Node):
 class TransformGroupNode(SceneGraphNode):
     ELEMENT_TAG: ClassVar[str] = 'TransformGroup'
 
-    def __init__(self, id_: int, empty_object: bpy.types.Object | bpy.types.Collection,
-                 i3d: I3D, parent: SceneGraphNode | None = None):
+    def __init__(
+        self,
+        id_: int,
+        empty_object: bpy.types.Object | bpy.types.Collection,
+        i3d: I3D,
+        parent: SceneGraphNode | None = None,
+    ):
         super().__init__(id_=id_, blender_object=empty_object, i3d=i3d, parent=parent)
 
     @property
@@ -310,7 +322,7 @@ class TransformGroupNode(SceneGraphNode):
         if not (runtime_loaded := self.blender_object.i3d_reference.runtime_loaded):
             # Default is True so only write if False
             self._write_attribute('referenceRuntimeLoaded', runtime_loaded)
-        if (child_path := self.blender_object.i3d_reference.child_path):
+        if child_path := self.blender_object.i3d_reference.child_path:
             self._write_attribute('referenceChildPath', child_path)
 
     def populate_xml_element(self):

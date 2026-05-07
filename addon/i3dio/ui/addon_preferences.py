@@ -31,16 +31,18 @@ class I3D_IO_AddonPreferences(AddonPreferences):
             "This is required for the add-on to function properly, as it provides access to game assets."
         ),
         default="",
-        update=update_is_dirty
+        update=update_is_dirty,
     )
 
     i3d_converter_path: StringProperty(
         name="I3D Converter Path",
-        description=("Path to i3dConverter.exe, required to convert raw I3D files by extracting <Shapes> data "
-                     "and generating an external .shapes file for optimized mesh storage."),
+        description=(
+            "Path to i3dConverter.exe, required to convert raw I3D files by extracting <Shapes> data "
+            "and generating an external .shapes file for optimized mesh storage."
+        ),
         subtype='FILE_PATH',
         default="",
-        update=update_is_dirty
+        update=update_is_dirty,
     )
 
     general_tabs: EnumProperty(name="Tabs", items=[("GENERAL", "General", "")], default="GENERAL")
@@ -59,8 +61,9 @@ class I3D_IO_AddonPreferences(AddonPreferences):
         is_data_path_valid = data_path.exists() and data_path.is_dir() and data_path.name.lower() == "data"
         if not is_data_path_valid or not self.fs_data_path:
             if not self.fs_data_path:
-                box.label(text="No FS Data Path set. This is required for the add-on to function properly.",
-                          icon="ERROR")
+                box.label(
+                    text="No FS Data Path set. This is required for the add-on to function properly.", icon="ERROR"
+                )
             elif not data_path.exists():
                 box.label(text="The specified path does not exist.", icon="ERROR")
             elif not data_path.is_dir():
@@ -178,6 +181,7 @@ class I3D_IO_OT_i3d_converter_path_from_giants_addon(bpy.types.Operator):
 
     def execute(self, context):
         import shutil
+
         latest = None
         for addon in addon_utils.modules():
             info = getattr(addon, "bl_info", {})

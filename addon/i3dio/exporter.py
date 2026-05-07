@@ -1,23 +1,23 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
+
+import logging
+import subprocess
+import sys
+import time
 from pathlib import Path
 from typing import List
-import sys
-import subprocess
-import time
-import logging
+
 import bpy
-from bpy_extras.io_utils import axis_conversion
 from addon_utils import module_bl_info
-from . import (
-    debugging,
-    xml_i3d
-)
-from .utility import (BlenderObject, sort_blender_objects_by_outliner_ordering, get_fs_data_path)
+from bpy_extras.io_utils import axis_conversion
+
+from . import debugging, xml_i3d
 from .i3d import I3D
+from .node_classes.merge_group import MergeGroup
 from .node_classes.node import SceneGraphNode
 from .node_classes.skinned_mesh import SkinnedMeshRootNode
-from .node_classes.merge_group import MergeGroup
 from .ui.dds_exporter import export_motion_path_array
+from .utility import BlenderObject, get_fs_data_path, sort_blender_objects_by_outliner_ordering
 
 logger = logging.getLogger(__name__)
 logger.debug(f"Loading: {__name__}")
@@ -30,7 +30,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
 
     if operator.log_to_file:
         # Remove the file ending from path and append log specific naming
-        filename = filepath[0:len(filepath) - len(xml_i3d.file_ending)] + debugging.export_log_file_ending
+        filename = filepath[0 : len(filepath) - len(xml_i3d.file_ending)] + debugging.export_log_file_ending
         log_file_handler = logging.FileHandler(filename, mode='w')
         log_file_handler.setLevel(logging.DEBUG)
         log_file_handler.setFormatter(debugging.addon_export_log_formatter)
@@ -54,14 +54,18 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
 
     # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
     try:
-
         depsgraph = bpy.context.evaluated_depsgraph_get()
 
-        i3d = I3D(name=bpy.path.display_name_from_filepath(filepath),
-                  i3d_file_path=filepath,
-                  conversion_matrix=axis_conversion(to_forward=axis_forward, to_up=axis_up, ).to_4x4(),
-                  depsgraph=depsgraph,
-                  settings=settings)
+        i3d = I3D(
+            name=bpy.path.display_name_from_filepath(filepath),
+            i3d_file_path=filepath,
+            conversion_matrix=axis_conversion(
+                to_forward=axis_forward,
+                to_up=axis_up,
+            ).to_4x4(),
+            depsgraph=depsgraph,
+            settings=settings,
+        )
 
         # Log export settings
         logger.info("Exporter settings:")
@@ -251,10 +255,11 @@ def _add_object_to_i3d(i3d: I3D, obj: BlenderObject, parent: SceneGraphNode = No
                 node = i3d.add_merge_group_node(obj, _parent)
 
             # Process Skinned Meshes if enabled and MergeChildren wasn't applied
-            elif ('SKINNED_MESHES' in i3d.settings['features_to_export']
-                  and 'ARMATURE' in i3d.settings['object_types_to_export']
-                  and (armature_mod := next((mod for mod in obj.modifiers if mod.type == 'ARMATURE'), None))
-                  ):
+            elif (
+                'SKINNED_MESHES' in i3d.settings['features_to_export']
+                and 'ARMATURE' in i3d.settings['object_types_to_export']
+                and (armature_mod := next((mod for mod in obj.modifiers if mod.type == 'ARMATURE'), None))
+            ):
                 if armature_mod.object is None:
                     logger.warning(
                         f"Armature modifier '{armature_mod.name}' on skinned mesh '{obj.name}' "
@@ -368,17 +373,12 @@ def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
     logger.info(f"Starting binarization of {filepath!r}")
     try:
         conversion_result = subprocess.run(
-            args=[
-                str(converter_exe_path),
-                '-in', str(filepath),
-                '-out', str(filepath),
-                '-gamePath', f"{game_path}/"
-            ],
+            args=[str(converter_exe_path), '-in', str(filepath), '-out', str(filepath), '-gamePath', f"{game_path}/"],
             timeout=BINARIZER_TIMEOUT_IN_SECONDS,
             check=False,  # inspect stdout even on non-zero exit code
             text=True,
             stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT
+            stderr=subprocess.STDOUT,
         )
         raw = conversion_result.stdout or ""
         lines = [ln.rstrip("\r\n") for ln in raw.splitlines() if ln.strip()]
@@ -391,11 +391,12 @@ def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
                 collapsed.append(ln)
             last = ln
 
-        _UNIMPORTANT = ("render system", "driver: null", "nullconsoledevice initialized", "i3d contains non-binary")
+        _unimportant = ("render system", "driver: null", "nullconsoledevice initialized", "i3d contains non-binary")
+
         def _emit(line: str) -> None:
             msg = line.rstrip()
             low = msg.lower().strip()
-            if any(s in low for s in _UNIMPORTANT):
+            if any(s in low for s in _unimportant):
                 return
             if low.startswith("error:"):
                 logger.error(f"  {msg}", stacklevel=2)
@@ -403,6 +404,7 @@ def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
                 logger.warning(msg, stacklevel=2)
             else:
                 logger.info(f"   {msg}", stacklevel=2)
+
         for line in collapsed:
             _emit(line)
 

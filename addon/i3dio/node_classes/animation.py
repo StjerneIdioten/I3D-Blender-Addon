@@ -1,32 +1,36 @@
+import contextlib
 import logging
 import math
-import bpy
-from bpy_extras import anim_utils
-import mathutils
-import contextlib
 
+import bpy
+import mathutils
+from bpy_extras import anim_utils
+
+from .. import debugging, xml_i3d
+from ..i3d import I3D
 from .node import SceneGraphNode
 from .skinned_mesh import SkinnedMeshBoneNode
-from .. import xml_i3d, debugging
-from ..i3d import I3D
 
 
 class BaseAnimationExport:
     def __init__(self, i3d: I3D, fps: float):
         self.i3d = i3d
         self.fps = fps
-        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                                  {'object_name': type(self).__name__})
+        self.logger = debugging.ObjectNameAdapter(
+            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': type(self).__name__}
+        )
 
 
 class Keyframes(BaseAnimationExport):
-    def __init__(self,
-                 i3d: I3D,
-                 fps: float,
-                 node: SceneGraphNode | SkinnedMeshBoneNode,
-                 channelbag: bpy.types.ActionChannelbag,
-                 start_frame: int,
-                 end_frame: int):
+    def __init__(
+        self,
+        i3d: I3D,
+        fps: float,
+        node: SceneGraphNode | SkinnedMeshBoneNode,
+        channelbag: bpy.types.ActionChannelbag,
+        start_frame: int,
+        end_frame: int,
+    ):
         super().__init__(i3d, fps)
         self.node = node
         self.is_bone = isinstance(node, SkinnedMeshBoneNode)
@@ -36,8 +40,10 @@ class Keyframes(BaseAnimationExport):
         self.fcurves = self._filter_fcurves(channelbag)
         self.needs_baking = self._needs_baking(self.fcurves)
         self.has_translation = any(fc.data_path.endswith("location") for fc in self.fcurves) or self.needs_baking
-        self.has_rotation = any(fc.data_path.endswith(("rotation_euler", "rotation_quaternion"))
-                                for fc in self.fcurves) or self.needs_baking
+        self.has_rotation = (
+            any(fc.data_path.endswith(("rotation_euler", "rotation_quaternion")) for fc in self.fcurves)
+            or self.needs_baking
+        )
         self.has_scale = any(fc.data_path.endswith("scale") for fc in self.fcurves) or self.needs_baking
 
         self.xml_element = self._generate_keyframes()
@@ -128,12 +134,14 @@ class Keyframes(BaseAnimationExport):
 
 
 class Clip(BaseAnimationExport):
-    def __init__(self,
-                 i3d: I3D,
-                 fps: float,
-                 layer: bpy.types.ActionLayer,
-                 node_slot_pairs: list[tuple[SceneGraphNode, bpy.types.ActionSlot]],
-                 action: bpy.types.Action):
+    def __init__(
+        self,
+        i3d: I3D,
+        fps: float,
+        layer: bpy.types.ActionLayer,
+        node_slot_pairs: list[tuple[SceneGraphNode, bpy.types.ActionSlot]],
+        action: bpy.types.Action,
+    ):
         super().__init__(i3d, fps)
         self.layer = layer
         self.action = action
@@ -153,7 +161,7 @@ class Clip(BaseAnimationExport):
 
             if node.blender_object.type == 'ARMATURE':
                 for bone in node.blender_object.data.bones:
-                    if (bone_node := self.i3d.processed_objects.get(bone)):
+                    if bone_node := self.i3d.processed_objects.get(bone):
                         keyframes = Keyframes(self.i3d, self.fps, bone_node, channelbag, start_frame, end_frame)
                         if not keyframes.is_empty:
                             self.xml_element.append(keyframes.xml_element)
@@ -168,11 +176,13 @@ class Clip(BaseAnimationExport):
 
 
 class AnimationSet(BaseAnimationExport):
-    def __init__(self,
-                 i3d: I3D,
-                 fps: float,
-                 action: bpy.types.Action,
-                 node_slot_pairs: list[tuple[SceneGraphNode, bpy.types.ActionSlot]]):
+    def __init__(
+        self,
+        i3d: I3D,
+        fps: float,
+        action: bpy.types.Action,
+        node_slot_pairs: list[tuple[SceneGraphNode, bpy.types.ActionSlot]],
+    ):
         super().__init__(i3d, fps)
         self.action = action
         self.node_slot_pairs = node_slot_pairs
@@ -203,8 +213,10 @@ class Animation(BaseAnimationExport):
         # Temporarily unhides all animated objects during export.
         # Objects hidden in the viewport won't update transforms when the frame changes, which can break baking.
         affected_objects = {
-            node.blender_object for node_slot_pairs in self.i3d.anim_links.values()
-            for node, _ in node_slot_pairs if isinstance(node.blender_object, bpy.types.Object)
+            node.blender_object
+            for node_slot_pairs in self.i3d.anim_links.values()
+            for node, _ in node_slot_pairs
+            if isinstance(node.blender_object, bpy.types.Object)
         }
 
         original_hide_state = {obj: obj.hide_viewport for obj in affected_objects}

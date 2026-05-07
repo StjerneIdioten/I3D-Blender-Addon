@@ -1,16 +1,18 @@
-from pathlib import Path
 import logging
+from pathlib import Path
+
 import bpy
-from bpy.types import Operator
 from bpy.props import EnumProperty
+from bpy.types import Operator
 
 from .. import debugging
-from ..motion_path_array_collect import MotionPathArray
 from ..dds_writer import write_dds_dx10
+from ..motion_path_array_collect import MotionPathArray
 
 
-def export_motion_path_array(obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph,
-                             logger=debugging.addon_logger) -> tuple[str, str]:
+def export_motion_path_array(
+    obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph, logger=debugging.addon_logger
+) -> tuple[str, str]:
     """Exports DDS for an object with motion path array enabled.
     - logger: optional logging.Logger for info/error output
     Returns True on success, False otherwise.
@@ -57,7 +59,7 @@ class I3D_IO_OT_motion_path_array(Operator):
             ("ACTIVE_COLLECTION", "Active Collection", "Export objects in the active collection"),
             ("SELECTED_OBJECTS", "Selected Objects", "Export only selected objects"),
         ],
-        default='ALL'
+        default='ALL',
     )
 
     def execute(self, context):

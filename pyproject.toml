@@ -1,0 +1,19 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["addon/i3dio"]
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N"]
+
+[tool.ruff.lint.per-file-ignores]
+"addon/i3dio/**/*.py" = [
+  "N801",  # Blender-style class names (e.g., SOMETHING_OT_Something) violate CapWords
+]
+
+[tool.ruff.lint.isort]
+order-by-type = true
+
+[tool.ruff.format]
+quote-style = "preserve"

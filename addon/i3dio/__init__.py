@@ -1,49 +1,43 @@
-# This fixes reloading, by deleting the module references and thus forcing a reload
+# This fixes reloading (Blender: System -> Reload Scripts) by purging cached submodules
+# so importing this add-on loads fresh code without restarting Blender
 if "bpy" in locals():
     import sys
-    for module in list(sys.modules):
-        if __name__ in module:
-            del sys.modules[module]
 
-from . import ui
+    prefix = __name__ + "."
+    for name in list(sys.modules):
+        if name.startswith(prefix):
+            del sys.modules[name]
 
 import bpy
 
+from . import ui
+
+_UI_MODULES = (
+    ui.addon_preferences,
+    ui.udim_picker,
+    ui.shader_parser,
+    ui.material_templates,
+    ui.shader_picker,
+    ui.udim_to_mat_template,
+    ui.exporter,
+    ui.dds_exporter,
+    ui.collision_data,
+    ui.bit_mask_editor,
+    ui.presets,
+    ui.object,
+    ui.user_attributes,
+    ui.mesh,
+    ui.light,
+)
+
+
 def register():
-    ui.helper_functions.register()
-    ui.addon_preferences.register()
-    ui.udim_picker.register()
-    ui.shader_parser.register()
-    ui.material_templates.register()
-    ui.shader_picker.register()
-    ui.udim_to_mat_template.register()
-    ui.exporter.register()
-    ui.dds_exporter.register()
-    ui.collision_data.register()
-    ui.bit_mask_editor.register()
-    ui.presets.register()
-    ui.object.register()
-    ui.user_attributes.register()
-    ui.mesh.register()
-    ui.light.register()
+    for module in _UI_MODULES:
+        module.register()
     bpy.types.TOPBAR_MT_file_export.append(ui.exporter.menu_func_export)
 
 
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(ui.exporter.menu_func_export)
-    ui.exporter.unregister()
-    ui.dds_exporter.unregister()
-    ui.user_attributes.unregister()
-    ui.bit_mask_editor.unregister()
-    ui.presets.unregister()
-    ui.object.unregister()
-    ui.collision_data.unregister()
-    ui.mesh.unregister()
-    ui.light.unregister()
-    ui.udim_to_mat_template.unregister()
-    ui.shader_picker.unregister()
-    ui.shader_parser.unregister()
-    ui.material_templates.unregister()
-    ui.udim_picker.unregister()
-    ui.addon_preferences.unregister()
-    ui.helper_functions.unregister()
+    for module in reversed(_UI_MODULES):
+        module.unregister()

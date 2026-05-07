@@ -1,16 +1,13 @@
 import bpy
-from bpy.types import (
-    Operator,
-    Panel
-)
 from bl_operators.presets import AddPresetBase
 from bpy.props import (
-    StringProperty,
     BoolProperty,
     EnumProperty,
-    PointerProperty,
     IntProperty,
+    PointerProperty,
+    StringProperty,
 )
+from bpy.types import Operator, Panel
 
 from . import presets
 
@@ -37,73 +34,63 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         'material_holder': {'name': 'materialHolder', 'default': False},
         'nav_mesh_mask': {'name': 'buildNavMeshMask', 'default': '0', 'type': 'HEX'},
         'decal_layer': {'name': 'decalLayer', 'default': 0},
-        'vertex_compression_range': {'name': 'vertexCompressionRange', 'default': 'auto',
-                                     'placement': 'IndexedTriangleSet'}
+        'vertex_compression_range': {
+            'name': 'vertexCompressionRange',
+            'default': 'auto',
+            'placement': 'IndexedTriangleSet',
+        },
     }
 
     casts_shadows: BoolProperty(
-        name="Cast Shadowmap",
-        description="Cast Shadowmap",
-        default=i3d_map['casts_shadows']['blender_default']
+        name="Cast Shadowmap", description="Cast Shadowmap", default=i3d_map['casts_shadows']['blender_default']
     )
 
     receive_shadows: BoolProperty(
-        name="Receive Shadowmap",
-        description="Receive Shadowmap",
-        default=i3d_map['receive_shadows']['blender_default']
+        name="Receive Shadowmap", description="Receive Shadowmap", default=i3d_map['receive_shadows']['blender_default']
     )
 
     non_renderable: BoolProperty(
         name="Non Renderable",
         description="Don't render the mesh, used for collision boxes etc.",
-        default=i3d_map['non_renderable']['default']
+        default=i3d_map['non_renderable']['default'],
     )
 
     distance_blending: BoolProperty(
-        name="Distance Blending",
-        description="Distance Blending",
-        default=i3d_map['distance_blending']['default']
+        name="Distance Blending", description="Distance Blending", default=i3d_map['distance_blending']['default']
     )
 
     rendered_in_viewports: BoolProperty(
         name="Rendered In Viewports",
         description="Determines if the object is rendered in Giants Editor viewport or not",
-        default=i3d_map['rendered_in_viewports']['default']
+        default=i3d_map['rendered_in_viewports']['default'],
     )
 
-    is_occluder: BoolProperty(
-        name="Occluder",
-        description="Is Occluder?",
-        default=i3d_map['is_occluder']['default']
-    )
+    is_occluder: BoolProperty(name="Occluder", description="Is Occluder?", default=i3d_map['is_occluder']['default'])
 
     terrain_decal: BoolProperty(
         name="Terrain Decal",
         description="If enabled, the shape will be rendered as a terrain decal",
-        default=i3d_map['terrain_decal']['default']
+        default=i3d_map['terrain_decal']['default'],
     )
 
     cpu_mesh: EnumProperty(
         name="CPU Mesh",
         description="CPU Mesh",
-        items=[
-            ('0', 'Off', "Turns off CPU Mesh"),
-            ('256', 'On', "Turns on CPU Mesh")
-        ],
-        default=i3d_map['cpu_mesh']['default']
+        items=[('0', 'Off', "Turns off CPU Mesh"), ('256', 'On', "Turns on CPU Mesh")],
+        default=i3d_map['cpu_mesh']['default'],
     )
 
     double_sided: BoolProperty(
         name="Double Sided",
         description="If enabled, the shape will be rendered from both sides",
-        default=i3d_map['double_sided']['default']
+        default=i3d_map['double_sided']['default'],
     )
 
     material_holder: BoolProperty(
         name="Material Holder",
         description="Needs to be set if the material of this shape is to be used on any non-standard geometry "
         "such as GEOMETRY_PARTICLE_SYSTEM or GEOMETRY_FILL_PLANE in order for the shaders to be properly precompiled",
-        default=i3d_map['material_holder']['default']
+        default=i3d_map['material_holder']['default'],
     )
 
     nav_mesh_mask: StringProperty(
@@ -136,7 +123,7 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
             ('128.0', '128.0', "128.0"),
             ('256.0', '256.0', "256.0"),
         ],
-        default=i3d_map['vertex_compression_range']['default']
+        default=i3d_map['vertex_compression_range']['default'],
     )
 
     bounding_volume_object: PointerProperty(
@@ -145,18 +132,22 @@ class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
         "If the bounding volume object shares origin with the original object, "
         "then Giants Engine will always ignore the exported values and recalculate them itself",
         type=bpy.types.Object,
-        poll=lambda self, obj: obj.type == 'MESH' and obj is not bpy.context.object
+        poll=lambda self, obj: obj.type == 'MESH' and obj is not bpy.context.object,
     )
 
     color_export: EnumProperty(
         name="Vertex Color Export",
         description="Controls if vertex colors are exported for this mesh",
         items=[
-            ('AUTO', "Auto (by Shader)", "Export only if any applied shader on the material requires colors "
-                                         "and the mesh has a color attribute layer"),
+            (
+                'AUTO',
+                "Auto (by Shader)",
+                "Export only if any applied shader on the material requires colors "
+                "and the mesh has a color attribute layer",
+            ),
             ('IF_PRESENT', "If Layer Exists", "Export when a color attribute layer exists, regardless of shader"),
         ],
-        default='AUTO'
+        default='AUTO',
     )
 
 

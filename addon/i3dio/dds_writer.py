@@ -1,7 +1,8 @@
-import numpy as np
 import struct
-from .debugging import addon_logger as logger
 
+import numpy as np
+
+from .debugging import addon_logger as logger
 
 DDS_MAGIC = b'DDS '
 
@@ -36,42 +37,42 @@ def write_dds_dx10(filepath: str, arr: np.ndarray) -> None:
     def dword(value: int) -> bytes:
         return struct.pack('<I', value)
 
-    dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT | DDSD_MIPMAPCOUNT
+    dwFlags = DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT | DDSD_MIPMAPCOUNT  # noqa: N806
 
     header = bytearray()
-    header += dword(124)      # dwSize
+    header += dword(124)  # dwSize
     header += dword(dwFlags)  # Flags
-    header += dword(height)   # Height
-    header += dword(width)    # Width
-    header += dword(0)        # dwPitchOrLinearSize (unused for DX10)
-    header += dword(0)        # dwDepth (must be 0 for 2D textures)
-    header += dword(1)        # dwMipMapCount (1 for no mipmaps)
+    header += dword(height)  # Height
+    header += dword(width)  # Width
+    header += dword(0)  # dwPitchOrLinearSize (unused for DX10)
+    header += dword(0)  # dwDepth (must be 0 for 2D textures)
+    header += dword(1)  # dwMipMapCount (1 for no mipmaps)
 
     # Giants specific
     reserved1 = [0] * 11
     reserved1[0] = 0x288AE8D9  # GS_DDS_HEADER_EXT_MAGIC_TAG
-    reserved1[2] = 0x2         # DDS_EXTENDED_ALLOW_RAW
+    reserved1[2] = 0x2  # DDS_EXTENDED_ALLOW_RAW
     header += b''.join(dword(x) for x in reserved1)
 
     # DDS_PIXELFORMAT (32 bytes)
-    header += dword(32)               # ddspf.dwSize
-    header += dword(DDPF_FOURCC)      # ddspf.dwFlags
-    header += b'DX10'                 # ddspf.dwFourCC
-    header += dword(0) * 5            # masks unused
+    header += dword(32)  # ddspf.dwSize
+    header += dword(DDPF_FOURCC)  # ddspf.dwFlags
+    header += b'DX10'  # ddspf.dwFourCC
+    header += dword(0) * 5  # masks unused
 
     header += dword(DDSCAPS_TEXTURE)  # dwCaps
-    header += dword(0)                # dwCaps2
-    header += dword(0)                # dwCaps3
-    header += dword(0)                # dwCaps4
-    header += dword(0)                # dwReserved2
+    header += dword(0)  # dwCaps2
+    header += dword(0)  # dwCaps3
+    header += dword(0)  # dwCaps4
+    header += dword(0)  # dwReserved2
 
     # DDS_HEADER_DXT10 (20 bytes)
     header_dx10 = bytearray()
-    header_dx10 += dword(DXGI_FORMAT_R16G16B16A16_FLOAT)    # dxgiFormat
+    header_dx10 += dword(DXGI_FORMAT_R16G16B16A16_FLOAT)  # dxgiFormat
     header_dx10 += dword(DDS_RESOURCE_DIMENSION_TEXTURE2D)  # resourceDimension
-    header_dx10 += dword(0)           # miscFlag
+    header_dx10 += dword(0)  # miscFlag
     header_dx10 += dword(array_size)  # arraySize
-    header_dx10 += dword(0)           # miscFlags2
+    header_dx10 += dword(0)  # miscFlags2
 
     # Write array slices sequentially as required by DDS spec
     data = arr.tobytes(order='C')

@@ -1,12 +1,11 @@
 import logging
+
 import bpy
 
-from .node import (SceneGraphNode, TransformGroupNode)
-from .shape import (ShapeNode, EvaluatedMesh, IndexedTriangleSet)
-
 from .. import debugging
-
 from ..i3d import I3D
+from .node import SceneGraphNode, TransformGroupNode
+from .shape import EvaluatedMesh, IndexedTriangleSet, ShapeNode
 
 
 class MergeGroupChild(TransformGroupNode):
@@ -14,8 +13,7 @@ class MergeGroupChild(TransformGroupNode):
 
 
 class MergeGroupRoot(ShapeNode):
-    def __init__(self, id_: int, merge_group_object: bpy.types.Object, i3d: I3D,
-                 parent: SceneGraphNode | None = None):
+    def __init__(self, id_: int, merge_group_object: bpy.types.Object, i3d: I3D, parent: SceneGraphNode | None = None):
         self.merge_group_name = i3d.merge_groups[merge_group_object.i3d_merge_group_index].name
         self.skin_bind_node_ids: list[int] = []
 
@@ -57,12 +55,14 @@ class MergeGroupRoot(ShapeNode):
 
 class MergeGroup:
     """Temporary collector to handle out-of-order processing of merge group nodes."""
+
     def __init__(self, name: str):
         self.name = name
         self.root_node: MergeGroupRoot | None = None
         self.child_nodes: list[MergeGroupChild] = []
-        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                                  {'object_name': self.name})
+        self.logger = debugging.ObjectNameAdapter(
+            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': self.name}
+        )
         self.logger.debug("Initialized merge group collector")
 
     # Should only be run once, when the root node is found.

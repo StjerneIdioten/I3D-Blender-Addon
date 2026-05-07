@@ -1,31 +1,10 @@
 import bpy
-
-from bpy.props import (
-    StringProperty,
-    BoolProperty,
-    IntProperty,
-    EnumProperty,
-    PointerProperty,
-    CollectionProperty
-)
-
-from bpy_extras.io_utils import (
-    ExportHelper,
-    orientation_helper
-)
-
-from bpy.types import (
-    Operator,
-    Panel
-)
-
-from .. import (
-    exporter,
-    xml_i3d
-)
+from bpy.props import BoolProperty, CollectionProperty, EnumProperty, IntProperty, PointerProperty, StringProperty
+from bpy.types import Operator, Panel
+from bpy_extras.io_utils import ExportHelper, orientation_helper
 
 from .. import __package__ as base_package
-
+from .. import exporter, xml_i3d
 
 classes = []
 
@@ -38,13 +17,12 @@ def register(cls):
 @register
 class I3DShaderFolderEntry(bpy.types.PropertyGroup):
     name: StringProperty(
-        name="Name",
-        description="Optional name to help identify this search path",
-        default="Custom Shader Folder"
+        name="Name", description="Optional name to help identify this search path", default="Custom Shader Folder"
     )
 
     def update_path(self, _context):
         from .shader_parser import populate_custom_shaders
+
         populate_custom_shaders()
 
     path: StringProperty(
@@ -53,7 +31,7 @@ class I3DShaderFolderEntry(bpy.types.PropertyGroup):
         subtype='DIR_PATH',
         default='',
         update=update_path,
-        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'},
     )
 
 
@@ -63,14 +41,15 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
     i3d_mapping_file_path: StringProperty(
         name="XML File",
         description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
-                    "contain an '<i3dMapping> somewhere in the file",
+        "contain an '<i3dMapping> somewhere in the file",
         subtype='FILE_PATH',
         default='',
-        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'},
     )
 
     def update_moddesc_path(self, context):
         from .material_templates import parse_brand_templates_from_moddesc
+
         parse_brand_templates_from_moddesc()
 
     moddesc_path: StringProperty(
@@ -79,13 +58,13 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         subtype='FILE_PATH',
         default='',
         update=update_moddesc_path,
-        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'},
     )
 
     custom_shader_folders: CollectionProperty(
         type=I3DShaderFolderEntry,
         name="Extra Shader Search Paths",
-        description="Directories containing additional shader XML files"
+        description="Directories containing additional shader XML files",
     )
     shader_extra_paths_index: IntProperty(default=0)
 
@@ -94,15 +73,17 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
 @orientation_helper(axis_forward='-Z', axis_up='Y')
 class I3D_IO_OT_export(Operator, ExportHelper):
     """Save i3d file"""
+
     bl_idname = "export_scene.i3d"
     bl_label = "Export I3D"
     bl_options = {'UNDO', 'PRESET'}  # 'PRESET' enables the preset dialog for saving settings as preset
 
     filename_ext = xml_i3d.file_ending
-    filter_glob: StringProperty(default=f"*{xml_i3d.file_ending}",
-                                options={'HIDDEN'},
-                                maxlen=255,
-                                )
+    filter_glob: StringProperty(
+        default=f"*{xml_i3d.file_ending}",
+        options={'HIDDEN'},
+        maxlen=255,
+    )
 
     # List of operator properties, the attributes will be assigned
     # to the class instance from the operator settings before calling.
@@ -120,9 +101,9 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             ('ALL', "Everything", "Export everything from the scene master collection"),
             ('ACTIVE_COLLECTION', "Active Collection", "Export only the active collection and all its children"),
             ('ACTIVE_OBJECT', "Active Object", "Export the active object and its children"),
-            ('SELECTED_OBJECTS', "Selected Objects", "Export only selected objects (with optional children)")
+            ('SELECTED_OBJECTS', "Selected Objects", "Export only selected objects (with optional children)"),
         ],
-        default='SELECTED_OBJECTS'
+        default='SELECTED_OBJECTS',
     )
 
     selection_traverse_children: BoolProperty(
@@ -131,7 +112,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             "When enabled, also exports all children of the selected objects. "
             "When disabled, only the selected objects are exported, without their children."
         ),
-        default=False
+        default=False,
     )
 
     binarize_i3d: BoolProperty(
@@ -140,33 +121,33 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             "Converts the exported .i3d file to binary format using i3dConverter.exe.\n"
             "Requires the converter path to be set in Addon Preferences"
         ),
-        default=True
+        default=True,
     )
 
     keep_collections_as_transformgroups: BoolProperty(
         name="Keep Collections",
         description="Keep organisational collections as transformgroups in the i3d file. If turned off collections "
-                    "will be ignored and the child objects will be added to the nearest parent in the hierarchy",
-        default=True
+        "will be ignored and the child objects will be added to the nearest parent in the hierarchy",
+        default=True,
     )
 
     apply_modifiers: BoolProperty(
         name="Apply Modifiers",
         description="Apply modifiers on objects before exporting mesh (Non destructive)",
-        default=True
+        default=True,
     )
 
     apply_unit_scale: BoolProperty(
         name="Apply Unit Scale",
         description="Apply the unit scale setting to the exported mesh and transform data",
-        default=True
+        default=True,
     )
 
     alphabetic_uvs: BoolProperty(
         name="Alphabetic UV's",
         description="UV's will be exported in  alphabetic order instead of list order "
-                    "(To get around not having reordering of UV's in blender)",
-        default=False
+        "(To get around not having reordering of UV's in blender)",
+        default=False,
     )
 
     vertex_color_override: EnumProperty(
@@ -177,7 +158,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             ('FORCE_AUTO', "Force Auto (by Shader)", "Behave as if all meshes are AUTO"),
             ('FORCE_IF_PRESENT', "Force If Present", "Behave as if all meshes are IF_PRESENT"),
         ],
-        default='USE_MESH'
+        default='USE_MESH',
     )
 
     object_types_to_export: EnumProperty(
@@ -189,7 +170,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             ('LIGHT', "Light", "Export lights"),
             ('MESH', "Mesh", "Export meshes"),
             ('CURVE', "Curve", "Export curves"),
-            ('ARMATURE', "Armatures", "Export armatures, used for skinned meshes")
+            ('ARMATURE', "Armatures", "Export armatures, used for skinned meshes"),
         ),
         options={'ENUM_FLAG'},
         default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'CURVE', 'ARMATURE'},
@@ -200,11 +181,18 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         description="Select which features should be enabled for the export",
         items=(
             ('MERGE_GROUPS', "Merge Groups", "Export merge groups"),
-            ('SKINNED_MESHES', "Skinned Meshes", "Bind meshes to the bones of an armature in i3d. If disabled, "
-                                                 "the armature and bone structure will still be exported, "
-                                                 "but the meshes wont be bound to it"),
-            ('MERGE_CHILDREN', "Merge Children", "Merge the child objects of empties with Merge Children enabled "
-                                                 "into a single exported mesh"),
+            (
+                'SKINNED_MESHES',
+                "Skinned Meshes",
+                "Bind meshes to the bones of an armature in i3d. If disabled, "
+                "the armature and bone structure will still be exported, "
+                "but the meshes wont be bound to it",
+            ),
+            (
+                'MERGE_CHILDREN',
+                "Merge Children",
+                "Merge the child objects of empties with Merge Children enabled into a single exported mesh",
+            ),
             ('ANIMATIONS', "Animations", "Export animations"),
         ),
         options={'ENUM_FLAG'},
@@ -214,15 +202,15 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     copy_files: BoolProperty(
         name="Copy Files",
         description="Copies the files to have them together with the i3d file. Structure is determined by 'File "
-                    "Structure' parameter. If turned off files are referenced by their absolute path instead."
-                    "Files from the FS data folder are always converted to relative $data\\shared\\path\\to\\file.",
-        default=True
+        "Structure' parameter. If turned off files are referenced by their absolute path instead."
+        "Files from the FS data folder are always converted to relative $data\\shared\\path\\to\\file.",
+        default=True,
     )
 
     overwrite_files: BoolProperty(
         name="Overwrite Files",
         description="Overwrites files if they already exist, currently it is only evaluated for material files!",
-        default=True
+        default=True,
     )
 
     file_structure: EnumProperty(
@@ -231,21 +219,15 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         items=(
             ('FLAT', "Flat", "The hierarchy is flattened, everything is in the same folder as the i3d"),
             ('BLENDER', "Blender", "The hierarchy is mimiced from around the blend file"),
-            ('MODHUB', "Modhub", "The hierarchy is setup according to modhub guidelines, sorted by filetype")
+            ('MODHUB', "Modhub", "The hierarchy is setup according to modhub guidelines, sorted by filetype"),
         ),
-        default='MODHUB'
+        default='MODHUB',
     )
 
-    verbose_output: BoolProperty(
-        name="Verbose Output",
-        description="Print out info to console",
-        default=True
-    )
+    verbose_output: BoolProperty(name="Verbose Output", description="Print out info to console", default=True)
 
     log_to_file: BoolProperty(
-        name="Generate logfile",
-        description="Generates a log file in the same folder as the exported i3d",
-        default=True
+        name="Generate logfile", description="Generates a log file in the same folder as the exported i3d", default=True
     )
 
     object_sorting_prefix: StringProperty(
@@ -255,16 +237,16 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         "sorting the objects, while also removing this from the final object name. "
         "The key can be anything and even multiple characters to allow as much flexibility as possible. "
         "To disable the functionality just set the string to nothing",
-        default=":"
+        default=":",
     )
 
     i3d_mapping_file_path: StringProperty(
         name="XML File",
         description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
-                    "contain an '<i3dMapping> somewhere in the file",
+        "contain an '<i3dMapping> somewhere in the file",
         subtype='FILE_PATH',
         default='',
-        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'},
     )
 
     scene_key = "i3dio_export_settings"
@@ -274,7 +256,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         # This is done to allow the settings to be saved between sessions
         # Do not save collection prop since then we can use that as check if it was exported through file browser
         # Use i3d_mapping_file_path from context.scene.i3dio instead of self.i3d_mapping_file_path
-        ACCEPTED_PROPERTIES = [
+        accepted_properties = [
             "selection",
             "selection_traverse_children",
             "binarize_i3d",
@@ -293,7 +275,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             "object_sorting_prefix",
         ]
         export_props = {}
-        for prop in ACCEPTED_PROPERTIES:
+        for prop in accepted_properties:
             if hasattr(self, prop):
                 value = getattr(self, prop)
                 if isinstance(value, set):
@@ -357,10 +339,12 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         # Since it is single threaded, this warning wouldn't be sent before the exported starts exporting.
         # So it can't come before the export and it drowns if the export time comes after it.
         if context.preferences.addons[base_package].preferences.fs_data_path == '':
-            self.report({'WARNING'},
-                        "FS Data folder path is not set, "
-                        "see https://stjerneidioten.github.io/"
-                        "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder")
+            self.report(
+                {'WARNING'},
+                "FS Data folder path is not set, "
+                "see https://stjerneidioten.github.io/"
+                "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder",
+            )
 
         return {'FINISHED'}
 
@@ -498,10 +482,13 @@ class I3D_IO_PT_i3d_scene(Panel):
         if body:
             row = body.row()
             row.template_list(
-                "UI_UL_list", "i3d_shader_folders",
-                scene_props, "custom_shader_folders",
-                scene_props, "shader_extra_paths_index",
-                rows=2
+                "UI_UL_list",
+                "i3d_shader_folders",
+                scene_props,
+                "custom_shader_folders",
+                scene_props,
+                "shader_extra_paths_index",
+                rows=2,
             )
             col = row.column(align=True)
             col.operator("i3dio.add_shader_folder", icon='ADD', text="")

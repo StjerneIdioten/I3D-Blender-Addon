@@ -1,10 +1,12 @@
 from typing import ClassVar
+
 import bpy
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper, ShaderImageTextureWrapper
+
 from .. import utility, xml_i3d
 from ..i3d import I3D
-from ..ui.shader_picker import SHADER_DEFAULT
 from ..ui.shader_parser import get_shader_dict
+from ..ui.shader_picker import SHADER_DEFAULT
 from .node import Node
 
 
@@ -44,7 +46,7 @@ class Material(Node):
         return None
 
     def populate_xml_element(self) -> None:
-        vehicle_shader = (self.i3d_attrs.shader_name == "vehicleShader")
+        vehicle_shader = self.i3d_attrs.shader_name == "vehicleShader"
         principled = PrincipledBSDFWrapper(self.blender_material, is_readonly=True)
         bsdf = principled.node_principled_bsdf
 
@@ -152,8 +154,14 @@ class Material(Node):
     def _find_node_by_name(self, name: str) -> bpy.types.Node | None:
         if not self.blender_material.node_tree:
             return None
-        return next((node for node in self.blender_material.node_tree.nodes
-                     if node.name.lower() == name or node.label.lower() == name), None)
+        return next(
+            (
+                node
+                for node in self.blender_material.node_tree.nodes
+                if node.name.lower() == name or node.label.lower() == name
+            ),
+            None,
+        )
 
     def _linked_rgb_color(self, socket: bpy.types.NodeSocket) -> list[float] | None:
         """If the socket is linked to a RGB node, return its color, otherwise None."""

@@ -1,14 +1,14 @@
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import bpy
-from bpy.app.handlers import persistent, load_post
+from bpy.app.handlers import load_post, persistent
 
 from .. import xml_i3d
 from ..debugging import addon_logger
 from ..utility import get_fs_data_path
-
 
 logger = addon_logger.getChild("shader_parser")
 
@@ -57,7 +57,7 @@ def parse_shader_parameters(parameter: xml_i3d.XML_Element) -> list[ShaderParame
     """Parses a shader parameter element and returns shader parameter data."""
     type_str = parameter.attrib.get('type', 'float4')
     component_count = {'float': 1, 'float1': 1, 'float2': 2, 'float3': 3, 'float4': 4}.get(type_str, 4)
-    
+
     def _parse_float_list(value: str | None, default: float = 0.0) -> list[float]:
         if value is None:
             return [default] * component_count
@@ -87,7 +87,7 @@ def parse_shader_parameters(parameter: xml_i3d.XML_Element) -> list[ShaderParame
             min_value=min_single,
             max_value=max_single,
             description=description,
-            template=template
+            template=template,
         )
 
     if parameter.attrib.get('arraySize') is None:

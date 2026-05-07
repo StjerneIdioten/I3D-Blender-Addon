@@ -1,15 +1,18 @@
 """This module contains functionality for handling the i3d xml format such as reading and writing with correct
-precision """
+precision"""
+
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, Dict)
-import math
+
 import logging
+import math
+import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
+from typing import Dict, Union
+
 import bpy
 import mathutils
 from idprop.types import IDPropertyArray
 
 from . import utility
-import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +20,7 @@ XML_Element = ET.Element
 file_ending = '.i3d'
 merge_group_prefix = 'MergedMesh_'
 skinned_mesh_prefix = 'SkinnedMesh_'
-i3d_max = 3.40282e+38
+i3d_max = 3.40282e38
 
 
 def parse(*argv, **kwargs) -> ET.ElementTree:
@@ -38,15 +41,15 @@ def iter_section(root: XML_Element, section_name: str, child_tag: str) -> ET.Ele
             yield child
 
 
-def SubElement(*args, **kwargs) -> ET.Element:
+def SubElement(*args, **kwargs) -> ET.Element:  # noqa: N802
     return ET.SubElement(*args, **kwargs)
 
 
-def Element(*args, **kwargs) -> ET.Element:
+def Element(*args, **kwargs) -> ET.Element:  # noqa: N802
     return ET.Element(*args, **kwargs)
 
 
-def ElementTree(*args, **kwargs) -> ET.ElementTree:
+def ElementTree(*args, **kwargs) -> ET.ElementTree:  # noqa: N802
     return ET.ElementTree(*args, **kwargs)
 
 
@@ -56,22 +59,16 @@ def write_tree_to_file(tree, file_path: str, *argv, **kwargs) -> None:
 
 
 def export_to_i3d_file(source: XML_Element, file_path: str, *argv, **kwargs) -> None:
-    settings = {
-        'xml_declaration': True,
-        'encoding': 'iso-8859-1',
-        'method': 'xml'
-    }
+    settings = {'xml_declaration': True, 'encoding': 'iso-8859-1', 'method': 'xml'}
 
     write_tree_to_file(ElementTree(source), file_path, *argv, **settings, **kwargs)
 
 
 def i3d_root_element(name: str) -> XML_Element:
-    root_attributes = {
-        'version': '1.6',
-    }
+    root_attributes = {'version': '1.6'}
     namespaced_attributes = {
         'xsi:noNamespaceSchemaLocation': 'http://i3d.giants.ch/schema/i3d-1.6.xsd',
-        'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance'
+        'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance',
     }
     return Element('i3D', attrib={'name': name, **root_attributes, **namespaced_attributes})
 
@@ -205,8 +202,10 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
                     if 0 <= value_decimal <= 2**32 - 1:  # Check that it is actually a 32-bit unsigned int
                         value_to_write = value_decimal
                     else:
-                        logger.warning(f"Supplied value '{value}' for '{prop_name}' is out of bounds."
-                                       f" It should be within range [0, ffffffff] (32-bit unsigned)")
+                        logger.warning(
+                            f"Supplied value '{value}' for '{prop_name}' is out of bounds."
+                            f" It should be within range [0, ffffffff] (32-bit unsigned)"
+                        )
                         continue
             elif field_type == 'OVERRIDE':
                 value_to_write = property_group.i3d_map[prop_key].get('override')

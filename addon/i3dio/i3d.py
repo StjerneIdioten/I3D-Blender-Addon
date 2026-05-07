@@ -1,29 +1,36 @@
 """This module contains shared functionality between the different modules of the i3dio addon"""
+
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
-from typing import (Union, Type)
+
 import logging
-from . import xml_i3d
+from typing import Type, Union
+
 import bpy
 import mathutils
+
+from . import xml_i3d
 
 logger = logging.getLogger(__name__)
 
 
 class I3D:
     """A special node which is the root node for the entire I3D file. It essentially represents the i3d file"""
-    def __init__(self, name: str, i3d_file_path: str, conversion_matrix: mathutils.Matrix,
-                 depsgraph: bpy.types.Depsgraph, settings: dict):
-        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                                  {'object_name': name})
-        self._ids = {
-            'node': 1,
-            'shape': 1,
-            'material': 1,
-            'file': 1,
-        }
+
+    def __init__(
+        self,
+        name: str,
+        i3d_file_path: str,
+        conversion_matrix: mathutils.Matrix,
+        depsgraph: bpy.types.Depsgraph,
+        settings: dict,
+    ):
+        self.logger = debugging.ObjectNameAdapter(
+            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': name}
+        )
+        self._ids = {'node': 1, 'shape': 1, 'material': 1, 'file': 1}
         self.paths = {
             'i3d_file_path': i3d_file_path,
-            'i3d_folder': i3d_file_path[0:i3d_file_path.rfind('\\')],
+            'i3d_folder': i3d_file_path[0 : i3d_file_path.rfind('\\')],
         }
 
         # Initialize top-level categories
@@ -65,8 +72,13 @@ class I3D:
         self._ids[id_type] += 1
         return next_id
 
-    def _add_node(self, node_type: Type[SceneGraphNode], object_: Type[bpy.types.bpy_struct],
-                  parent: Type[SceneGraphNode] = None, **kwargs) -> SceneGraphNode:
+    def _add_node(
+        self,
+        node_type: Type[SceneGraphNode],
+        object_: Type[bpy.types.bpy_struct],
+        parent: Type[SceneGraphNode] = None,
+        **kwargs,
+    ) -> SceneGraphNode:
         node = node_type(self._next_available_id('node'), object_, self, parent, **kwargs)
         # Populate xml element after node is fully constructed
         node.populate_xml_element()
@@ -77,8 +89,9 @@ class I3D:
             self.xml_elements['Scene'].append(node.element)
         return node
 
-    def _get_or_create_armature_node(self, armature_object: bpy.types.Object,
-                                     parent: SceneGraphNode | None) -> SkinnedMeshRootNode:
+    def _get_or_create_armature_node(
+        self, armature_object: bpy.types.Object, parent: SceneGraphNode | None
+    ) -> SkinnedMeshRootNode:
         """Retrieves an existing SkinnedMeshRootNode for the armature or creates a new one if needed."""
         node = self.skinned_meshes.get(armature_object.name)
         if node is None:
@@ -107,8 +120,9 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(ShapeNode, mesh_object, parent)
 
-    def add_merge_group_node(self, merge_group_object: bpy.types.Object,
-                             parent: SceneGraphNode | None = None) -> SceneGraphNode:
+    def add_merge_group_node(
+        self, merge_group_object: bpy.types.Object, parent: SceneGraphNode | None = None
+    ) -> SceneGraphNode:
         self.logger.debug("Adding merge group node")
 
         # Blender-side and export-side merge group data
@@ -117,14 +131,13 @@ class I3D:
 
         # Check if a root is assigned in Blender and if that root is part of this export
         root_obj = blender_merge_group.root
-        has_valid_root = (root_obj and root_obj in self.all_objects_to_export)
+        has_valid_root = root_obj and root_obj in self.all_objects_to_export
 
         # Determine if the current object should be the root of the merge group
         # 1. If it is marked as root in Blender and the root object matches the merge group object
         # 2. There is no valid root assigned, and the exporter haven't assigned a root yet
-        should_be_root = (
-            (has_valid_root and root_obj == merge_group_object)
-            or (not has_valid_root and exporter_merge_group.root_node is None)
+        should_be_root = (has_valid_root and root_obj == merge_group_object) or (
+            not has_valid_root and exporter_merge_group.root_node is None
         )
 
         if should_be_root:
@@ -141,12 +154,14 @@ class I3D:
         exporter_merge_group.add_child(child_node)
         return child_node
 
-    def add_merge_children_node(self, merge_children_object: bpy.types.Object,
-                                parent: SceneGraphNode | None = None) -> SceneGraphNode:
+    def add_merge_children_node(
+        self, merge_children_object: bpy.types.Object, parent: SceneGraphNode | None = None
+    ) -> SceneGraphNode:
         return self._add_node(MergeChildrenRoot, merge_children_object, parent)
 
-    def add_bone(self, bone_object: bpy.types.Bone, parent: SceneGraphNode | None,
-                 root_node: SkinnedMeshRootNode) -> SceneGraphNode:
+    def add_bone(
+        self, bone_object: bpy.types.Bone, parent: SceneGraphNode | None, root_node: SkinnedMeshRootNode
+    ) -> SceneGraphNode:
         # Prevent the bone from getting added to the scene root node if added through a armature modifier.
         # If it actually should be added to scene root we will handle it when we get to the armature object
         node = SkinnedMeshBoneNode(self._next_available_id('node'), bone_object, self, parent, root_node)
@@ -172,8 +187,9 @@ class I3D:
     def add_skinned_mesh_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         return self._add_node(SkinnedMeshShapeNode, mesh_object, parent)
 
-    def add_transformgroup_node(self, empty_object: [bpy.types.Object, bpy.types.Collection],
-                                parent: SceneGraphNode = None) -> SceneGraphNode:
+    def add_transformgroup_node(
+        self, empty_object: [bpy.types.Object, bpy.types.Collection], parent: SceneGraphNode = None
+    ) -> SceneGraphNode:
         return self._add_node(TransformGroupNode, empty_object, parent)
 
     def add_light_node(self, light_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
@@ -184,14 +200,26 @@ class I3D:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""
         return self._add_node(CameraNode, camera_object, parent)
 
-    def add_shape(self, evaluated_mesh: EvaluatedMesh, shape_name: str | None = None, is_merge_group: bool = False,
-                  is_generic: bool = False, bone_mapping: ChainMap | None = None) -> int:
+    def add_shape(
+        self,
+        evaluated_mesh: EvaluatedMesh,
+        shape_name: str | None = None,
+        is_merge_group: bool = False,
+        is_generic: bool = False,
+        bone_mapping: ChainMap | None = None,
+    ) -> int:
         export_name = shape_name or evaluated_mesh.name
         if export_name not in self.shapes:
             shape_id = self._next_available_id('shape')
-            indexed_triangle_set = IndexedTriangleSet(shape_id, self, evaluated_mesh, shape_name=export_name,
-                                                      is_merge_group=is_merge_group, is_generic=is_generic,
-                                                      bone_mapping=bone_mapping)
+            indexed_triangle_set = IndexedTriangleSet(
+                shape_id,
+                self,
+                evaluated_mesh,
+                shape_name=export_name,
+                is_merge_group=is_merge_group,
+                is_generic=is_generic,
+                bone_mapping=bone_mapping,
+            )
             indexed_triangle_set.populate_xml_element()
             # Store a reference to the shape from both it's name and its shape id
             self.shapes.update(dict.fromkeys([shape_id, export_name], indexed_triangle_set))
@@ -217,8 +245,9 @@ class I3D:
     def add_user_attributes(self, user_attributes, node_id):
         node_attribute_element = self.xml_elements['UserAttributes'].find(f"UserAttribute[@nodeId='{node_id:d}']")
         if node_attribute_element is None:
-            node_attribute_element = xml_i3d.SubElement(self.xml_elements['UserAttributes'], 'UserAttribute',
-                                                        attrib={'nodeId': str(node_id)})
+            node_attribute_element = xml_i3d.SubElement(
+                self.xml_elements['UserAttributes'], 'UserAttribute', attrib={'nodeId': str(node_id)}
+            )
 
         for attribute in user_attributes:
             attrib = {'name': attribute.name, 'type': attribute.type.replace('data_', '')}
@@ -236,7 +265,7 @@ class I3D:
     def add_material(self, blender_material: bpy.types.Material) -> int:
         name = blender_material.name
         if name not in self.materials:
-            self.logger.debug(f"New Material")
+            self.logger.debug("New Material")
             material_id = self._next_available_id('material')
             material = Material(material_id, self, blender_material)
             material.populate_xml_element()
@@ -251,7 +280,7 @@ class I3D:
         # If the material doesn't pre-exist in the blend file, then add it.
         if blender_material is None:
             material = bpy.data.materials.new(default_material_name)
-            self.logger.info(f"Default material does not exist. Creating 'i3d_default_material'")
+            self.logger.info("Default material does not exist. Creating 'i3d_default_material'")
             self.add_material(material)
         # If it already exists in the blend file (Due to a previous export) add it to the i3d material list
         elif default_material_name not in self.materials:
@@ -261,7 +290,7 @@ class I3D:
 
     def add_file(self, file_type: Type[File], path_to_file: str) -> int:
         if path_to_file not in self.files:
-            self.logger.debug(f"New File")
+            self.logger.debug("New File")
             file_id = self._next_available_id('file')
             file = file_type(file_id, self, path_to_file)
             file.populate_xml_element()
@@ -312,7 +341,7 @@ class I3D:
             stripped_line = line.strip()  # Remove leading and trailing whitespace
             if '<i3dMappings>' in stripped_line:
                 i3d_mapping_idx = idx
-                xml_indentation = line[:line.find('<')]  # Preserve indentation
+                xml_indentation = line[: line.find('<')]  # Preserve indentation
                 break
             if stripped_line == f"</{root.tag}>":
                 closing_root_idx = idx  # Preserve the index of the closing root tag
@@ -341,7 +370,7 @@ class I3D:
             # If the mapping is an empty string, use the node name
             mapping_name = getattr(mapping_node.blender_object.i3d_mapping, 'mapping_name', '') or mapping_node.name
             new_mappings.append(
-                f'{xml_indentation*2}<i3dMapping id="{mapping_name}" node="{_build_index_string(mapping_node)}" />\n'
+                f'{xml_indentation * 2}<i3dMapping id="{mapping_name}" node="{_build_index_string(mapping_node)}" />\n'
             )
 
         # Remove old mappings and insert new ones
@@ -350,7 +379,7 @@ class I3D:
             end_idx = i3d_mapping_idx
             while end_idx < len(lines) and '</i3dMappings>' not in lines[end_idx]:
                 end_idx += 1
-            lines[i3d_mapping_idx + 1:end_idx] = new_mappings  # Replace contents
+            lines[i3d_mapping_idx + 1 : end_idx] = new_mappings  # Replace contents
         else:
             lines.insert(i3d_mapping_idx + 1, ''.join(new_mappings) + f"{xml_indentation}</i3dMappings>\n")
 
@@ -359,12 +388,14 @@ class I3D:
 
         self.logger.info(f"Successfully exported i3dMappings to {file_path}")
 
+
 # To avoid a circular import, since all nodes rely on the I3D class, but i3d itself contains all the different nodes.
+# ruff: noqa: F401, E402, F403
+from .node_classes.animation import *
+from .node_classes.file import *
+from .node_classes.material import *
+from .node_classes.merge_children import *
+from .node_classes.merge_group import *
 from .node_classes.node import *
 from .node_classes.shape import *
-from .node_classes.merge_group import *
-from .node_classes.merge_children import *
 from .node_classes.skinned_mesh import *
-from .node_classes.material import *
-from .node_classes.file import *
-from .node_classes.animation import *

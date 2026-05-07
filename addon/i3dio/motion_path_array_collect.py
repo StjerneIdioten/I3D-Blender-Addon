@@ -1,11 +1,13 @@
 import logging
 from math import tau
-import numpy as np
+
 import bpy
 import mathutils
+import numpy as np
 from bpy_extras.io_utils import axis_conversion
-from .utility import sort_blender_objects_by_outliner_ordering
+
 from . import debugging
+from .utility import sort_blender_objects_by_outliner_ordering
 
 # Convert matrix from Blender to Giants coordinate system
 CONVERSION_MATRIX: mathutils.Matrix = axis_conversion(to_forward='-Z', to_up='Y').to_4x4()
@@ -30,15 +32,17 @@ class MotionPathArray:
 
     All arrays output by this class are ready for packing into 16-bit float DDS textures.
     """
+
     def __init__(self, obj: bpy.types.Object, depsgraph: bpy.types.Depsgraph = None):
         self.obj = obj
         self.props = obj.i3d_motion_path_array
         self.depsgraph = depsgraph or bpy.context.view_layer.depsgraph
-        self.logger = debugging.ObjectNameAdapter(logging.getLogger(f"{__name__}.{type(self).__name__}"),
-                                                  {'object_name': obj.name})
+        self.logger = debugging.ObjectNameAdapter(
+            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': obj.name}
+        )
 
         self.is_cyclic = self.props.is_cyclic
-        self.hide_first_and_last = (self.props.hide_first_and_last and self.props.include_position)
+        self.hide_first_and_last = self.props.hide_first_and_last and self.props.include_position
         self.prev_quat = None  # For smooth quaternion transitions
         self.array = None
 

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
 import logging
 import math
 from dataclasses import dataclass, field, fields
 from pathlib import Path
+from typing import ClassVar
 
 import bpy
 import bpy.utils.previews
@@ -22,6 +21,7 @@ MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}
 BRAND_MATERIAL_TEMPLATES: dict[str, BrandMaterialTemplate] = {}
 preview_collections = {}
 
+
 def _warn_invalid_template_attr(
     template_name: str,
     attr_name: str,
@@ -37,9 +37,11 @@ def _warn_invalid_template_attr(
     )
 
 
+# ruff: noqa: N815
 @dataclass
 class TemplateBase:
     """Base class for shared material template attributes defined in XML files."""
+
     name: str = "UnknownTemplate"
     colorScale: tuple[float, float, float] = (1.0, 1.0, 1.0)
     clearCoatIntensity: float = 0.0
@@ -174,7 +176,7 @@ def _parse_brand_material_templates(path: Path) -> dict[str, BrandMaterialTempla
     templates = {}
     for tmpl in root.findall("template"):
         if name := tmpl.attrib.get("name"):  # Just to be safe
-            if (new_template := BrandMaterialTemplate.from_elem(tmpl, default_parent)):
+            if new_template := BrandMaterialTemplate.from_elem(tmpl, default_parent):
                 templates[name] = new_template
     return templates
 
@@ -236,15 +238,26 @@ def get_template_by_name(name: str) -> MaterialTemplate | BrandMaterialTemplate 
     return MATERIAL_TEMPLATES.get(name) or BRAND_MATERIAL_TEMPLATES.get(name)
 
 
-def apply_template_to_material(material: bpy.types.Material, template: MaterialTemplate | BrandMaterialTemplate,
-                               allowed_params=None, allowed_textures=None, overlay_only_declared=False) -> None:
+def apply_template_to_material(
+    material: bpy.types.Material,
+    template: MaterialTemplate | BrandMaterialTemplate,
+    allowed_params=None,
+    allowed_textures=None,
+    overlay_only_declared=False,
+) -> None:
     """Applies params and textures from a template to the given material property collections."""
     params = material.i3d_attributes.shader_material_params
     textures = material.i3d_attributes.shader_material_textures
 
     if allowed_params is None:
-        allowed_params = {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
-                          "smoothnessScale", "metalnessScale", "porosity"}
+        allowed_params = {
+            "colorScale",
+            "clearCoatIntensity",
+            "clearCoatSmoothness",
+            "smoothnessScale",
+            "metalnessScale",
+            "porosity",
+        }
     if allowed_textures is None:
         allowed_textures = {"detailDiffuse", "detailNormal", "detailSpecular"}
 
@@ -322,9 +335,9 @@ class I3D_IO_OT_create_material_from_template_popup(bpy.types.Operator):
             ('SLOT', "Material Slot", "Add to new material slot"),
             ('ACTIVE_OBJECT', "Active Object", "Assign to the active object"),
             ('SELECTED_OBJECTS', "Selected Objects", "Assign to all selected objects"),
-            ('SELECTED_MESHES', "Selected Meshes", "Assign material to all selected triangles in selected meshes")
+            ('SELECTED_MESHES', "Selected Meshes", "Assign material to all selected triangles in selected meshes"),
         ],
-        default='SLOT'
+        default='SLOT',
     )
 
     def draw(self, _context):
@@ -381,9 +394,9 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
             ('SLOT', "Material Slot", "Add to new material slot"),
             ('ACTIVE_OBJECT', "Active Object", "Assign to the active object"),
             ('SELECTED_OBJECTS', "Selected Objects", "Assign to all selected objects"),
-            ('SELECTED_MESHES', "Selected Meshes", "Assign material to all selected triangles in selected meshes")
+            ('SELECTED_MESHES', "Selected Meshes", "Assign material to all selected triangles in selected meshes"),
         ],
-        default='SLOT'
+        default='SLOT',
     )
 
     def execute(self, context):
@@ -445,9 +458,9 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
 class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     bl_idname = "i3dio.template_search_popup"
     bl_label = "Select Template"
-    bl_description = ("Search and apply material templates.\n"
-                      "• Hold Shift: Skip color scale\n"
-                      "• Hold Ctrl: Only apply color scale\n")
+    bl_description = (
+        "Search and apply material templates.\n• Hold Shift: Skip color scale\n• Hold Ctrl: Only apply color scale\n"
+    )
     bl_options = {'INTERNAL', 'UNDO'}
     bl_property = "template_name"
 
@@ -455,9 +468,11 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     def description(cls, _context, properties):
         if properties.single_param:
             return f"Set single parameter: {properties.single_param}"
-        return ("Search and apply material templates.\n"
-                "• Hold Shift: Skip color scale\n"
-                "• Hold Ctrl: Only apply color scale\n")
+        return (
+            "Search and apply material templates.\n"
+            "• Hold Shift: Skip color scale\n"
+            "• Hold Ctrl: Only apply color scale\n"
+        )
 
     @classmethod
     def poll(cls, context):
@@ -474,8 +489,14 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
     only_color_scale: bpy.props.BoolProperty(default=False, options={'HIDDEN'})
 
     def execute(self, context):
-        allowed_params = {"colorScale", "clearCoatIntensity", "clearCoatSmoothness",
-                          "smoothnessScale", "metalnessScale", "porosity"}
+        allowed_params = {
+            "colorScale",
+            "clearCoatIntensity",
+            "clearCoatSmoothness",
+            "smoothnessScale",
+            "metalnessScale",
+            "porosity",
+        }
         allowed_textures = {"detailDiffuse", "detailNormal", "detailSpecular"}
         info_parts = []
 
@@ -492,8 +513,9 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
             return {'CANCELLED'}
 
         if self.single_param:  # Updating single param only, no need for parent inheritance
-            apply_template_to_material(context.material, template,
-                                       allowed_params={self.single_param}, allowed_textures=[])
+            apply_template_to_material(
+                context.material, template, allowed_params={self.single_param}, allowed_textures=[]
+            )
             info_parts.append(f"Only set param: {self.single_param}")
         else:
             if (parent := getattr(template, 'parentTemplate', None)) is not None:
@@ -509,7 +531,7 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
                     direction="PROPS_TO_NODES",
                     skip_color_scale=self.skip_color_scale,
                     only_color_scale=self.only_color_scale,
-                    single_param=self.single_param
+                    single_param=self.single_param,
                 )
 
         info_str = " | ".join(info_parts)

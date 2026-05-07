@@ -4,5 +4,14 @@
     ],
     "blender.environmentVariables": {
         "BLENDER_USER_RESOURCES": "${workspaceFolder}/.blender"
+    },
+
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports.ruff": "explicit",
+            "source.fixAll.ruff": "explicit"
+        }
     }
 }

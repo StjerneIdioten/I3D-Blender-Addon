@@ -1,28 +1,43 @@
-if "bpy" in locals():
-    import importlib
-    reloadable_modules = [
-        'helper_functions',
-        'addon_preferences',
-        'exporter',
-        'dds_exporter',
-        'collision_data',
-        'bit_mask_editor',
-        'presets',
-        'object',
-        'mesh',
-        'light',
-        'shader_parser',
-        'material_templates',
-        'shader_picker',
-        'udim_to_mat_template',
-        'user_attributes',
-        'udim_picker'
-    ]
+"""
+NOTE: reloading is handled centrally in the root add-on __init__.py by purging
+cached submodules. This file should stay import-only to keep reload behavior
+predictable.
+"""
 
-    for module_name in reloadable_modules:
-        if module_name in locals():
-            importlib.reload(locals()[module_name])
+from . import (
+    addon_preferences,
+    bit_mask_editor,
+    collision_data,
+    dds_exporter,
+    exporter,
+    helper_functions,
+    light,
+    material_templates,
+    mesh,
+    object,
+    presets,
+    shader_parser,
+    shader_picker,
+    udim_picker,
+    udim_to_mat_template,
+    user_attributes,
+)
 
-from . import (helper_functions, addon_preferences, exporter, dds_exporter, collision_data, bit_mask_editor, object,
-               presets, user_attributes, mesh, light, shader_parser, material_templates,
-               shader_picker, udim_to_mat_template, udim_picker)
+__all__ = [
+    "addon_preferences",
+    "bit_mask_editor",
+    "collision_data",
+    "dds_exporter",
+    "exporter",
+    "helper_functions",
+    "light",
+    "material_templates",
+    "mesh",
+    "object",
+    "presets",
+    "shader_parser",
+    "shader_picker",
+    "udim_picker",
+    "udim_to_mat_template",
+    "user_attributes",
+]

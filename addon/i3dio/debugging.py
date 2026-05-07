@@ -1,4 +1,5 @@
 """Debug module which primarily contains the loggers used in the code and any helpful functions for debugging"""
+
 import logging
 
 # A top level logger with the module name

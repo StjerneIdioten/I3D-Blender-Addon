@@ -39,8 +39,7 @@ class MergeChildrenRoot(ShapeNode):
         if obj.type == 'MESH':
             self.logger.debug(f"Merging child: '{obj.name}', g_value: {g_value} (root: {self.blender_object.name!r})")
             self.i3d.shapes[self.shape_id].append_from_evaluated_mesh(
-                EvaluatedMesh(self.i3d, obj, reference_frame=reference_frame),
-                g_value
+                EvaluatedMesh(self.i3d, obj, reference_frame=reference_frame), g_value
             )
 
         for child in obj.children:

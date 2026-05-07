@@ -1,12 +1,18 @@
 from __future__ import annotations
-from collections import defaultdict
+
 import math
 import re
+from collections import defaultdict
+
 import bpy
 
-from .material_templates import (get_template_by_name, apply_template_to_material, brand_name_from_color,
-                                 ensure_base_color_texture)
-from .shader_migration_utils import migrate_variation, migrate_and_apply_parameters, migrate_material_textures
+from .material_templates import (
+    apply_template_to_material,
+    brand_name_from_color,
+    ensure_base_color_texture,
+    get_template_by_name,
+)
+from .shader_migration_utils import migrate_and_apply_parameters, migrate_material_textures, migrate_variation
 
 # UDIM tile index to material template mapping.
 # key[1] = colorMask variations with colorMatN
@@ -79,7 +85,7 @@ def is_vehicle_shader(i3d_attributes) -> bool:
     Checks both the 'shader_name' and the legacy 'source' path,
     since old files stored the full shader XML path in 'source'.
     """
-    return (i3d_attributes.shader_name == "vehicleShader" or "vehicleShader" in i3d_attributes.get('source', ''))
+    return i3d_attributes.shader_name == "vehicleShader" or "vehicleShader" in i3d_attributes.get('source', '')
 
 
 def custom_udim_index(u: float, v: float) -> int:
@@ -150,8 +156,9 @@ def strip_texture_suffix(name: str) -> str:
     e.g., 'myVehicle_diffuse.dds' -> 'myVehicle'.
     Handles .dds, .png, .jpg, .jpeg, and optional Blender numerical suffixes.
     """
-    return re.sub(r'_(diffuse|normal|specular|vmask|alpha|height)\.(dds|png|jpe?g)(\.\d+)?$', '',
-                  name, flags=re.IGNORECASE)
+    return re.sub(
+        r'_(diffuse|normal|specular|vmask|alpha|height)\.(dds|png|jpe?g)(\.\d+)?$', '', name, flags=re.IGNORECASE
+    )
 
 
 def main_texture_name(mat: bpy.types.Material) -> str:
@@ -188,14 +195,11 @@ def should_be_wet(all_names: list[str], mat: bpy.types.Material) -> bool:
         return True  # Default to wet if no names are available, as exterior parts are more common.
 
     # Keywords indicating parts that should NOT receive rain/wetness effects.
-    DRY_KEYWORDS = (
-        "window", "glass", "winshield",
-        "interior", "seat", "dashboard", "steeringwheel", "pedal"
-    )
+    dry_keywords = ("window", "glass", "winshield", "interior", "seat", "dashboard", "steeringwheel", "pedal")
 
     # Count how many of the provided names suggest the part should be dry.
     names_lower = [n.lower() for n in all_names]
-    dry_matches = sum(1 for name in names_lower if any(keyword in name for keyword in DRY_KEYWORDS))
+    dry_matches = sum(1 for name in names_lower if any(keyword in name for keyword in dry_keywords))
 
     dry_ratio = dry_matches / len(names_lower)  # Calculate the ratio of names that imply a "dry" state.
     threshold = 0.5  # If 50% or more of the names suggest a dry part, we classify it as dry.
@@ -228,12 +232,14 @@ def remap_wetness_uvs(new_material_work_orders: dict) -> None:
             all_names.append(texture_node.image.name)
 
         # Determine the current state (based on UV position) and desired state (based on naming).
-        is_currently_in_wet_region = (udim >= 0)
+        is_currently_in_wet_region = udim >= 0
         is_desired_wet = should_be_wet(all_names, new_mat)  # Using the clearer function
 
-        print(f"Processing '{new_mat.name}' (UDIM {udim}): "
-              f"Currently in {'WET' if is_currently_in_wet_region else 'DRY'} region. "
-              f"Desired state: {'WET' if is_desired_wet else 'DRY'}.")
+        print(
+            f"Processing '{new_mat.name}' (UDIM {udim}): "
+            f"Currently in {'WET' if is_currently_in_wet_region else 'DRY'} region. "
+            f"Desired state: {'WET' if is_desired_wet else 'DRY'}."
+        )
 
         if is_desired_wet and not is_currently_in_wet_region:
             # Move all UVs up so the lowest V is at 0, snapping the island into the wet region without misaligning it
@@ -359,15 +365,16 @@ class I3D_IO_OT_udim_to_mat_template(bpy.types.Operator):
         for (old_mat, udim), work_order in new_material_work_orders.items():
             key = (old_mat, udim)
             old_i3d_attrs = old_mat.i3d_attributes
-            old_variation_name = (old_i3d_attrs.get('temp_old_variation_name') or old_i3d_attrs.shader_variation_name)
+            old_variation_name = old_i3d_attrs.get('temp_old_variation_name') or old_i3d_attrs.shader_variation_name
 
             from_alpha = "template_idx_from_alpha" in work_order
             template_idx = work_order.get('template_idx_from_alpha', udim)
 
             # Look up the FS25 template name by UDIM index or by the alpha-channel override
             template_info = UDIM_TO_MAT_TEMPLATE.get(template_idx)
-            template_name = (template_info[1 if from_alpha else 0]
-                             if template_info else f"unknownTemplate_{template_idx}")
+            template_name = (
+                template_info[1 if from_alpha else 0] if template_info else f"unknownTemplate_{template_idx}"
+            )
 
             if "decal" in old_variation_name.lower() and udim == 0:
                 template_name = "decal"  # Special case for decals, use a generic decal template

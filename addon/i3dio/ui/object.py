@@ -1,28 +1,22 @@
 import bpy
-from bpy.types import (
-    Operator,
-    Panel
-)
 from bl_operators.presets import AddPresetBase
-from bpy.app.handlers import (
-    persistent,
-    load_post
-)
+from bpy.app.handlers import load_post, persistent
 from bpy.props import (
-    StringProperty,
     BoolProperty,
-    EnumProperty,
-    PointerProperty,
-    FloatProperty,
-    IntProperty,
-    FloatVectorProperty,
     CollectionProperty,
+    EnumProperty,
+    FloatProperty,
+    FloatVectorProperty,
+    IntProperty,
+    PointerProperty,
+    StringProperty,
 )
-from .helper_functions import i3d_property
-from ..xml_i3d import i3d_max
-from . import (presets, mesh, light)
+from bpy.types import Operator, Panel
 
+from ..xml_i3d import i3d_max
+from . import light, mesh, presets
 from .collision_data import COLLISIONS
+from .helper_functions import i3d_property
 
 classes = []
 
@@ -36,9 +30,11 @@ def register(cls):
 class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
     i3d_map = {
         'locked_group': {'name': 'lockedgroup', 'default': False, 'preset_group': 'ALL'},
-        'visibility': {'name': 'visibility', 'default': True, 'tracking': {'member_path': 'hide_render',
-                                                                           'mapping': {True: False,
-                                                                                       False: True}}},
+        'visibility': {
+            'name': 'visibility',
+            'default': True,
+            'tracking': {'member_path': 'hide_render', 'mapping': {True: False, False: True}},
+        },
         'clip_distance': {'name': 'clipDistance', 'default': 1000000.0, 'preset_group': 'ALL'},
         'min_clip_distance': {'name': 'minClipDistance', 'default': 0.0, 'preset_group': 'ALL'},
         'object_mask': {'name': 'objectMask', 'default': '0', 'type': 'HEX', 'preset_group': 'ALL'},
@@ -47,9 +43,17 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'lod_blending': {'name': 'lodBlending', 'default': True, 'preset_group': 'EMPTY'},
         'collision': {'name': 'collision', 'default': True, 'preset_group': 'MESH'},
         'collision_filter_group': {
-            'name': 'collisionFilterGroup', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
+            'name': 'collisionFilterGroup',
+            'default': 'ff',
+            'type': 'HEX',
+            'preset_group': 'MESH',
+        },
         'collision_filter_mask': {
-            'name': 'collisionFilterMask', 'default': 'ff', 'type': 'HEX', 'preset_group': 'MESH'},
+            'name': 'collisionFilterMask',
+            'default': 'ff',
+            'type': 'HEX',
+            'preset_group': 'MESH',
+        },
         'compound': {'name': 'compound', 'default': False, 'preset_group': 'MESH'},
         'trigger': {'name': 'trigger', 'default': False, 'preset_group': 'MESH'},
         'restitution': {'name': 'restitution', 'default': 0.0, 'preset_group': 'MESH'},
@@ -66,10 +70,25 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         'minute_of_day_end': {'name': 'minuteOfDayEnd', 'default': 0, 'preset_group': 'EMPTY'},
         'day_of_year_start': {'name': 'dayOfYearStart', 'default': 0, 'preset_group': 'EMPTY'},
         'day_of_year_end': {'name': 'dayOfYearEnd', 'default': 0, 'preset_group': 'EMPTY'},
-        'weather_required_mask': {'name': 'weatherRequiredMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'weather_required_mask': {
+            'name': 'weatherRequiredMask',
+            'default': '0',
+            'type': 'HEX',
+            'preset_group': 'EMPTY',
+        },
         'weather_prevent_mask': {'name': 'weatherPreventMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
-        'viewer_spaciality_required_mask': {'name': 'viewerSpacialityRequiredMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
-        'viewer_spaciality_prevent_mask': {'name': 'viewerSpacialityPreventMask', 'default': '0', 'type': 'HEX', 'preset_group': 'EMPTY'},
+        'viewer_spaciality_required_mask': {
+            'name': 'viewerSpacialityRequiredMask',
+            'default': '0',
+            'type': 'HEX',
+            'preset_group': 'EMPTY',
+        },
+        'viewer_spaciality_prevent_mask': {
+            'name': 'viewerSpacialityPreventMask',
+            'default': '0',
+            'type': 'HEX',
+            'preset_group': 'EMPTY',
+        },
         'render_invisible': {'name': 'renderInvisible', 'default': False, 'preset_group': 'EMPTY'},
         'visible_shader_parameter': {'name': 'visibleShaderParameter', 'default': 1.0, 'preset_group': 'EMPTY'},
         'joint': {'name': 'joint', 'default': False, 'preset_group': 'EMPTY'},
@@ -93,20 +112,16 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Enable this option to treat the object as a 'locked group' in Giants Editor. "
         "When the hierarchy is collapsed and you select any of its child objects in the viewport, "
         "the parent object (the locked group) will be selected instead.",
-        default=i3d_map['locked_group']['default']
+        default=i3d_map['locked_group']['default'],
     )
 
-    visibility: BoolProperty(
-        name="Visibility",
-        description="Visibility",
-        default=i3d_map['visibility']['default']
-    )
+    visibility: BoolProperty(name="Visibility", description="Visibility", default=i3d_map['visibility']['default'])
 
     visibility_tracking: BoolProperty(
         name="Render Visibility",
         description="Can be found at: Object Properties -> Visibility -> Renders "
-                    "(can also be toggled through outliner)",
-        default=True
+        "(can also be toggled through outliner)",
+        default=True,
     )
 
     lod_distances: FloatVectorProperty(
@@ -115,13 +130,11 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         "The first value is always 0, and each subsequent value must be equal to or greater than the previous one.",
         size=4,
         default=i3d_map['lod_distances']['default'],
-        min=0.0
+        min=0.0,
     )
 
     lod_blending: BoolProperty(
-        name="LOD Blending",
-        description="Enable LOD blending",
-        default=i3d_map['lod_blending']['default']
+        name="LOD Blending", description="Enable LOD blending", default=i3d_map['lod_blending']['default']
     )
 
     clip_distance: FloatProperty(
@@ -131,7 +144,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         min=0.0,
         max=i3d_max,
         soft_min=0,
-        soft_max=65535.0
+        soft_max=65535.0,
     )
 
     min_clip_distance: FloatProperty(
@@ -141,7 +154,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         min=0.0,
         max=i3d_max,
         soft_min=0,
-        soft_max=65535.0
+        soft_max=65535.0,
     )
 
     object_mask: StringProperty(
@@ -158,15 +171,13 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
             ('static', 'Static', "Inanimate object with infinite mass"),
             ('dynamic', 'Dynamic', "Object moves with physics"),
             ('kinematic', 'Kinematic', "Object moves without physics"),
-            ('compoundChild', 'Compound Child', "Uses the collision of a higher-level object marked as 'compound'")
+            ('compoundChild', 'Compound Child', "Uses the collision of a higher-level object marked as 'compound'"),
         ],
-        default=i3d_map['rigid_body_type']['default']
+        default=i3d_map['rigid_body_type']['default'],
     )
 
     collision: BoolProperty(
-        name="Collision",
-        description="Does the object take part in collisions",
-        default=i3d_map['collision']['default']
+        name="Collision", description="Does the object take part in collisions", default=i3d_map['collision']['default']
     )
 
     def update_collision_preset_name(self, context):
@@ -183,39 +194,31 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Collision Preset Name",
         description="The name of the collision preset to use",
         default="",
-        update=update_collision_preset_name
+        update=update_collision_preset_name,
     )
 
     collision_filter_group: StringProperty(
         name="Collision Filter Group",
         description="The objects collision filter group as a hexadecimal value",
-        default=i3d_map['collision_filter_group']['default']
+        default=i3d_map['collision_filter_group']['default'],
     )
 
     collision_filter_mask: StringProperty(
         name="Collision Filter Mask",
         description="The objects collision filter mask as a hexadecimal value",
-        default=i3d_map['collision_filter_mask']['default']
+        default=i3d_map['collision_filter_mask']['default'],
     )
 
-    compound: BoolProperty(
-        name="Compound",
-        description="Compound",
-        default=i3d_map['compound']['default']
-    )
+    compound: BoolProperty(name="Compound", description="Compound", default=i3d_map['compound']['default'])
 
-    trigger: BoolProperty(
-        name="Trigger",
-        description="Trigger",
-        default=i3d_map['trigger']['default']
-    )
+    trigger: BoolProperty(name="Trigger", description="Trigger", default=i3d_map['trigger']['default'])
 
     restitution: FloatProperty(
         name="Restitution",
         description="Bounciness of the surface",
         default=i3d_map['restitution']['default'],
         min=0,
-        max=1
+        max=1,
     )
 
     static_friction: FloatProperty(
@@ -223,7 +226,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="The force that resists motion between two non-moving surfaces",
         default=i3d_map['static_friction']['default'],
         min=0,
-        max=1
+        max=1,
     )
 
     dynamic_friction: FloatProperty(
@@ -231,7 +234,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="The force that resists motion between two moving surfaces",
         default=i3d_map['dynamic_friction']['default'],
         min=0,
-        max=1
+        max=1,
     )
 
     linear_damping: FloatProperty(
@@ -239,7 +242,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Defines the slowdown factor for linear movement, affecting speed",
         default=i3d_map['linear_damping']['default'],
         min=0,
-        max=1
+        max=1,
     )
 
     angular_damping: FloatProperty(
@@ -247,16 +250,16 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Defines the slowdown factor for angular movement, affecting spin",
         default=i3d_map['angular_damping']['default'],
         min=0,
-        max=1
+        max=1,
     )
 
     density: FloatProperty(
         name="Density",
         description="Used with the shape of the object to calculate mass. "
-                    "The higher the number, the heavier the object",
+        "The higher the number, the heavier the object",
         default=i3d_map['density']['default'],
         min=0,
-        max=20
+        max=20,
     )
 
     solver_iteration_count: IntProperty(
@@ -264,16 +267,15 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="The number of iterations the physics engine uses to solve the constraints",
         default=i3d_map['solver_iteration_count']['default'],
         min=1,
-        max=20
+        max=20,
     )
 
     split_type: IntProperty(
         name="Split Type",
-        description="Split type determines what type of tree it is. "
-                    "For custom tree type use a number over 19",
+        description="Split type determines what type of tree it is. For custom tree type use a number over 19",
         default=i3d_map['split_type']['default'],
         min=0,
-        max=200
+        max=200,
     )
 
     split_uvs: FloatVectorProperty(
@@ -282,19 +284,16 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         size=5,
         default=i3d_map['split_uvs']['default'],
         min=0,
-        max=i3d_max
+        max=i3d_max,
     )
 
     use_parent: BoolProperty(
-        name="Use Parent",
-        description="Inherits visibility condition attributes from the parent object",
-        default=True
+        name="Use Parent", description="Inherits visibility condition attributes from the parent object", default=True
     )
 
     minute_of_day_start: IntProperty(
         name="Minute of Day Start",
-        description="The minute of the day when visibility is enabled.\n"
-        "Example: 8:00 AM = 480, 8:00 PM = 1200",
+        description="The minute of the day when visibility is enabled.\nExample: 8:00 AM = 480, 8:00 PM = 1200",
         default=i3d_map['minute_of_day_start']['default'],
         max=1440,
         min=0,
@@ -302,8 +301,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
 
     minute_of_day_end: IntProperty(
         name="Minute of Day End",
-        description="The minute of the day when visibility is disabled.\n"
-        "Example: 8:00 AM = 480, 8:00 PM = 1200",
+        description="The minute of the day when visibility is disabled.\nExample: 8:00 AM = 480, 8:00 PM = 1200",
         default=i3d_map['minute_of_day_end']['default'],
         max=1440,
         min=0,
@@ -329,33 +327,33 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Weather Required Mask (Hex)",
         description="Defines the required weather conditions as a hexadecimal value.\n"
         "Examples: Winter = 400, Winter + Snow = 408",
-        default=i3d_map['weather_required_mask']['default']
+        default=i3d_map['weather_required_mask']['default'],
     )
 
     weather_prevent_mask: StringProperty(
         name="Weather Prevent Mask (Hex)",
         description="Defines the weather conditions that prevent visibility as a hexadecimal value.\n"
         "Examples: Summer = 100, Summer + Sun = 101",
-        default=i3d_map['weather_prevent_mask']['default']
+        default=i3d_map['weather_prevent_mask']['default'],
     )
 
     viewer_spaciality_required_mask: StringProperty(
         name="Viewer Spaciality Required Mask (Hex)",
         description="Defines the required viewer spaciality conditions as a hexadecimal value",
-        default=i3d_map['viewer_spaciality_required_mask']['default']
+        default=i3d_map['viewer_spaciality_required_mask']['default'],
     )
 
     viewer_spaciality_prevent_mask: StringProperty(
         name="Viewer Spaciality Prevent Mask (Hex)",
         description="Defines the viewer spaciality conditions that prevent visibility as a hexadecimal value",
-        default=i3d_map['viewer_spaciality_prevent_mask']['default']
+        default=i3d_map['viewer_spaciality_prevent_mask']['default'],
     )
 
     render_invisible: BoolProperty(
         name="Render Invisible",
         description="If enabled, the object is always rendered.\n"
         "Visibility must be controlled in the shader using the visible shader parameter",
-        default=i3d_map['render_invisible']['default']
+        default=i3d_map['render_invisible']['default'],
     )
 
     visible_shader_parameter: FloatProperty(
@@ -364,98 +362,78 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         "If conditions are not met, 0 is passed to the shader",
         default=i3d_map['visible_shader_parameter']['default'],
         min=-100,
-        max=100
+        max=100,
     )
 
-    joint: BoolProperty(
-        name="Joint",
-        description="Enable use of joint",
-        default=i3d_map['joint']['default']
-    )
+    joint: BoolProperty(name="Joint", description="Enable use of joint", default=i3d_map['joint']['default'])
     projection: BoolProperty(
-        name="Enable joint projection",
-        description="Enables use of joint",
-        default=i3d_map['projection']['default']
+        name="Enable joint projection", description="Enables use of joint", default=i3d_map['projection']['default']
     )
     x_axis_drive: BoolProperty(
-        name="X Axis Drive",
-        description="Enable x axis drive",
-        default=i3d_map['x_axis_drive']['default']
+        name="X Axis Drive", description="Enable x axis drive", default=i3d_map['x_axis_drive']['default']
     )
     y_axis_drive: BoolProperty(
-        name="Y Axis Drive",
-        description="Enable y axis drive",
-        default=i3d_map['y_axis_drive']['default']
+        name="Y Axis Drive", description="Enable y axis drive", default=i3d_map['y_axis_drive']['default']
     )
     z_axis_drive: BoolProperty(
-        name="Z Axis Drive",
-        description="Enable z axis drive",
-        default=i3d_map['z_axis_drive']['default']
+        name="Z Axis Drive", description="Enable z axis drive", default=i3d_map['z_axis_drive']['default']
     )
     drive_position: BoolProperty(
-        name="Drive Position",
-        description="Enable drive position",
-        default=i3d_map['drive_position']['default']
+        name="Drive Position", description="Enable drive position", default=i3d_map['drive_position']['default']
     )
     projection_distance: FloatProperty(
         name="Projection Distance",
         description="Projection distance",
         default=i3d_map['projection_distance']['default'],
         min=0,
-        max=i3d_max
+        max=i3d_max,
     )
     projection_angle: FloatProperty(
         name="Projection Angle",
         description="Projection angle",
         default=i3d_map['projection_angle']['default'],
         min=0,
-        max=i3d_max
+        max=i3d_max,
     )
     drive_force_limit: FloatProperty(
         name="Drive Force Limit",
         description="Drive Force Limit",
         default=i3d_map['drive_force_limit']['default'],
         min=0,
-        max=i3d_max
+        max=i3d_max,
     )
     drive_spring: FloatProperty(
-        name="Drive Spring",
-        description="Drive Spring",
-        default=i3d_map['drive_spring']['default'],
-        min=0,
-        max=i3d_max
+        name="Drive Spring", description="Drive Spring", default=i3d_map['drive_spring']['default'], min=0, max=i3d_max
     )
     drive_damping: FloatProperty(
         name="Drive Damping",
         description="Drive Damping",
         default=i3d_map['drive_damping']['default'],
         min=0,
-        max=i3d_max
+        max=i3d_max,
     )
     breakable_joint: BoolProperty(
-        name="Breakable",
-        description="Breakable joint",
-        default=i3d_map['breakable_joint']['default']
+        name="Breakable", description="Breakable joint", default=i3d_map['breakable_joint']['default']
     )
     joint_break_force: FloatProperty(
         name="Break Force",
         description="Joint break force",
         default=i3d_map['joint_break_force']['default'],
         min=0,
-        max=i3d_max
+        max=i3d_max,
     )
     joint_break_torque: FloatProperty(
         name="Break Torque",
         description="Joint break torque",
         default=i3d_map['joint_break_torque']['default'],
         min=0,
-        max=i3d_max
+        max=i3d_max,
     )
 
     exclude_from_export: BoolProperty(
         name="Exclude from Export",
         description="If checked, this object and its children will be excluded from export",
-        default=False
+        default=False,
     )
 
     collapse_armature: BoolProperty(
@@ -466,22 +444,18 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
             "If disabled, the armature will be exported as a transform group, "
             "with bones structured as they appear in Blender."
         ),
-        default=True
+        default=True,
     )
 
 
 @register
 class I3DMergeGroup(bpy.types.PropertyGroup):
-    name: StringProperty(
-        name='Merge Group Name',
-        description='The name of the merge group',
-        default='MergeGroup'
-    )
+    name: StringProperty(name='Merge Group Name', description='The name of the merge group', default='MergeGroup')
 
     root: PointerProperty(
         name="Merge Group Root Object",
         description="The object acting as the root for the merge group",
-        type=bpy.types.Object
+        type=bpy.types.Object,
     )
 
 
@@ -495,7 +469,7 @@ class I3DMergeChildren(bpy.types.PropertyGroup):
             "The root object's mesh data (vertices, triangles, materials, etc.) will NOT be exported, "
             "but its shape attributes (e.g., cast shadows) and object attributes will still be used."
         ),
-        default=False
+        default=False,
     )
     apply_transforms: bpy.props.BoolProperty(
         name="Apply Transforms",
@@ -505,7 +479,7 @@ class I3DMergeChildren(bpy.types.PropertyGroup):
             "When disabled, all child meshes are transformed to match the root object's location and orientation, "
             "removing their individual offsets."
         ),
-        default=False
+        default=False,
     )
     interpolation_steps: bpy.props.IntProperty(
         name="Interpolation Steps",
@@ -516,7 +490,7 @@ class I3DMergeChildren(bpy.types.PropertyGroup):
         ),
         default=1,
         min=1,
-        max=10
+        max=10,
     )
     reverse_order: bpy.props.BoolProperty(
         name="Reverse Order",
@@ -525,7 +499,7 @@ class I3DMergeChildren(bpy.types.PropertyGroup):
             "This affects the assignment of generic values used in shaders, "
             "which can influence rendering order or animation sequences."
         ),
-        default=False
+        default=False,
     )
 
 
@@ -537,14 +511,14 @@ class I3DMotionPathArray(bpy.types.PropertyGroup):
             "Enable to export a Motion Path Array texture for this object and its children.\n"
             "Only objects with this enabled will be exported as Motion Path Arrays"
         ),
-        default=False
+        default=False,
     )
     filepath: StringProperty(
         name="Texture Filepath",
         description="File path to save the generated Motion Path Array texture (DDS)",
         default='',
         subtype='FILE_PATH',
-        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'},
     )
     use_geometry_nodes: BoolProperty(
         name="Use Geometry Nodes",
@@ -552,7 +526,7 @@ class I3DMotionPathArray(bpy.types.PropertyGroup):
             "Enable to generate the motion path array from a geometry nodes setup "
             "instead of using child objects in the scene."
         ),
-        default=False
+        default=False,
     )
     is_cyclic: BoolProperty(
         name="Cyclic Path",
@@ -560,22 +534,18 @@ class I3DMotionPathArray(bpy.types.PropertyGroup):
             "Enable for tracks or chains that form a closed loop.\n"
             "Disable for open-ended paths (e.g. effects). This prevents flipping in motion path arrays."
         ),
-        default=False
+        default=False,
     )
     include_position: BoolProperty(
-        name="Include Position",
-        description="Include object positions (XYZ) in the exported texture",
-        default=True
+        name="Include Position", description="Include object positions (XYZ) in the exported texture", default=True
     )
     include_rotation: BoolProperty(
         name="Include Rotation",
         description="Include object rotation (quaternion XYZW) in the exported texture",
-        default=True
+        default=True,
     )
     include_scale: BoolProperty(
-        name="Include Scale",
-        description="Include object scales (XYZ) in the exported texture",
-        default=False
+        name="Include Scale", description="Include object scales (XYZ) in the exported texture", default=False
     )
     hide_first_and_last: BoolProperty(
         name="Hide First and Last",
@@ -583,7 +553,7 @@ class I3DMotionPathArray(bpy.types.PropertyGroup):
             "Set the first and last child's visibility (position.w) to 0 in the texture.\n"
             "This hides the endpoints in the shader. Useful for effect arrays to avoid visible end caps"
         ),
-        default=False
+        default=False,
     )
 
 
@@ -592,13 +562,13 @@ class I3DMappingData(bpy.types.PropertyGroup):
     is_mapped: BoolProperty(
         name="Add to mapping",
         description="If checked this object will be mapped to the i3d mapping of the xml file",
-        default=False
+        default=False,
     )
 
     mapping_name: StringProperty(
         name="Alternative Name",
         description="If this is left empty the name of the object itself will be used",
-        default=''
+        default='',
     )
 
 
@@ -609,7 +579,7 @@ class I3DReferenceData(bpy.types.PropertyGroup):
         description="The path to the .i3d file you want to reference",
         default='',
         subtype='FILE_PATH',
-        options={'PATH_SUPPORTS_BLEND_RELATIVE'}
+        options={'PATH_SUPPORTS_BLEND_RELATIVE'},
     )
     runtime_loaded: BoolProperty(
         name="Runtime Loaded",
@@ -618,7 +588,7 @@ class I3DReferenceData(bpy.types.PropertyGroup):
             "Disable for objects managed by XML (e.g. lights) or if you only want to preview in Giants Editor. "
             "Most references should NOT be runtime loaded."
         ),
-        default=False  # Default in GE is True, but for most use cases False makes more sense
+        default=False,  # Default in GE is True, but for most use cases False makes more sense
     )
     child_path: StringProperty(
         name="Child Path",
@@ -627,7 +597,7 @@ class I3DReferenceData(bpy.types.PropertyGroup):
             "e.g. '0>' for the first root node, '1>' for the second. If left empty and the file has multiple "
             "root nodes, you'll get a warning, but the first node ('0>') will be used by default in Giants Editor."
         ),
-        default=''
+        default='',
     )
 
 
@@ -646,11 +616,11 @@ class I3D_IO_OT_set_collision_preset(bpy.types.Operator):
         if desc and getattr(desc, 'desc', None):
             return desc.desc
         return f"Set the collision preset to {properties.preset}"
-    
+
     def invoke(self, context, event):
         self.apply_to_selected = event.alt
         return self.execute(context)
-    
+
     def execute(self, context):
         if self.apply_to_selected:
             for obj in context.selected_objects:
@@ -702,7 +672,7 @@ SPLIT_TYPE_PRESETS = {
     "Shagbark Hickory": {'split_type': 16, 'support_wood_harvester': False},
     "Stone Pine": {'split_type': 17, 'support_wood_harvester': False},
     "Willow": {'split_type': 18, 'support_wood_harvester': False},
-    "Olive Tree": {'split_type': 19, 'support_wood_harvester': False}
+    "Olive Tree": {'split_type': 19, 'support_wood_harvester': False},
 }
 
 
@@ -717,8 +687,10 @@ class I3D_IO_OT_set_split_type_preset(bpy.types.Operator):
     def description(cls, _context, properties):
         preset = SPLIT_TYPE_PRESETS.get(properties.preset, {})
         support_harvester = preset.get('support_wood_harvester', False)
-        return (f"Set the split type preset to {properties.preset}.\n"
-                f"Supports wood harvester: {'Yes' if support_harvester else 'No'}")
+        return (
+            f"Set the split type preset to {properties.preset}.\n"
+            f"Supports wood harvester: {'Yes' if support_harvester else 'No'}"
+        )
 
     def execute(self, context):
         i3d_attributes = context.object.i3d_attributes
@@ -810,9 +782,22 @@ def unset_properties(i3d_attributes: bpy.types.PropertyGroup, props: tuple) -> N
 
 
 def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.types.PropertyGroup) -> None:
-    UNSET_PROPS = ('compound', 'collision', 'collision_filter_group', 'collision_filter_mask', 'trigger',
-                   'restitution', 'static_friction', 'dynamic_friction', 'linear_damping', 'angular_damping',
-                   'density', 'solver_iteration_count', 'split_type', 'split_uvs')
+    unset_props = (
+        'compound',
+        'collision',
+        'collision_filter_group',
+        'collision_filter_mask',
+        'trigger',
+        'restitution',
+        'static_friction',
+        'dynamic_friction',
+        'linear_damping',
+        'angular_damping',
+        'density',
+        'solver_iteration_count',
+        'split_type',
+        'split_uvs',
+    )
 
     is_static = i3d_attributes.rigid_body_type == 'static'
     header, panel = layout.panel('i3d_rigid_body_panel', default_closed=False)
@@ -821,7 +806,7 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
         panel.prop(i3d_attributes, 'rigid_body_type')
 
         if i3d_attributes.rigid_body_type == 'none':
-            unset_properties(i3d_attributes, UNSET_PROPS)
+            unset_properties(i3d_attributes, unset_props)
             return
 
         row_compound = panel.row()
@@ -883,9 +868,18 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
 
 
 def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.types.PropertyGroup) -> None:
-    PROPS = ('minute_of_day_start', 'minute_of_day_end', 'day_of_year_start', 'day_of_year_end',
-             'weather_required_mask', 'weather_prevent_mask', 'viewer_spaciality_required_mask',
-             'viewer_spaciality_prevent_mask', 'render_invisible', 'visible_shader_parameter')
+    props = (
+        'minute_of_day_start',
+        'minute_of_day_end',
+        'day_of_year_start',
+        'day_of_year_end',
+        'weather_required_mask',
+        'weather_prevent_mask',
+        'viewer_spaciality_required_mask',
+        'viewer_spaciality_prevent_mask',
+        'render_invisible',
+        'visible_shader_parameter',
+    )
 
     use_parent = i3d_attributes.use_parent
     # layout.use_property_split = False
@@ -895,7 +889,7 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
     header.label(text="Visibility Condition")
     if panel:
         panel.use_property_split = True
-        for prop in PROPS:
+        for prop in props:
             row = panel.row()
             row.prop(i3d_attributes, prop)
             if prop.endswith('_mask'):
@@ -907,13 +901,25 @@ def draw_visibility_condition_attributes(layout: bpy.types.UILayout, i3d_attribu
             row.enabled = not use_parent
 
         if use_parent:
-            unset_properties(i3d_attributes, PROPS)
+            unset_properties(i3d_attributes, props)
 
 
 def draw_joint_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.types.PropertyGroup) -> None:
-    PROPS = ('projection', 'projection_distance', 'projection_angle', 'x_axis_drive', 'y_axis_drive',
-             'z_axis_drive', 'drive_position', 'drive_force_limit', 'drive_spring', 'drive_damping',
-             'breakable_joint', 'joint_break_force', 'joint_break_torque')
+    props = (
+        'projection',
+        'projection_distance',
+        'projection_angle',
+        'x_axis_drive',
+        'y_axis_drive',
+        'z_axis_drive',
+        'drive_position',
+        'drive_force_limit',
+        'drive_spring',
+        'drive_damping',
+        'breakable_joint',
+        'joint_break_force',
+        'joint_break_torque',
+    )
 
     header, panel = layout.panel('i3d_joint_panel', default_closed=True)
     header.use_property_split = False
@@ -921,15 +927,16 @@ def draw_joint_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.types.
     header.label(text="Joint")
     if panel:
         panel.enabled = i3d_attributes.joint
-        for prop in PROPS:
+        for prop in props:
             panel.prop(i3d_attributes, prop)
 
         if not i3d_attributes.joint:
-            unset_properties(i3d_attributes, PROPS)
+            unset_properties(i3d_attributes, props)
 
 
-def draw_level_of_detail_attributes(layout: bpy.types.UILayout, obj: bpy.types.Object,
-                                    i3d_attributes: bpy.types.PropertyGroup) -> None:
+def draw_level_of_detail_attributes(
+    layout: bpy.types.UILayout, obj: bpy.types.Object, i3d_attributes: bpy.types.PropertyGroup
+) -> None:
     header, panel = layout.panel('i3d_lod_panel', default_closed=True)
     header.label(text="Level of Detail (LOD)")
     if panel:
@@ -1060,13 +1067,13 @@ class I3D_IO_OT_new_merge_group(bpy.types.Operator):
     bl_options = {'INTERNAL', 'UNDO'}
 
     def execute(self, context):
-        MERGE_GROUP_DEFAULT_NAME = "MergeGroup"
+        merge_group_default_name = "MergeGroup"
 
         obj = context.object
-        name = MERGE_GROUP_DEFAULT_NAME
+        name = merge_group_default_name
         count = 1
         while context.scene.i3dio_merge_groups.find(name) != -1:
-            name = f"{MERGE_GROUP_DEFAULT_NAME}.{count:03d}"
+            name = f"{merge_group_default_name}.{count:03d}"
             count += 1
         mg = context.scene.i3dio_merge_groups.add()
 
@@ -1212,12 +1219,26 @@ class I3D_IO_OT_Object_Add_Preset(AddPresetBase, Operator):
 
     @property
     def preset_values(self):
-        base_values = [f"bpy.context.object.i3d_attributes.{name}" for name, attributes in I3DNodeObjectAttributes.i3d_map.items() if attributes.get('preset_group', None) in ['ALL', bpy.context.object.type]]
+        base_values = [
+            f"bpy.context.object.i3d_attributes.{name}"
+            for name, attributes in I3DNodeObjectAttributes.i3d_map.items()
+            if attributes.get('preset_group', None) in ['ALL', bpy.context.object.type]
+        ]
         match bpy.context.object.type:
             case 'MESH':
-                base_values.extend([f"bpy.context.object.data.i3d_attributes.{name}" for name in mesh.I3DNodeShapeAttributes.i3d_map.keys()])
+                base_values.extend(
+                    [
+                        f"bpy.context.object.data.i3d_attributes.{name}"
+                        for name in mesh.I3DNodeShapeAttributes.i3d_map.keys()
+                    ]
+                )
             case 'LIGHT':
-                base_values.extend([f"bpy.context.object.data.i3d_attributes.{name}" for name in light.I3DNodeLightAttributes.i3d_map.keys()])
+                base_values.extend(
+                    [
+                        f"bpy.context.object.data.i3d_attributes.{name}"
+                        for name in light.I3DNodeLightAttributes.i3d_map.keys()
+                    ]
+                )
         return base_values
 
     preset_subdir = I3D_IO_PT_Object_Presets.preset_subdir

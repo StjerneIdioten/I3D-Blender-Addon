@@ -1,4 +1,5 @@
 import bpy
+
 obj = bpy.context.object
 
 obj.data.i3d_attributes.casts_shadows = True

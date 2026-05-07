@@ -102,8 +102,14 @@ def migrate_and_apply_parameters(new_mat_attrs, old_mat_attrs) -> None:
         # "Old-Old" Legacy (from the list of dicts)
         for old_param in old_mat_attrs.get('shader_parameters', []):
             if name := old_param.get('name'):
-                value = next((old_param.get(k) for k in ('data_float_4', 'data_float_3', 'data_float_2', 'data_float_1')
-                              if k in old_param), None)
+                value = next(
+                    (
+                        old_param.get(k)
+                        for k in ('data_float_4', 'data_float_3', 'data_float_2', 'data_float_1')
+                        if k in old_param
+                    ),
+                    None,
+                )
                 if value is not None:
                     if isinstance(value, (float, int)):
                         value = [float(value)]
@@ -128,10 +134,12 @@ def migrate_and_apply_parameters(new_mat_attrs, old_mat_attrs) -> None:
                 expected_length = len(target_param)
                 value_to_assign = list(old_value)
                 sliced_value = value_to_assign[:expected_length]
-                print(f"[Migration] Migrating '{old_name}' -> '{new_name}'. "
-                      f"Original value: {value_to_assign} (len {len(value_to_assign)}), "
-                      f"Target length: {expected_length}, "
-                      f"Assigned: {sliced_value}")
+                print(
+                    f"[Migration] Migrating '{old_name}' -> '{new_name}'. "
+                    f"Original value: {value_to_assign} (len {len(value_to_assign)}), "
+                    f"Target length: {expected_length}, "
+                    f"Assigned: {sliced_value}"
+                )
                 new_params_collection[new_name] = sliced_value
             except (TypeError, ValueError, KeyError, AttributeError) as e:
                 _print(f"[Migration] Could not apply param '{old_name}' as '{new_name}': {e}")
