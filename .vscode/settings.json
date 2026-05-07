@@ -6,6 +6,9 @@
         "BLENDER_USER_RESOURCES": "${workspaceFolder}/.blender"
     },
 
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.formatOnSave": true,
