@@ -8,8 +8,6 @@ if "bpy" in locals():
         if name.startswith(prefix):
             del sys.modules[name]
 
-import bpy
-
 from . import ui
 
 _UI_MODULES = (
@@ -34,10 +32,8 @@ _UI_MODULES = (
 def register():
     for module in _UI_MODULES:
         module.register()
-    bpy.types.TOPBAR_MT_file_export.append(ui.exporter.menu_func_export)
 
 
 def unregister():
-    bpy.types.TOPBAR_MT_file_export.remove(ui.exporter.menu_func_export)
     for module in reversed(_UI_MODULES):
         module.unregister()

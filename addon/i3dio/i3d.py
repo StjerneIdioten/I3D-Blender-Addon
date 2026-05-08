@@ -13,6 +13,7 @@ from . import xml_i3d
 logger = logging.getLogger(__name__)
 
 
+# ruff: noqa: F405
 class I3D:
     """A special node which is the root node for the entire I3D file. It essentially represents the i3d file"""
 
@@ -108,13 +109,13 @@ class I3D:
         return node
 
     # Public Methods ###################################################################################################
-    def to_i3d(self, M: mathutils.Matrix) -> mathutils.Matrix:
+    def to_i3d(self, matrix: mathutils.Matrix) -> mathutils.Matrix:
         """Full basis change. Transform the matrix to I3D space."""
-        return self.conversion_matrix @ M @ self.conversion_matrix_inv
+        return self.conversion_matrix @ matrix @ self.conversion_matrix_inv
 
-    def to_i3d_forward(self, M: mathutils.Matrix) -> mathutils.Matrix:
+    def to_i3d_forward(self, matrix: mathutils.Matrix) -> mathutils.Matrix:
         """Forward-only basis change."""
-        return self.conversion_matrix @ M
+        return self.conversion_matrix @ matrix
 
     def add_shape_node(self, mesh_object: bpy.types.Object, parent: SceneGraphNode = None) -> SceneGraphNode:
         """Add a blender object with a data type of MESH to the scenegraph as a Shape node"""

@@ -509,9 +509,11 @@ def register():
         bpy.utils.register_class(cls)
 
     bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
+    bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
 
 def unregister():
+    bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     del bpy.types.Scene.i3dio
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
