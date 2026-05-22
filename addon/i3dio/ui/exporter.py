@@ -4,7 +4,8 @@ from bpy.types import Operator, Panel
 from bpy_extras.io_utils import ExportHelper, orientation_helper
 
 from .. import __package__ as base_package
-from .. import exporter, xml_i3d
+from ..export_entrypoint import export_blend_to_i3d
+from ..xml_i3d import FILE_EXT
 
 classes = []
 
@@ -29,7 +30,7 @@ class I3DShaderFolderEntry(bpy.types.PropertyGroup):
         name="Shader Folder",
         description="Directory containing custom shader XML files",
         subtype='DIR_PATH',
-        default='',
+        default="",
         update=update_path,
         options={'PATH_SUPPORTS_BLEND_RELATIVE'},
     )
@@ -40,8 +41,10 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
     # Used when exporting through the file browser
     i3d_mapping_file_path: StringProperty(
         name="XML File",
-        description="Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
-        "contain an '<i3dMapping> somewhere in the file",
+        description=(
+            "Pick the file where you wish the exporter to export i3d-mappings. The file should be xml and"
+            "contain an '<i3dMapping> somewhere in the file"
+        ),
         subtype='FILE_PATH',
         default='',
         options={'PATH_SUPPORTS_BLEND_RELATIVE'},
@@ -56,7 +59,7 @@ class I3DExportUIProperties(bpy.types.PropertyGroup):
         name="ModDesc Path",
         description="Path to the modDesc.xml file. If set, Brand Material Templates will be loaded from it",
         subtype='FILE_PATH',
-        default='',
+        default="",
         update=update_moddesc_path,
         options={'PATH_SUPPORTS_BLEND_RELATIVE'},
     )
@@ -78,9 +81,9 @@ class I3D_IO_OT_export(Operator, ExportHelper):
     bl_label = "Export I3D"
     bl_options = {'UNDO', 'PRESET'}  # 'PRESET' enables the preset dialog for saving settings as preset
 
-    filename_ext = xml_i3d.file_ending
+    filename_ext = FILE_EXT
     filter_glob: StringProperty(
-        default=f"*{xml_i3d.file_ending}",
+        default=f"*{FILE_EXT}",
         options={'HIDDEN'},
         maxlen=255,
     )
@@ -170,10 +173,11 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             ('LIGHT', "Light", "Export lights"),
             ('MESH', "Mesh", "Export meshes"),
             ('CURVE', "Curve", "Export curves"),
+            ('FONT', "Text", "Export text objects as meshes"),
             ('ARMATURE', "Armatures", "Export armatures, used for skinned meshes"),
         ),
         options={'ENUM_FLAG'},
-        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'CURVE', 'ARMATURE'},
+        default={'EMPTY', 'CAMERA', 'LIGHT', 'MESH', 'CURVE', 'FONT', 'ARMATURE'},
     )
 
     features_to_export: EnumProperty(
@@ -194,9 +198,14 @@ class I3D_IO_OT_export(Operator, ExportHelper):
                 "Merge the child objects of empties with Merge Children enabled into a single exported mesh",
             ),
             ('ANIMATIONS', "Animations", "Export animations"),
+            (
+                'MOTION_PATH_ARRAYS',
+                "Motion Path Arrays (DDS)",
+                "Export Motion Path Array DDS textures for objects with Motion Path Array enabled",
+            ),
         ),
         options={'ENUM_FLAG'},
-        default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN'},
+        default={'MERGE_GROUPS', 'SKINNED_MESHES', 'MERGE_CHILDREN', 'MOTION_PATH_ARRAYS'},
     )
 
     copy_files: BoolProperty(
@@ -263,8 +272,8 @@ class I3D_IO_OT_export(Operator, ExportHelper):
             "keep_collections_as_transformgroups",
             "apply_modifiers",
             "apply_unit_scale",
+            "vertex_color_override",
             "alphabetic_uvs",
-            "export_color_by_shader",
             "object_types_to_export",
             "features_to_export",
             "copy_files",
@@ -327,7 +336,7 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         original_frame = context.scene.frame_current
         context.scene.frame_set(0)
 
-        status = exporter.export_blend_to_i3d(self, self.filepath, self.axis_forward, self.axis_up, settings)
+        status = export_blend_to_i3d(self, context, self.filepath, self.axis_forward, self.axis_up, settings)
 
         context.scene.frame_set(original_frame)
 
@@ -336,25 +345,15 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         else:
             self.report({'ERROR'}, "I3D Export Failed! Check console/log for error(s)")
 
-        # Since it is single threaded, this warning wouldn't be sent before the exported starts exporting.
-        # So it can't come before the export and it drowns if the export time comes after it.
-        if context.preferences.addons[base_package].preferences.fs_data_path == '':
-            self.report(
-                {'WARNING'},
-                "FS Data folder path is not set, "
-                "see https://stjerneidioten.github.io/"
-                "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder",
-            )
-
         return {'FINISHED'}
 
 
 def export_main(layout: bpy.types.UILayout, operator, is_file_browser: bool):
     if is_file_browser:
-        layout.prop(operator, 'selection')
+        layout.prop(operator, "selection")
         if operator.selection == 'SELECTED_OBJECTS':
-            layout.prop(operator, 'selection_traverse_children')
-    layout.prop(operator, 'object_sorting_prefix')
+            layout.prop(operator, "selection_traverse_children")
+    layout.prop(operator, "object_sorting_prefix")
 
 
 def export_options(layout: bpy.types.UILayout, operator):
@@ -363,17 +362,17 @@ def export_options(layout: bpy.types.UILayout, operator):
     if body:
         col = body.column()
         col.enabled = bool(bpy.context.preferences.addons[base_package].preferences.i3d_converter_path)
-        col.prop(operator, 'binarize_i3d')
+        col.prop(operator, "binarize_i3d")
         col = body.column()
-        col.prop(operator, 'keep_collections_as_transformgroups')
-        col.prop(operator, 'apply_modifiers')
-        col.prop(operator, 'apply_unit_scale')
-        col.prop(operator, 'alphabetic_uvs')
-        col.prop(operator, 'vertex_color_override')
+        col.prop(operator, "keep_collections_as_transformgroups")
+        col.prop(operator, "apply_modifiers")
+        col.prop(operator, "apply_unit_scale")
+        col.prop(operator, "alphabetic_uvs")
+        col.prop(operator, "vertex_color_override")
         body.separator(type='LINE')
-        body.prop(operator, 'object_types_to_export', expand=True)
+        body.prop(operator, "object_types_to_export", expand=True)
         body.separator(type='LINE')
-        body.prop(operator, 'features_to_export', expand=True)
+        body.prop(operator, "features_to_export", expand=True)
         body.separator(type='LINE')
         body.prop(operator, "axis_forward")
         body.prop(operator, "axis_up")
@@ -383,26 +382,26 @@ def export_files(layout, operator):
     header, body = layout.panel("I3D_export_files", default_closed=False)
     header.label(text="File Options")
     if body:
-        body.prop(operator, 'copy_files')
+        body.prop(operator, "copy_files")
         col = body.column()
         col.enabled = operator.copy_files
-        col.prop(operator, 'overwrite_files')
-        col.prop(operator, 'file_structure')
+        col.prop(operator, "overwrite_files")
+        col.prop(operator, "file_structure")
 
 
 def export_debug(layout, operator):
     header, body = layout.panel("I3D_export_debug", default_closed=False)
     header.label(text="Debug Options")
     if body:
-        body.prop(operator, 'verbose_output')
-        body.prop(operator, 'log_to_file')
+        body.prop(operator, "verbose_output")
+        body.prop(operator, "log_to_file")
 
 
 def export_i3d_mapping(layout, operator):
     header, body = layout.panel("I3D_export_i3d_mapping", default_closed=False)
     header.label(text="I3D Mapping Options")
     if body:
-        body.prop(operator, 'i3d_mapping_file_path')
+        body.prop(operator, "i3d_mapping_file_path")
 
 
 @register
@@ -470,12 +469,12 @@ class I3D_IO_PT_i3d_scene(Panel):
         header, body = layout.panel("i3d_mapping_options", default_closed=False)
         header.label(text="I3D Mapping Options")
         if body:
-            body.prop(scene_props, 'i3d_mapping_file_path')
+            body.prop(scene_props, "i3d_mapping_file_path")
 
         header, body = layout.panel("i3d_moddesc_options", default_closed=False)
         header.label(text="ModDesc Options")
         if body:
-            body.prop(scene_props, 'moddesc_path')
+            body.prop(scene_props, "moddesc_path")
 
         header, body = layout.panel("i3d_custom_shader_paths", default_closed=False)
         header.label(text="Custom Shader Folders")
@@ -504,10 +503,11 @@ def menu_func_export(self, context):
     self.layout.operator(I3D_IO_OT_export.bl_idname, text="I3D (.i3d)")
 
 
-def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
+_register, _unregister = bpy.utils.register_classes_factory(classes)
 
+
+def register():
+    _register()
     bpy.types.Scene.i3dio = PointerProperty(type=I3DExportUIProperties)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export)
 
@@ -515,5 +515,4 @@ def register():
 def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export)
     del bpy.types.Scene.i3dio
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
+    _unregister()

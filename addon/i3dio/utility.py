@@ -169,7 +169,7 @@ def as_export_path(filepath: str | Path) -> Path:
         return Path(normalize_path_separators(filepath))
 
     # Check if inside FS data directory
-    if (fs_path := as_fs_relative_path(filepath)).parts and fs_path.parts[0] == '$data':
+    if (fs_path := as_fs_relative_path(filepath)).parts and fs_path.parts[0] == "$data":
         return fs_path
 
     # Try to make path relative to the .blend file
@@ -201,3 +201,13 @@ def get_fs_data_path(as_path: bool = False) -> str | Path:
     if as_path:
         return Path(fs_data_path)
     return fs_data_path
+
+
+def strip_sorting_prefix(name: str, sep: str) -> str:
+    """Strip leading '<digits><sep>' from name (e.g. '12:Cube' -> 'Cube')."""
+    if not name or not sep:
+        return name
+    head, found, tail = name.partition(sep)  # Split at first occurrence of sep
+    if found and head.isdigit() and tail:
+        return tail
+    return name

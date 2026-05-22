@@ -9,7 +9,7 @@ from bpy.types import Panel
 
 from .. import __package__ as base_package
 from ..utility import get_fs_data_path
-from ..xml_i3d import i3d_max
+from ..xml_i3d import I3D_MAX as i3d_max
 from .helper_functions import detect_fs_version, humanize_template, is_version_compatible
 from .material_templates import TEMPLATES_GROUP_NAMES
 from .shader_migration_utils import migrate_material_parameters, migrate_material_textures, migrate_variation

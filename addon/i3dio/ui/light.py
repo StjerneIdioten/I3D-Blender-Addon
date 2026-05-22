@@ -3,7 +3,7 @@ from bl_operators.presets import AddPresetBase
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, PointerProperty
 from bpy.types import Operator, Panel
 
-from ..xml_i3d import i3d_max
+from ..xml_i3d import I3D_MAX as i3d_max
 from . import presets
 from .helper_functions import i3d_property
 

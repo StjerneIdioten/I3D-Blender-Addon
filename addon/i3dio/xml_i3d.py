@@ -4,32 +4,34 @@ precision"""
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 
 import logging
-import math
-import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
-from typing import Dict, Union
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import Any, Callable, Mapping, TextIO
+from xml.sax.saxutils import quoteattr
 
 import bpy
 import mathutils
+import numpy as np
 from idprop.types import IDPropertyArray
-
-from . import utility
 
 logger = logging.getLogger(__name__)
 
+# Public constants / types
 XML_Element = ET.Element
-file_ending = '.i3d'
-merge_group_prefix = 'MergedMesh_'
-skinned_mesh_prefix = 'SkinnedMesh_'
-i3d_max = 3.40282e38
+FILE_EXT = ".i3d"
+I3D_MAX = 3.40282e38
+
+_ENCODING = "iso-8859-1"
+_INDENT = "  "
 
 
-def parse(*argv, **kwargs) -> ET.ElementTree:
-    tree = None
+# Parse / Element constructors
+def parse(*argv, **kwargs) -> ET.ElementTree | None:
     try:
-        tree = ET.parse(*argv, **kwargs, parser=ET.XMLParser())
+        return ET.parse(*argv, **kwargs, parser=ET.XMLParser())
     except (ET.ParseError, FileNotFoundError) as e:
-        print(f"Error while parsing xml file: {e}")
-    return tree
+        logger.error("Error while parsing xml file: %s", e)
+        return None
 
 
 def iter_section(root: XML_Element, section_name: str, child_tag: str) -> ET.Element | None:
@@ -45,243 +47,141 @@ def SubElement(*args, **kwargs) -> ET.Element:  # noqa: N802
     return ET.SubElement(*args, **kwargs)
 
 
-def Element(*args, **kwargs) -> ET.Element:  # noqa: N802
-    return ET.Element(*args, **kwargs)
+def SubElementA(parent: ET.Element, tag: str, attrib: Mapping[str, Any] | None = None, **extra: Any) -> ET.Element:  # noqa: N802
+    """Like ET.SubElement, but all attribute values go through fmt_attr_value()."""
+    elem = ET.SubElement(parent, tag)
+    if attrib:
+        for k, v in attrib.items():
+            write_attribute(elem, k, v)
+    for k, v in extra.items():
+        write_attribute(elem, k, v)
+    return elem
 
 
-def ElementTree(*args, **kwargs) -> ET.ElementTree:  # noqa: N802
-    return ET.ElementTree(*args, **kwargs)
-
-
-def write_tree_to_file(tree, file_path: str, *argv, **kwargs) -> None:
-    add_indentations(tree.getroot())
-    tree.write(file_path, *argv, **kwargs)
-
-
-def export_to_i3d_file(source: XML_Element, file_path: str, *argv, **kwargs) -> None:
-    settings = {'xml_declaration': True, 'encoding': 'iso-8859-1', 'method': 'xml'}
-
-    write_tree_to_file(ElementTree(source), file_path, *argv, **settings, **kwargs)
-
-
+# Root
 def i3d_root_element(name: str) -> XML_Element:
     root_attributes = {'version': '1.6'}
     namespaced_attributes = {
         'xsi:noNamespaceSchemaLocation': 'http://i3d.giants.ch/schema/i3d-1.6.xsd',
         'xmlns:xsi': 'http://www.w3.org/2001/XMLSchema-instance',
     }
-    return Element('i3D', attrib={'name': name, **root_attributes, **namespaced_attributes})
+    return ET.Element("i3D", attrib={"name": name, **root_attributes, **namespaced_attributes})
 
 
-def write_int(element: XML_Element, attribute: str, value: int) -> None:
-    """Write the attribute into the element with formatting for ints"""
-    element.set(attribute, f"{value:d}")
+# Attribute formatting / writing
+def _fmt_vector(values: tuple[float, ...]) -> str:
+    return " ".join(f"{float(x):.6g}" for x in values)
 
 
-def write_float(element: XML_Element, attribute: str, value: float) -> None:
-    """Write the attribute into the element with formatting for floats"""
-    element.set(attribute, f"{value:.6g}")
+def fmt_attr_value(value: Any) -> str:
+    """
+    Format a value as it should appear inside an XML attribute.
 
-
-def write_bool(element: XML_Element, attribute: str, value: bool) -> None:
-    """Write the attribute into the element with formatting for booleans"""
-    element.set(attribute, f"{value!s}".lower())
-
-
-def write_string(element: XML_Element, attribute: str, value: str) -> None:
-    """Write the attribute into the element with formatting for strings"""
-    element.set(attribute, value)
-
-
-def write_vector(element: XML_Element, attribute: str, values: tuple) -> None:
-    element.set(attribute, ' '.join(f"{x:.6g}" for x in values))
-
-
-def write_attribute(element: XML_Element, attribute: str, value) -> None:
+    This is the single formatting source of truth for:
+    - ElementTree attribute writes (write_attribute)
+    - Streaming writers (write_open_tag, ITS stream, etc.)
+    """
+    if isinstance(value, (bool, np.bool_)):  # order matters (bool is int subclass)
+        return "true" if bool(value) else "false"
+    if isinstance(value, int):
+        return f"{value:d}"
     if isinstance(value, float):
-        write_float(element, attribute, value)
-    elif isinstance(value, bool):  # Order matters, since bool is an int subclass!
-        write_bool(element, attribute, value)
-    elif isinstance(value, int):
-        write_int(element, attribute, value)
-    elif isinstance(value, str):
-        write_string(element, attribute, value)
-    elif isinstance(value, (list, tuple, bpy.types.bpy_prop_array, IDPropertyArray, mathutils.Color, mathutils.Vector)):
-        write_vector(element, attribute, tuple(value))
+        return f"{value:.6g}"
+    # numpy scalar numbers (np.int64, np.float32, etc.)
+    if isinstance(value, np.integer):
+        return f"{int(value):d}"
+    if isinstance(value, np.floating):
+        return f"{float(value):.6g}"
+    if isinstance(value, str):
+        return value
+
+    # Vector-ish
+    if isinstance(value, np.ndarray):
+        # Treat 1D arrays as vectors; higher dims fall back to str().
+        if value.ndim == 0:
+            return fmt_attr_value(value.item())
+        if value.ndim == 1:
+            return _fmt_vector(tuple(float(x) for x in value))
+
+    if isinstance(value, (list, tuple, bpy.types.bpy_prop_array, IDPropertyArray, mathutils.Color, mathutils.Vector)):
+        return _fmt_vector(tuple(value))
+
+    # Fallback
+    return str(value)
+
+
+def write_attribute(element: XML_Element, attribute: str, value: Any) -> None:
+    element.set(attribute, fmt_attr_value(value))
+
+
+# Pretty indentation
+def add_indentations(elem: ET.Element, level: int = 0) -> None:
+    """Pretty-print XML by adding indentation text nodes."""
+    i = "\n" + level * _INDENT
+    if len(elem):
+        if not elem.text or not elem.text.strip():
+            elem.text = i + _INDENT
+
+        for child in elem:
+            add_indentations(child, level + 1)
+            if not child.tail or not child.tail.strip():
+                child.tail = i + _INDENT  # indent siblings under this parent
+
+        # NOTE: last child tail should align the closing tag of the parent
+        if not elem[-1].tail or not elem[-1].tail.strip():
+            elem[-1].tail = i
     else:
-        logger.warning(f"No xml attribute writing function for attribute of type '{type(value)}'")
+        if level and (not elem.tail or not elem.tail.strip()):
+            elem.tail = i
 
 
-# TODO: Clean up this very generic, but spaghetti ish implementation of i3d attributes
-def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Element, None]]) -> None:
-    logger.info(f"Writing non-default properties from propertygroup: '{type(property_group).__name__}'")
-    # Since blender properties are basically abusing the annotation system, we can also abuse this to create
-    # a generic property export function by accessing the annotation dictionary
-    properties_written = 0
-    for prop_key in property_group.__annotations__.keys():
-        # If the attribute isn't in the i3d_map, then it isn't supposed to be exported as an attribute
-        if prop_key not in property_group.i3d_map:
-            continue
-
-        prop_name = prop_key
-        value = getattr(property_group, prop_key)
-
-        # Dependency Checks
-
-        # If the value depends on some other value being something specific
-        dependants = property_group.i3d_map[prop_key].get('depends', [])
-        dependency_break = False
-        for dependant in dependants:
-            # Pre-initialize to non-tracked version
-            member_value = getattr(property_group, dependant['name'])
-            # If the dependant value has a parameter that it is tracking
-            member_depends_tracking = property_group.i3d_map[dependant['name']].get('tracking', False)
-            if member_depends_tracking:
-                # If we are currently using the tracked value
-                if getattr(property_group, dependant['name'] + '_tracking'):
-                    # Get the value of the tracked member
-                    member_value = getattr(obj, member_depends_tracking['member_path'])
-                    # If there exist a map to map from tracked to i3d, then convert
-                    if member_depends_tracking.get('mapping', False):
-                        member_value = member_depends_tracking['mapping'][member_value]
-
-            # If the dependant member does not equal the correct value
-            if member_value != dependant['value']:
-                # One of the dependencies were broke, so skip searching through the rest.
-                dependency_break = True
-                break
-
-        # If this attribute did not live up to a dependency, then skip it.
-        if dependency_break:
-            continue
-
-        # Tracking checks
-        tracking = getattr(property_group, prop_key + '_tracking', None)
-        if tracking:
-            member_to_track = property_group.i3d_map[prop_key].get('tracking')
-            if 'value' in member_to_track:
-                if getattr(obj, member_to_track['member_path']) != member_to_track['value']:
-                    continue
-
-            if 'mapping' in member_to_track:
-                value = member_to_track['mapping'][getattr(obj, member_to_track['member_path'])]
-            else:
-                value = getattr(obj, member_to_track['member_path'])
-
-        value_to_write = value
-        default = property_group.i3d_map[prop_key].get('default')
-        i3d_name = property_group.i3d_map[prop_key].get('name')
-        field_type = property_group.i3d_map[prop_key].get('type')
-        i3d_placement = property_group.i3d_map[prop_key].get('placement', 'Node')
-        if i3d_placement is None:
-            continue  # Some props are only used in the UI and should not be exported
-
-        # Create the i3d_placement element if it does not exist, assuming it is a child of the 'Node' element
-        if i3d_placement not in elements:
-            elements[i3d_placement] = SubElement(elements['Node'], i3d_placement)
-
-        # Conversion Checks
-
-        # Special case of checking floats, since these can be not equal due to floating point errors
-        if utility.isclose_value(value, default):
-            continue
-        # In some cases of enums the i3d_name is actually the enum value itself. It is signaled by not having a name
-        elif i3d_name is None:
-            i3d_name = value
-            value_to_write = 1
-        # String field is used for unique types, that then get converted fx. HEX values. This is signaled by
-        # having an extra type field in the i3d_map dictionary entry for the propertygroup
-        if field_type is not None:
-            if field_type == 'HEX':
-                try:
-                    value_decimal = int(value, 16)
-                except ValueError:
-                    logger.error(f"Supplied value '{value}' for '{prop_name}' is not a hex value!")
-                    continue
-                else:
-                    if 0 <= value_decimal <= 2**32 - 1:  # Check that it is actually a 32-bit unsigned int
-                        value_to_write = value_decimal
-                    else:
-                        logger.warning(
-                            f"Supplied value '{value}' for '{prop_name}' is out of bounds."
-                            f" It should be within range [0, ffffffff] (32-bit unsigned)"
-                        )
-                        continue
-            elif field_type == 'OVERRIDE':
-                value_to_write = property_group.i3d_map[prop_key].get('override')
-            elif field_type == 'ANGLE':
-                if utility.isclose_value(value, default):
-                    continue
-                value_to_write = math.degrees(value)
-
-        logger.debug(f"Property '{prop_name}' with value '{value}'. Default is '{default}'")
-
-        write_attribute(elements[i3d_placement], i3d_name, value_to_write)
-        properties_written += 1
-
-    logger.info(f"Wrote '{properties_written}' properties")
+# Streaming writer helpers
+def write_open_tag(f: TextIO, tag: str, attrib: Mapping[str, Any] | None = None, indent: str = "") -> None:
+    if not attrib:
+        f.write(f"{indent}<{tag}>\n")
+        return
+    parts = [f"{k}={quoteattr(fmt_attr_value(v))}" for k, v in attrib.items()]
+    f.write(f"{indent}<{tag} " + " ".join(parts) + ">\n")
 
 
-def add_indentations(element: XML_Element, level: int = 0) -> None:
+def write_close_tag(f: TextIO, tag: str, indent: str = "") -> None:
+    f.write(f"{indent}</{tag}>\n")
+
+
+# Export
+def export_to_i3d_file(*, root: ET.Element, file_path: str | Path, shapes_writer: Callable[[TextIO], None]) -> None:
     """
-    Used for pretty printing the xml since etree does not indent elements and keeps everything in one continues
-    string and since i3d files are supposed to be human readable, we need indentation. There is a patch for
-    pretty printing on its way in the standard library, but it is not available until python 3.9 comes around.
+    Write an I3D where all sections are ElementTree-serialized, except <Shapes> content,
+    which is produced by shapes_writer(f).
 
-    The module 'lxml' could also be used since it has pretty-printing, but that would introduce an external
-    library dependency for the addon.
-
-    The source code from this solution is taken from http://effbot.org/zone/element-lib.htm#prettyprint
-
-    It recursively checks every element and adds a newline + space indents to the element to make it pretty and
-    easily readable. This technically changes the xml, but the giants engine does not seem to mind the linebreaks
-    and spaces, when parsing the i3d file.
+    NOTE: Shapes are always streamed for performance.
     """
-    indents = '\n' + level * '  '
-    if len(element):
-        if not element.text or not element.text.strip():
-            element.text = indents + '  '
-        if not element.tail or not element.tail.strip():
-            element.tail = indents
-        for element in element:
-            add_indentations(element, level + 1)
-        if not element.tail or not element.tail.strip():
-            element.tail = indents
-    else:
-        if level and (not element.tail or not element.tail.strip()):
-            element.tail = indents
+    if not any(child.tag == "Shapes" for child in list(root)):
+        raise ValueError("Root element has no <Shapes> child. Add it before exporting.")
+    # Always pretty-print the non-streamed parts. Not really any noticeable performance cost.
+    add_indentations(root)
 
+    with open(file_path, "w", encoding=_ENCODING, newline="\n") as f:
+        f.write(f'<?xml version="1.0" encoding="{_ENCODING}"?>\n')
 
-def escape_attrib_element_tree(text):
-    # escape attribute value
-    try:
-        if "&" in text:
-            text = text.replace("&", "&amp;")
-        if "<" in text:
-            text = text.replace("<", "&lt;")
-        if ">" in text:
-            # Needed for the i3d format
-            pass
-            # text = text.replace(">", "&gt;")
-        if "\"" in text:
-            text = text.replace("\"", "&quot;")
-        # The following business with carriage returns is to satisfy
-        # Section 2.11 of the XML specification, stating that
-        # CR or CR LN should be replaced with just LN
-        # http://www.w3.org/TR/REC-xml/#sec-line-ends
-        if "\r\n" in text:
-            text = text.replace("\r\n", "\n")
-        if "\r" in text:
-            text = text.replace("\r", "\n")
-        # The following four lines are issue 17582
-        if "\n" in text:
-            text = text.replace("\n", "&#10;")
-        if "\t" in text:
-            text = text.replace("\t", "&#09;")
-        return text
-    except (TypeError, AttributeError):
-        ET._raise_serialization_error(text)
+        # <i3D ...>
+        write_open_tag(f, root.tag, root.attrib, indent="")
+        t = root.text or ""
+        if t.startswith("\n"):
+            t = t[1:]
+        f.write(t)
 
+        # Children in order; stream Shapes
+        for child in list(root):
+            if child.tag == "Shapes":
+                f.write("<Shapes>\n")  # Already at correct indent level due to root.text / previous tail
+                shapes_writer(f)
+                # Close Shapes at one indent level (2 spaces)
+                f.write("  </Shapes>")
+                # Preserve whatever indentation/newline ElementTree computed after <Shapes/>
+                f.write(child.tail or "\n")
+                continue
 
-# Assign the escape attribute function to replace the default implementation
-ET._escape_attrib = escape_attrib_element_tree
+            f.write(ET.tostring(child, encoding="unicode", method="xml"))
+
+        write_close_tag(f, root.tag, indent="")

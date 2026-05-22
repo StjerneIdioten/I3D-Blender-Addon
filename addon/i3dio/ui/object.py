@@ -13,7 +13,7 @@ from bpy.props import (
 )
 from bpy.types import Operator, Panel
 
-from ..xml_i3d import i3d_max
+from ..xml_i3d import I3D_MAX as i3d_max
 from . import light, mesh, presets
 from .collision_data import COLLISIONS
 from .helper_functions import i3d_property
