@@ -31,7 +31,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
 
     if operator.log_to_file:
         # Remove the file ending from path and append log specific naming
-        filename = filepath[0 : len(filepath) - len(I3D_FILE_EXT)] + debugging.export_log_file_ending
+        filename = filepath[0 : len(filepath) - len(I3D_FILE_EXT)] + debugging.EXPORT_LOG_FILE_ENDING
         log_file_handler = logging.FileHandler(filename, mode='w')
         log_file_handler.setLevel(logging.DEBUG)
         log_file_handler.setFormatter(debugging.addon_export_log_formatter)
@@ -49,7 +49,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
     if operator.verbose_output:
         debugging.addon_console_handler.setLevel(logging.DEBUG)
     else:
-        debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
+        debugging.addon_console_handler.setLevel(debugging.ADDON_CONSOLE_HANDLER_DEFAULT_LEVEL)
 
     time_start = time.time()
 
@@ -129,7 +129,7 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
         pass
 
     debugging.addon_logger.removeHandler(log_file_handler)
-    debugging.addon_console_handler.setLevel(debugging.addon_console_handler_default_level)
+    debugging.addon_console_handler.setLevel(debugging.ADDON_CONSOLE_HANDLER_DEFAULT_LEVEL)
     return export_data
 
 
