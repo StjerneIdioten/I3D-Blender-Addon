@@ -7,6 +7,7 @@ import bpy
 from bpy.app.handlers import load_post, persistent
 
 from .. import xml_i3d
+from ..constants import I3D_MAX
 from ..debugging import addon_logger
 from ..utility import get_fs_data_path
 
@@ -18,8 +19,8 @@ class ShaderParameter:
     name: str
     component_count: int
     default_value: list[float]
-    min_value: float = -xml_i3d.i3d_max
-    max_value: float = xml_i3d.i3d_max
+    min_value: float = -I3D_MAX
+    max_value: float = I3D_MAX
     description: str = ''
     template: str = 'default'
 
@@ -73,11 +74,11 @@ def parse_shader_parameters(parameter: xml_i3d.XML_Element) -> list[ShaderParame
     description = parameter.attrib.get("description", "").replace("\\n", "\n")
 
     default_value = _parse_float_list(parameter.attrib.get('defaultValue'))
-    min_values = _parse_float_list(parameter.attrib.get('minValue'), min(-xml_i3d.i3d_max, min(default_value)))
-    max_values = _parse_float_list(parameter.attrib.get('maxValue'), max(xml_i3d.i3d_max, max(default_value)))
-    # Blender supports only a single min/max per prop, so if all are the same, use that; else fallback to i3d_max
-    min_single = min_values[0] if all(x == min_values[0] for x in min_values) else -xml_i3d.i3d_max
-    max_single = max_values[0] if all(x == max_values[0] for x in max_values) else xml_i3d.i3d_max
+    min_values = _parse_float_list(parameter.attrib.get('minValue'), min(-I3D_MAX, min(default_value)))
+    max_values = _parse_float_list(parameter.attrib.get('maxValue'), max(I3D_MAX, max(default_value)))
+    # Blender supports only a single min/max per prop, so if all are the same, use that; else fallback to I3D_MAX
+    min_single = min_values[0] if all(x == min_values[0] for x in min_values) else -I3D_MAX
+    max_single = max_values[0] if all(x == max_values[0] for x in max_values) else I3D_MAX
 
     def make_parameter(name: str, value: list[float]) -> ShaderParameter:
         return ShaderParameter(

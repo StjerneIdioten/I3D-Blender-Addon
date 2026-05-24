@@ -3,7 +3,7 @@ from bl_operators.presets import AddPresetBase
 from bpy.props import BoolProperty, EnumProperty, FloatProperty, FloatVectorProperty, PointerProperty
 from bpy.types import Operator, Panel
 
-from ..xml_i3d import i3d_max
+from ..constants import I3D_MAX
 from . import presets
 from .helper_functions import i3d_property
 
@@ -154,7 +154,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['range']['default'],
         precision=3,
         min=0.01,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0.01,
         soft_max=65535,
     )
@@ -172,7 +172,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         precision=3,
         unit='ROTATION',
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=180,
     )
@@ -189,7 +189,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['drop_off']['default'],
         precision=3,
         min=0,
-        max=5,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=5,
     )
@@ -220,8 +220,8 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         description="Depends on 'Cast Shadow Map' being 'True'",
         default=i3d_map['shadow_map_slope_scale_bias']['default'],
         precision=3,
-        min=-i3d_max,
-        max=i3d_max,
+        min=-I3D_MAX,
+        max=I3D_MAX,
         soft_min=-10,
         soft_max=10,
     )
@@ -231,8 +231,8 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         description="Depends on 'Cast Shadow Map' being 'True'",
         default=i3d_map['shadow_map_slope_clamp']['default'],
         precision=3,
-        min=-i3d_max,
-        max=i3d_max,
+        min=-I3D_MAX,
+        max=I3D_MAX,
         soft_min=-10,
         soft_max=10,
     )
@@ -262,7 +262,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['shadow_far_distance']['default'],
         precision=3,
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=65535,
     )
@@ -273,7 +273,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['shadow_extrusion_distance']['default'],
         precision=3,
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=100,
     )
@@ -291,7 +291,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['split_distance_1']['default'],
         precision=3,
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=500,
     )
@@ -302,7 +302,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['split_distance_2']['default'],
         precision=3,
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=500,
     )
@@ -313,7 +313,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['split_distance_3']['default'],
         precision=3,
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=500,
     )
@@ -324,7 +324,7 @@ class I3DNodeLightAttributes(bpy.types.PropertyGroup):
         default=i3d_map['split_distance_4']['default'],
         precision=3,
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=500,
     )

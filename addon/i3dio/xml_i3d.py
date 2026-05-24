@@ -17,10 +17,6 @@ from . import utility
 logger = logging.getLogger(__name__)
 
 XML_Element = ET.Element
-file_ending = '.i3d'
-merge_group_prefix = 'MergedMesh_'
-skinned_mesh_prefix = 'SkinnedMesh_'
-i3d_max = 3.40282e38
 
 
 def parse(*argv, **kwargs) -> ET.ElementTree:

@@ -10,7 +10,7 @@ from collections import ChainMap
 import bpy
 import mathutils
 
-from .. import xml_i3d
+from ..constants import SKINNED_MESH_PREFIX
 from ..i3d import I3D
 from .node import SceneGraphNode, TransformGroupNode
 from .shape import EvaluatedMesh, IndexedTriangleSet, ShapeNode
@@ -194,7 +194,7 @@ class SkinnedMeshShapeNode(ShapeNode):
             for modifier in skinned_mesh_object.modifiers
             if modifier.type == 'ARMATURE' and modifier.object
         ]
-        self.skinned_mesh_name = f"{xml_i3d.skinned_mesh_prefix}{skinned_mesh_object.data.name}"
+        self.skinned_mesh_name = f"{SKINNED_MESH_PREFIX}{skinned_mesh_object.data.name}"
         self.bone_mapping = ChainMap(*[armature.bone_mapping for armature in self.armature_nodes])
         super().__init__(id_=id_, shape_object=skinned_mesh_object, i3d=i3d, parent=parent)
 

@@ -13,7 +13,7 @@ from bpy.props import (
 )
 from bpy.types import Operator, Panel
 
-from ..xml_i3d import i3d_max
+from ..constants import I3D_MAX
 from . import light, mesh, presets
 from .collision_data import COLLISIONS
 from .helper_functions import i3d_property
@@ -142,7 +142,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Anything above this distance to the camera, wont be rendered",
         default=i3d_map['clip_distance']['default'],
         min=0.0,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=65535.0,
     )
@@ -152,7 +152,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Anything below this distance to the camera, wont be rendered",
         default=i3d_map['min_clip_distance']['default'],
         min=0.0,
-        max=i3d_max,
+        max=I3D_MAX,
         soft_min=0,
         soft_max=65535.0,
     )
@@ -284,7 +284,7 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         size=5,
         default=i3d_map['split_uvs']['default'],
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
     )
 
     use_parent: BoolProperty(
@@ -386,31 +386,31 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Projection distance",
         default=i3d_map['projection_distance']['default'],
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
     )
     projection_angle: FloatProperty(
         name="Projection Angle",
         description="Projection angle",
         default=i3d_map['projection_angle']['default'],
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
     )
     drive_force_limit: FloatProperty(
         name="Drive Force Limit",
         description="Drive Force Limit",
         default=i3d_map['drive_force_limit']['default'],
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
     )
     drive_spring: FloatProperty(
-        name="Drive Spring", description="Drive Spring", default=i3d_map['drive_spring']['default'], min=0, max=i3d_max
+        name="Drive Spring", description="Drive Spring", default=i3d_map['drive_spring']['default'], min=0, max=I3D_MAX
     )
     drive_damping: FloatProperty(
         name="Drive Damping",
         description="Drive Damping",
         default=i3d_map['drive_damping']['default'],
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
     )
     breakable_joint: BoolProperty(
         name="Breakable", description="Breakable joint", default=i3d_map['breakable_joint']['default']
@@ -420,14 +420,14 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         description="Joint break force",
         default=i3d_map['joint_break_force']['default'],
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
     )
     joint_break_torque: FloatProperty(
         name="Break Torque",
         description="Joint break torque",
         default=i3d_map['joint_break_torque']['default'],
         min=0,
-        max=i3d_max,
+        max=I3D_MAX,
     )
 
     exclude_from_export: BoolProperty(

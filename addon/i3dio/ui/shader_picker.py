@@ -8,8 +8,8 @@ from bpy.props import BoolProperty, CollectionProperty, EnumProperty, FloatPrope
 from bpy.types import Panel
 
 from .. import __package__ as base_package
+from ..constants import I3D_MAX
 from ..utility import get_fs_data_path
-from ..xml_i3d import i3d_max
 from .helper_functions import detect_fs_version, humanize_template, is_version_compatible
 from .material_templates import TEMPLATES_GROUP_NAMES
 from .shader_migration_utils import migrate_material_parameters, migrate_material_textures, migrate_variation
@@ -293,7 +293,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         description="Amount of light absorbed when passing through the material (higher = darker look)",
         default=i3d_map['light_absorbance']['blender_default'],
         min=0.0,
-        max=i3d_max,
+        max=I3D_MAX,
     )
 
     refraction_bump_scale: FloatProperty(
@@ -301,7 +301,7 @@ class I3DMaterialShader(bpy.types.PropertyGroup):
         description="Intensity of the bump map distortion effect for refraction",
         default=i3d_map['refraction_bump_scale']['blender_default'],
         min=0.0,
-        max=i3d_max,
+        max=I3D_MAX,
     )
 
     refraction_with_ssr_data: BoolProperty(
