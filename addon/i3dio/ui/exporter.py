@@ -337,16 +337,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         else:
             self.report({'ERROR'}, "I3D Export Failed! Check console/log for error(s)")
 
-        # Since it is single threaded, this warning wouldn't be sent before the exported starts exporting.
-        # So it can't come before the export and it drowns if the export time comes after it.
-        if context.preferences.addons[base_package].preferences.fs_data_path == '':
-            self.report(
-                {'WARNING'},
-                "FS Data folder path is not set, "
-                "see https://stjerneidioten.github.io/"
-                "I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder",
-            )
-
         return {'FINISHED'}
 
 

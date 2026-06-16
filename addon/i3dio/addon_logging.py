@@ -6,7 +6,7 @@ from typing import Any
 ADDON_LOG_NAME = "i3dio"
 ADDON_PACKAGE_NAME = __package__ or ADDON_LOG_NAME
 
-EXPORT_LOG_FILE_ENDING = "_export_log.txt"
+EXPORT_LOG_SUFFIX = "_export_log.txt"
 ADDON_CONSOLE_HANDLER_DEFAULT_LEVEL = logging.WARNING
 
 _LOG_FORMAT = "%(shortname)s:%(funcName)s:%(levelname)s: %(prefix)s%(message)s"
@@ -49,7 +49,7 @@ def _make_label(*, object_name: object = None, node_kind: object = None, node_id
 # A top level logger with the module name
 addon_logger = logging.getLogger(ADDON_PACKAGE_NAME)
 addon_logger.setLevel(logging.DEBUG)
-addon_logger.handlers = []  # Reset upon reload, since reloading the addon does not reload the logging module
+addon_logger.handlers.clear()  # Reset upon reload, since reloading the addon does not reload the logging module
 
 # Top-level handler for outputting to blender console
 addon_console_handler = logging.StreamHandler()
@@ -64,7 +64,9 @@ addon_logger.info("Initialized logging for %s addon", ADDON_LOG_NAME)
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a child logger under the addon root logger."""
+    """Return an addon logger from either a relative or absolute module name."""
+    if name == ADDON_PACKAGE_NAME or name.startswith(f"{ADDON_PACKAGE_NAME}."):
+        return logging.getLogger(name)
     return addon_logger.getChild(name)
 
 
@@ -81,7 +83,7 @@ def export_log_file(filepath: str) -> Iterator[logging.FileHandler]:
         handler.close()
 
 
-class ContextAdapter(logging.LoggerAdapter):
+class ExportLogAdapter(logging.LoggerAdapter):
     """Inject export context such as object name, node kind, node id, and prefix."""
 
     def process(self, msg: str, kwargs: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -100,7 +102,9 @@ class ContextAdapter(logging.LoggerAdapter):
         return f"{head}{msg}", kwargs
 
 
-class ObjectNameAdapter(logging.LoggerAdapter):
-    def process(self, msg: str, kwargs: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-        object_name = kwargs.pop("object_name", self.extra.get("object_name"))
-        return f"[{object_name}] {msg}", kwargs
+def get_export_logger(name: str, **extra: Any) -> ExportLogAdapter:
+    return ExportLogAdapter(get_logger(name), extra)
+
+
+def get_export_logger_for(obj: object, **extra: Any) -> ExportLogAdapter:
+    return get_export_logger(f"{type(obj).__module__}.{type(obj).__name__}", **extra)

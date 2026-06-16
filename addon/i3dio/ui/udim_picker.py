@@ -1,4 +1,3 @@
-import logging
 import math
 from collections import defaultdict
 from itertools import chain, product
@@ -12,7 +11,9 @@ from bpy.props import (
 from bpy.types import Menu, Operator
 from mathutils import Vector
 
-logger = logging.getLogger(__name__)
+from .. import addon_logging
+
+logger = addon_logging.get_logger(__name__)
 
 addon_keymaps = []
 classes = []

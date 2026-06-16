@@ -1,12 +1,11 @@
 import contextlib
-import logging
 import math
 
 import bpy
 import mathutils
 from bpy_extras import anim_utils
 
-from .. import debugging, xml_i3d
+from .. import addon_logging, xml_i3d
 from ..i3d import I3D
 from .node import SceneGraphNode
 from .skinned_mesh import SkinnedMeshBoneNode
@@ -16,9 +15,7 @@ class BaseAnimationExport:
     def __init__(self, i3d: I3D, fps: float):
         self.i3d = i3d
         self.fps = fps
-        self.logger = debugging.ObjectNameAdapter(
-            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': type(self).__name__}
-        )
+        self.logger = addon_logging.get_export_logger_for(self, object_name=type(self).__name__)
 
 
 class Keyframes(BaseAnimationExport):

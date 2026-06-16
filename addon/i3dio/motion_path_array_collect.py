@@ -1,4 +1,3 @@
-import logging
 from math import tau
 
 import bpy
@@ -6,7 +5,7 @@ import mathutils
 import numpy as np
 from bpy_extras.io_utils import axis_conversion
 
-from . import debugging
+from . import addon_logging
 from .utility import sort_blender_objects_by_outliner_ordering
 
 # Convert matrix from Blender to Giants coordinate system
@@ -37,9 +36,7 @@ class MotionPathArray:
         self.obj = obj
         self.props = obj.i3d_motion_path_array
         self.depsgraph = depsgraph or bpy.context.view_layer.depsgraph
-        self.logger = debugging.ObjectNameAdapter(
-            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': obj.name}
-        )
+        self.logger = addon_logging.get_export_logger_for(self, object_name=obj.name)
 
         self.is_cyclic = self.props.is_cyclic
         self.hide_first_and_last = self.props.hide_first_and_last and self.props.include_position

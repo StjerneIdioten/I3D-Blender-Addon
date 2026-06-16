@@ -4,6 +4,7 @@ import logging
 import subprocess
 import sys
 import time
+from contextlib import nullcontext
 from pathlib import Path
 from typing import List
 
@@ -11,8 +12,9 @@ import bpy
 from addon_utils import module_bl_info
 from bpy_extras.io_utils import axis_conversion
 
-from . import debugging
-from .constants import I3D_FILE_EXT, MERGE_GROUP_PREFIX
+from . import addon_logging
+from .constants import MERGE_GROUP_PREFIX
+from .export_report import ExportReport, capture_export_report, report_to_operator
 from .i3d import I3D
 from .node_classes.merge_group import MergeGroup
 from .node_classes.node import SceneGraphNode
@@ -20,8 +22,7 @@ from .node_classes.skinned_mesh import SkinnedMeshRootNode
 from .ui.dds_exporter import export_motion_path_array
 from .utility import BlenderObject, get_fs_data_path, sort_blender_objects_by_outliner_ordering
 
-logger = logging.getLogger(__name__)
-logger.debug(f"Loading: {__name__}")
+logger = addon_logging.get_logger(__name__)
 
 BINARIZER_TIMEOUT_IN_SECONDS = 30
 
@@ -29,107 +30,109 @@ BINARIZER_TIMEOUT_IN_SECONDS = 30
 def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings) -> dict:
     export_data = {}
 
+    addon_logging.addon_console_handler.setLevel(logging.INFO)
+
+    log_context = nullcontext()
     if operator.log_to_file:
         # Remove the file ending from path and append log specific naming
-        filename = filepath[0 : len(filepath) - len(I3D_FILE_EXT)] + debugging.EXPORT_LOG_FILE_ENDING
-        log_file_handler = logging.FileHandler(filename, mode='w')
-        log_file_handler.setLevel(logging.DEBUG)
-        log_file_handler.setFormatter(debugging.addon_export_log_formatter)
-        # Add the handler to top-level exporter, since we want any debug output during the export to be logged.
-        debugging.addon_logger.addHandler(log_file_handler)
-    else:
-        log_file_handler = None
+        path = Path(filepath)
+        log_filepath = str(path.with_name(f"{path.stem}{addon_logging.EXPORT_LOG_SUFFIX}"))
+        log_context = addon_logging.export_log_file(log_filepath)
 
-    # Output info about the addon
-    debugging.addon_console_handler.setLevel(logging.INFO)
-    logger.info(f"Blender version is: {bpy.app.version_string}")
-    logger.info(f"I3D Exporter version is: {module_bl_info(sys.modules[__package__])['version']}")
-    logger.info(f"Exporting to {filepath}")
-
-    if operator.verbose_output:
-        debugging.addon_console_handler.setLevel(logging.DEBUG)
-    else:
-        debugging.addon_console_handler.setLevel(debugging.ADDON_CONSOLE_HANDLER_DEFAULT_LEVEL)
-
+    export_report = ExportReport()
     time_start = time.time()
 
     # Wrap everything in a try/catch to handle addon breaking exceptions and also get them in the log file
-    try:
-        depsgraph = bpy.context.evaluated_depsgraph_get()
+    with log_context, capture_export_report(addon_logging.addon_logger, export_report):
+        try:
+            logger.info(f"Blender version is: {bpy.app.version_string}")
+            logger.info(f"I3D Exporter version is: {module_bl_info(sys.modules[__package__])['version']}")
+            logger.info(f"Exporting to {filepath}")
 
-        i3d = I3D(
-            name=bpy.path.display_name_from_filepath(filepath),
-            i3d_file_path=filepath,
-            conversion_matrix=axis_conversion(
-                to_forward=axis_forward,
-                to_up=axis_up,
-            ).to_4x4(),
-            depsgraph=depsgraph,
-            settings=settings,
-        )
+            depsgraph = bpy.context.evaluated_depsgraph_get()
 
-        # Log export settings
-        logger.info("Exporter settings:")
-        for setting, value in i3d.settings.items():
-            logger.info(f"  {setting}: {value}")
+            i3d = I3D(
+                name=bpy.path.display_name_from_filepath(filepath),
+                i3d_file_path=filepath,
+                conversion_matrix=axis_conversion(
+                    to_forward=axis_forward,
+                    to_up=axis_up,
+                ).to_4x4(),
+                depsgraph=depsgraph,
+                settings=settings,
+            )
 
-        # Handle case when export is triggered from a collection
-        source_collection = None
-        if operator.collection:
-            source_collection = bpy.data.collections.get(operator.collection)
-            if not source_collection:
-                operator.report({'ERROR'}, f"Collection '{operator.collection}' was not found")
-                return None
+            # Log export settings
+            logger.info("Exporter settings:")
+            for setting, value in i3d.settings.items():
+                logger.info(f"  {setting}: {value}")
 
-        if source_collection:
-            logger.info(f"Exporting using Blender's collection export feature. Collection: '{source_collection.name}'")
-            _export_collection_content(i3d, source_collection)
+            addon_logging.addon_console_handler.setLevel(
+                logging.DEBUG if operator.verbose_output else addon_logging.ADDON_CONSOLE_HANDLER_DEFAULT_LEVEL
+            )
+
+            # Handle case when export is triggered from a collection
+            source_collection = None
+            if operator.collection:
+                source_collection = bpy.data.collections.get(operator.collection)
+                if not source_collection:
+                    logger.error("Collection %r was not found", operator.collection)
+                    export_data['success'] = False
+                    return export_data
+
+            if source_collection:
+                logger.info(
+                    f"Exporting using Blender's collection export feature. Collection: '{source_collection.name}'"
+                )
+                _export_collection_content(i3d, source_collection)
+            else:
+                match operator.selection:
+                    case 'ALL':
+                        _export_active_scene_master_collection(i3d)
+                    case 'ACTIVE_COLLECTION':
+                        _export_active_collection(i3d)
+                    case 'ACTIVE_OBJECT':
+                        _export_active_object(i3d)
+                    case 'SELECTED_OBJECTS':
+                        _export_selected_objects(i3d)
+
+            if i3d.deferred_constraints:
+                _process_deferred_constraints(i3d)
+
+            if i3d.deferred_shapes_to_populate:
+                logger.info(
+                    f"Processing {len(i3d.deferred_shapes_to_populate)} deferred shapes (Merge Groups / Generics)"
+                )
+                for shape_to_process in i3d.deferred_shapes_to_populate:
+                    shape_to_process.process_and_write_mesh_data()
+
+            if i3d.anim_links:
+                i3d.add_animations()
+
+            i3d.export_to_i3d_file()
+
+            if operator.binarize_i3d:
+                _binarize_i3d(filepath, logger)
+
+            if not get_fs_data_path():
+                logger.error(
+                    "FS Data folder path is not set. In-game textures may not export correctly. See https://"
+                    "stjerneidioten.github.io/I3D-Blender-Addon/installation/setup/setup.html#fs-data-folder"
+                )
+
+        # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
+        except Exception:
+            logger.exception("Exception that stopped the exporter")
+            export_data['success'] = False
         else:
-            match operator.selection:
-                case 'ALL':
-                    _export_active_scene_master_collection(i3d)
-                case 'ACTIVE_COLLECTION':
-                    _export_active_collection(i3d)
-                case 'ACTIVE_OBJECT':
-                    _export_active_object(i3d)
-                case 'SELECTED_OBJECTS':
-                    _export_selected_objects(i3d)
+            export_data['success'] = True
+        finally:
+            export_data["time"] = time.time() - time_start
+            logger.info(f"Export took {export_data['time']:.3f} seconds")
 
-        if i3d.deferred_constraints:
-            _process_deferred_constraints(i3d)
+    report_to_operator(operator, export_report)
+    addon_logging.addon_console_handler.setLevel(addon_logging.ADDON_CONSOLE_HANDLER_DEFAULT_LEVEL)
 
-        if i3d.deferred_shapes_to_populate:
-            logger.info(f"Processing {len(i3d.deferred_shapes_to_populate)} deferred shapes (Merge Groups / Generics)")
-            for shape_to_process in i3d.deferred_shapes_to_populate:
-                shape_to_process.process_and_write_mesh_data()
-
-        if i3d.anim_links:
-            i3d.add_animations()
-
-        i3d.export_to_i3d_file()
-
-        if operator.binarize_i3d:
-            _binarize_i3d(filepath, operator, logger)
-
-    # Global try/catch exception handler. So that any unspecified exception will still end up in the log file
-    except Exception:
-        logger.exception("Exception that stopped the exporter")
-        export_data['success'] = False
-    else:
-        export_data['success'] = True
-
-    export_data['time'] = time.time() - time_start
-
-    logger.info(f"Export took {export_data['time']:.3f} seconds")
-
-    # EAFP
-    try:
-        log_file_handler.close()
-    except AttributeError:
-        pass
-
-    debugging.addon_logger.removeHandler(log_file_handler)
-    debugging.addon_console_handler.setLevel(debugging.ADDON_CONSOLE_HANDLER_DEFAULT_LEVEL)
     return export_data
 
 
@@ -355,7 +358,7 @@ def _process_deferred_constraints(i3d: I3D):
             i3d.logger.warning(f"Target {target_obj!r} is not processed or not in export list. Skipping.")
 
 
-def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
+def _binarize_i3d(filepath: str, logger: logging.Logger):
     """Tries to binarize the exported I3D file"""
     if not (converter_path := bpy.context.preferences.addons[__package__].preferences.i3d_converter_path):
         logger.error("No i3dConverter path set in preferences. Skipping binarization.")
@@ -410,16 +413,14 @@ def _binarize_i3d(filepath: str, operator, logger: logging.Logger):
             _emit(line)
 
         if conversion_result.returncode != 0:  # Non-zero exit
-            operator.report({'ERROR'}, "Binarization failed. See log for details.")
+            logger.error("Binarization failed. See log for details.")
             return
         logger.info(f'Finished binarization of "{filepath}"')
-        operator.report({'INFO'}, "Binarization completed successfully.")
+        logger.info("Binarization completed successfully.")
 
     except FileNotFoundError:
         logger.error(f"Invalid path to i3dConverter.exe: {converter_exe_path!r}")
     except subprocess.TimeoutExpired as e:
         logger.error(f"i3dConverter.exe timed out after {BINARIZER_TIMEOUT_IN_SECONDS} seconds. Output: {e.output!r}")
-        operator.report({'ERROR'}, "Binarization timed out. See log for details.")
     except Exception:
         logger.exception("Unexpected error while running i3dConverter.exe")
-        operator.report({'ERROR'}, "Binarization crashed. See log for details.")

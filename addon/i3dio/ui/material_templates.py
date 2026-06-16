@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import math
 from dataclasses import dataclass, field, fields
 from pathlib import Path
@@ -10,11 +9,11 @@ import bpy
 import bpy.utils.previews
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
 
-from .. import xml_i3d
+from .. import addon_logging, xml_i3d
 from ..utility import get_fs_data_path
 from .helper_functions import humanize_template
 
-logger = logging.getLogger(__name__)
+logger = addon_logging.get_logger(__name__)
 
 TEMPLATES_GROUP_NAMES: dict[str, str] = {}  # template_id -> friendly name
 MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}

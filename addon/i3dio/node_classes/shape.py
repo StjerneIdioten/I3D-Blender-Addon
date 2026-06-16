@@ -1,5 +1,4 @@
 import dataclasses
-import logging
 from collections import ChainMap, OrderedDict, defaultdict
 from dataclasses import dataclass
 from typing import ClassVar
@@ -8,7 +7,7 @@ import bpy
 import mathutils
 import numpy as np
 
-from .. import debugging, xml_i3d
+from .. import addon_logging, xml_i3d
 from ..i3d import I3D
 from .node import Node, SceneGraphNode
 
@@ -28,9 +27,7 @@ class EvaluatedMesh:
         self.name: str = mesh_object.data.name
         self.object: bpy.types.Object = None
         self.mesh: bpy.types.Mesh = None
-        self.logger = debugging.ObjectNameAdapter(
-            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': self.name}
-        )
+        self.logger = addon_logging.get_export_logger_for(self, object_name=self.name)
         self.generate_evaluated_mesh(mesh_object, reference_frame)
 
     def generate_evaluated_mesh(self, mesh_object: bpy.types.Object, reference_frame: mathutils.Matrix = None) -> None:
@@ -858,9 +855,7 @@ class EvaluatedNurbsCurve:
         self.i3d = i3d
         self.object = None
         self.curve_data = None
-        self.logger = debugging.ObjectNameAdapter(
-            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': self.name}
-        )
+        self.logger = addon_logging.get_export_logger_for(self, object_name=self.name)
         self.control_vertices = []
         self.generate_evaluated_curve(shape_object, reference_frame)
 

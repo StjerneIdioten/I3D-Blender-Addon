@@ -7,8 +7,8 @@ import bpy
 from bpy.app.handlers import load_post, persistent
 
 from .. import xml_i3d
+from ..addon_logging import addon_logger
 from ..constants import I3D_MAX
-from ..debugging import addon_logger
 from ..utility import get_fs_data_path
 
 logger = addon_logger.getChild("shader_parser")

@@ -1,6 +1,5 @@
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 
-import logging
 import math
 from abc import ABC, abstractmethod
 from inspect import isabstract
@@ -9,7 +8,7 @@ from typing import ClassVar
 import bpy
 import mathutils
 
-from .. import debugging, utility, xml_i3d
+from .. import addon_logging, utility, xml_i3d
 from ..i3d import I3D
 
 
@@ -47,9 +46,7 @@ class Node(ABC):
         raise NotImplementedError
 
     def _set_logging_output_name_field(self):
-        return debugging.ObjectNameAdapter(
-            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': self.name}
-        )
+        return addon_logging.get_export_logger_for(self, object_name=self.name)
 
     def _create_xml_element(self):
         self.logger.debug(f"Filling out basic attributes, {{name='{self.name}', nodeId='{self.id}'}}")

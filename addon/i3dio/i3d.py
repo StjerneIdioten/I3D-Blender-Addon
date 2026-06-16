@@ -2,15 +2,12 @@
 
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 
-import logging
 from typing import Type, Union
 
 import bpy
 import mathutils
 
-from . import xml_i3d
-
-logger = logging.getLogger(__name__)
+from . import addon_logging, xml_i3d
 
 
 # ruff: noqa: F405
@@ -25,9 +22,7 @@ class I3D:
         depsgraph: bpy.types.Depsgraph,
         settings: dict,
     ):
-        self.logger = debugging.ObjectNameAdapter(
-            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': name}
-        )
+        self.logger = addon_logging.get_export_logger_for(self, object_name=name)
         self._ids = {'node': 1, 'shape': 1, 'material': 1, 'file': 1}
         self.paths = {
             'i3d_file_path': i3d_file_path,

@@ -1,4 +1,3 @@
-import logging
 import os
 import shutil
 from inspect import isabstract
@@ -8,7 +7,7 @@ from typing import ClassVar
 import bpy
 
 from .. import (
-    debugging,
+    addon_logging,
     utility,
 )
 from ..i3d import I3D
@@ -49,10 +48,7 @@ class File(Node):
 
     # The log gets to scrambled if files are referred by their full path, so just use the filename instead
     def _set_logging_output_name_field(self):
-        return debugging.ObjectNameAdapter(
-            logging.getLogger(f"{__name__}.{type(self).__name__}"),
-            {'object_name': self.file_name + self.file_extension},
-        )
+        return addon_logging.get_export_logger_for(self, object_name=self.file_name + self.file_extension)
 
     def _create_xml_element(self):
         # In files, the node name attribute (filename) is also the path to the file. So this needs to be resolved

@@ -1,8 +1,6 @@
-import logging
-
 import bpy
 
-from .. import debugging
+from .. import addon_logging
 from ..i3d import I3D
 from .node import SceneGraphNode, TransformGroupNode
 from .shape import EvaluatedMesh, IndexedTriangleSet, ShapeNode
@@ -60,9 +58,7 @@ class MergeGroup:
         self.name = name
         self.root_node: MergeGroupRoot | None = None
         self.child_nodes: list[MergeGroupChild] = []
-        self.logger = debugging.ObjectNameAdapter(
-            logging.getLogger(f"{__name__}.{type(self).__name__}"), {'object_name': self.name}
-        )
+        self.logger = addon_logging.get_export_logger_for(self, object_name=self.name)
         self.logger.debug("Initialized merge group collector")
 
     # Should only be run once, when the root node is found.

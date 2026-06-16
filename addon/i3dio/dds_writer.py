@@ -2,7 +2,7 @@ import struct
 
 import numpy as np
 
-from .debugging import addon_logger as logger
+from .addon_logging import addon_logger as logger
 
 DDS_MAGIC = b'DDS '
 

@@ -3,7 +3,6 @@ precision"""
 
 from __future__ import annotations  # Enables python 4.0 annotation typehints fx. class self-referencing
 
-import logging
 import math
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
 from typing import Dict, Union
@@ -12,9 +11,9 @@ import bpy
 import mathutils
 from idprop.types import IDPropertyArray
 
-from . import utility
+from . import addon_logging, utility
 
-logger = logging.getLogger(__name__)
+logger = addon_logging.get_logger(__name__)
 
 XML_Element = ET.Element
 
@@ -24,7 +23,7 @@ def parse(*argv, **kwargs) -> ET.ElementTree:
     try:
         tree = ET.parse(*argv, **kwargs, parser=ET.XMLParser())
     except (ET.ParseError, FileNotFoundError) as e:
-        print(f"Error while parsing xml file: {e}")
+        logger.error(f"Error while parsing xml file: {e}")
     return tree
 
 
