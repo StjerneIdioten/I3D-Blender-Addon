@@ -115,6 +115,13 @@ class Material(Node):
     def _export_shader_settings(self) -> None:
         if self.i3d_attrs.shader_name != SHADER_DEFAULT:
             shaders = get_shader_dict(self.i3d_attrs.use_custom_shaders)
+            if self.i3d_attrs.shader_name not in shaders:
+                self.logger.warning(
+                    "Shader '%s' not found in %s shader list, skipping shader export",
+                    self.i3d_attrs.shader_name,
+                    "custom" if self.i3d_attrs.use_custom_shaders else "game",
+                )
+                return
             shader_path = str(shaders[self.i3d_attrs.shader_name].path)
             shader_file_id = self.i3d.add_file_shader(shader_path)
             self._write_attribute('customShaderId', shader_file_id)
