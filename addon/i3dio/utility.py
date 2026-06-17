@@ -96,6 +96,15 @@ def is_fs_builtin_path(filepath: str | Path) -> bool:
     return path_str == "$data" or path_str.startswith("$data/")
 
 
+def _resolve_existing_fs_source_path(source_path: Path, fs_data_path: Path) -> Path:
+    """Use an existing .dds texture when an FS data .png source reference is missing."""
+    if source_path.exists() or source_path.suffix.lower() != ".png" or not source_path.is_relative_to(fs_data_path):
+        return source_path
+
+    dds_path = source_path.with_suffix(".dds")
+    return dds_path if dds_path.exists() else source_path
+
+
 def fs_builtin_to_disk_path(filepath: str | Path) -> Path | None:
     """
     Converts a '$data/...' path to a real disk path using the configured FS data path.
@@ -105,8 +114,9 @@ def fs_builtin_to_disk_path(filepath: str | Path) -> Path | None:
         return None
     if not (fs_data_path := get_fs_data_path()):
         return None
+    fs_data_path = Path(bpy.path.abspath(fs_data_path)).resolve(strict=False)
     relative_path = normalize_path_separators(filepath).removeprefix("$data").lstrip("/")
-    return Path(bpy.path.abspath(fs_data_path)).resolve(strict=False) / relative_path
+    return _resolve_existing_fs_source_path(fs_data_path / relative_path, fs_data_path)
 
 
 def as_source_path(filepath: str | Path) -> Path | None:
@@ -120,7 +130,11 @@ def as_source_path(filepath: str | Path) -> Path | None:
     """
     if is_fs_builtin_path(filepath):
         return fs_builtin_to_disk_path(filepath)
-    return Path(bpy.path.abspath(str(filepath))).resolve(strict=False)
+    source_path = Path(bpy.path.abspath(str(filepath))).resolve(strict=False)
+    if fs_data_pref := get_fs_data_path():
+        fs_data_path = Path(bpy.path.abspath(str(fs_data_pref))).resolve(strict=False)
+        return _resolve_existing_fs_source_path(source_path, fs_data_path)
+    return source_path
 
 
 def as_fs_relative_path(filepath: str | Path) -> Path:
