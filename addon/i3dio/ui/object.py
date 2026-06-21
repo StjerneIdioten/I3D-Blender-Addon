@@ -15,8 +15,10 @@ from bpy.types import Operator, Panel
 
 from ..constants import I3D_MAX
 from . import light, mesh, presets
-from .collision_data import COLLISIONS
+from .collision_data import COLLISION_PRESET_CUSTOM, COLLISIONS, get_collision_preset_enum_items
 from .helper_functions import i3d_property
+
+_UPDATING_COLLISION_PRESET = "_updating_collision_preset"
 
 classes = []
 
@@ -180,20 +182,50 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Collision", description="Does the object take part in collisions", default=i3d_map['collision']['default']
     )
 
-    def update_collision_preset_name(self, context):
-        """Update the collision filter group and mask based on the selected preset."""
-        preset = COLLISIONS['presets'].get(self.collision_preset_name, {})
-        if preset:
-            self.collision_filter_group = preset.group_hex
-            self.collision_filter_mask = preset.mask_hex
-        else:
-            self.collision_filter_group = self.i3d_map['collision_filter_group']['default']
-            self.collision_filter_mask = self.i3d_map['collision_filter_mask']['default']
+    def _set_collision_filter_values(self, group: str, mask: str) -> None:
+        if self.collision_filter_group != group:
+            self.collision_filter_group = group
 
-    collision_preset_name: StringProperty(
+        if self.collision_filter_mask != mask:
+            self.collision_filter_mask = mask
+
+    def _find_matching_collision_preset(self) -> str:
+        group = self.collision_filter_group.lower().strip()
+        mask = self.collision_filter_mask.lower().strip()
+
+        for name, preset in COLLISIONS["presets"].items():
+            if preset.group_hex.lower() == group and preset.mask_hex.lower() == mask:
+                return name
+
+        return COLLISION_PRESET_CUSTOM
+
+    def update_collision_preset_name(self, context):
+        """Update group/mask when selecting a collision preset."""
+        preset_name = self.collision_preset_name
+        if preset_name == COLLISION_PRESET_CUSTOM:
+            return
+
+        if (preset := COLLISIONS["presets"].get(preset_name)) is None:
+            return
+        self[_UPDATING_COLLISION_PRESET] = True
+        try:
+            self._set_collision_filter_values(preset.group_hex, preset.mask_hex)
+        finally:
+            if _UPDATING_COLLISION_PRESET in self:
+                del self[_UPDATING_COLLISION_PRESET]
+
+    def update_collision_filter_value(self, context):
+        """Set enum to matching preset or Custom when values are edited manually."""
+        if self.get(_UPDATING_COLLISION_PRESET, False):
+            return
+
+        if self.collision_preset_name != (matching_preset := self._find_matching_collision_preset()):
+            self.collision_preset_name = matching_preset
+
+    collision_preset_name: EnumProperty(
         name="Collision Preset Name",
         description="The name of the collision preset to use",
-        default="",
+        items=get_collision_preset_enum_items,
         update=update_collision_preset_name,
     )
 
@@ -201,12 +233,14 @@ class I3DNodeObjectAttributes(bpy.types.PropertyGroup):
         name="Collision Filter Group",
         description="The objects collision filter group as a hexadecimal value",
         default=i3d_map['collision_filter_group']['default'],
+        update=update_collision_filter_value,
     )
 
     collision_filter_mask: StringProperty(
         name="Collision Filter Mask",
         description="The objects collision filter mask as a hexadecimal value",
         default=i3d_map['collision_filter_mask']['default'],
+        update=update_collision_filter_value,
     )
 
     compound: BoolProperty(name="Compound", description="Compound", default=i3d_map['compound']['default'])
@@ -601,58 +635,6 @@ class I3DReferenceData(bpy.types.PropertyGroup):
     )
 
 
-@register
-class I3D_IO_OT_set_collision_preset(bpy.types.Operator):
-    bl_idname = 'i3dio.set_collision_preset'
-    bl_label = 'Set Collision Preset'
-    bl_options = {'INTERNAL', 'UNDO'}
-
-    preset: StringProperty()
-    apply_to_selected: BoolProperty(options={'SKIP_SAVE'})
-
-    @classmethod
-    def description(cls, _context, properties):
-        desc = COLLISIONS['presets'].get(properties.preset, None)
-        if desc and getattr(desc, 'desc', None):
-            return desc.desc
-        return f"Set the collision preset to {properties.preset}"
-
-    def invoke(self, context, event):
-        self.apply_to_selected = event.alt
-        return self.execute(context)
-
-    def execute(self, context):
-        if self.apply_to_selected:
-            for obj in context.selected_objects:
-                if not obj.type == 'MESH':
-                    continue
-                obj.i3d_attributes.collision_preset_name = self.preset
-        else:
-            context.object.i3d_attributes.collision_preset_name = self.preset
-        return {'FINISHED'}
-
-
-@register
-class I3D_IO_MT_collision_presets(bpy.types.Menu):
-    bl_idname = "I3D_IO_MT_collision_presets"
-    bl_label = "Collision Presets"
-
-    def draw(self, _context):
-        layout = self.layout
-        presets = list(COLLISIONS['presets'].keys())
-
-        if not presets:
-            layout.label(text="No Presets Available")
-            return
-
-        grid = layout.grid_flow(columns=2, even_columns=True, even_rows=True)
-        for preset in presets:
-            text = preset.title().replace('_', ' ')
-            grid.operator(I3D_IO_OT_set_collision_preset.bl_idname, text=text).preset = preset
-        layout.separator()
-        layout.operator(I3D_IO_OT_set_collision_preset.bl_idname, text="None").preset = "NONE"
-
-
 SPLIT_TYPE_PRESETS = {
     "Spruce": {'split_type': 1, 'support_wood_harvester': True},
     "Pine": {'split_type': 2, 'support_wood_harvester': True},
@@ -785,6 +767,7 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
     unset_props = (
         'compound',
         'collision',
+        'collision_preset_name',
         'collision_filter_group',
         'collision_filter_mask',
         'trigger',
@@ -820,9 +803,8 @@ def draw_rigid_body_attributes(layout: bpy.types.UILayout, i3d_attributes: bpy.t
 
         col_filter_header, col_filter_panel = panel.panel('i3d_collision_filter', default_closed=False)
         col_filter_header.label(text="Collision Filter")
-        col_filter_header.emboss = 'NONE'
-        col_filter_header.menu(I3D_IO_MT_collision_presets.bl_idname, icon='PRESET', text="")
         if col_filter_panel:
+            col_filter_panel.prop(i3d_attributes, 'collision_preset_name', text="Preset", icon='PRESET')
             row = col_filter_panel.row()
             row.prop(i3d_attributes, 'collision_filter_group')
             op = row.operator('i3dio.bit_mask_editor', text="", icon='THREE_DOTS')

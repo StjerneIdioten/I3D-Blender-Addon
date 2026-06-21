@@ -1,11 +1,13 @@
 from collections import namedtuple
-from pathlib import Path
 
 import bpy
 from bpy.app.handlers import load_post, persistent
 
-from .. import __package__ as base_package
-from .. import xml_i3d
+from .. import addon_logging, xml_i3d
+from ..utility import get_fs_data_path
+from .helper_functions import humanize_template
+
+logger = addon_logging.get_logger("collision_data")
 
 COLLISIONS = {
     'flags': {},  # {name: bit}
@@ -18,6 +20,28 @@ CollisionOutput = namedtuple('CollisionOutput', ['preset', 'group', 'mask', 'wit
 CollisionRule = namedtuple('CollisionRule', ['mask_old', 'outputs'])
 
 
+COLLISION_PRESET_CUSTOM = "CUSTOM"
+_COLLISION_PRESET_ENUM_ITEMS: list[tuple[str, str, str]] = []
+
+
+def rebuild_collision_preset_enum_items() -> None:
+    """Build Blender enum items for collision presets.
+    Kept as a persistent list so dynamic EnumProperty callbacks return stable string references.
+    """
+    _COLLISION_PRESET_ENUM_ITEMS.clear()
+    _COLLISION_PRESET_ENUM_ITEMS.extend(
+        ((COLLISION_PRESET_CUSTOM, "Custom", "Use manually edited collision filter group and mask values"),)
+    )
+
+    _COLLISION_PRESET_ENUM_ITEMS.extend(
+        (name, humanize_template(name), preset.desc or "") for name, preset in sorted(COLLISIONS["presets"].items())
+    )
+
+
+def get_collision_preset_enum_items(self, context):
+    return _COLLISION_PRESET_ENUM_ITEMS
+
+
 def compute_bitmask(flags, flag_dict) -> int:
     return sum(1 << flag_dict[flag] for flag in flags if flag in flag_dict)
 
@@ -28,7 +52,7 @@ def parse_collision_mask_flags(filepath) -> None:
 
     tree = xml_i3d.parse(filepath)
     if tree is None:
-        print(f"Failed to parse {filepath}")
+        logger.error(f"Failed to parse {filepath}")
         return None
 
     root = tree.getroot()
@@ -55,7 +79,7 @@ def parse_collision_mask_flags(filepath) -> None:
                 try:
                     mask_value = int(direct_value, 16)
                 except ValueError:
-                    print(f"Invalid mask value '{direct_value}' in preset '{name}'")
+                    logger.error(f"Invalid mask value '{direct_value}' in preset '{name}'")
                     continue
             else:
                 # If no single value attribute, compute the bitmask from the flags
@@ -73,7 +97,7 @@ def parse_collision_mask_rules(filepath) -> None:
 
     tree = xml_i3d.parse(filepath)
     if tree is None:
-        print(f"Failed to parse {filepath}")
+        logger.error(f"Failed to parse {filepath}")
         return None
 
     root = tree.getroot()
@@ -94,7 +118,7 @@ def parse_collision_mask_rules(filepath) -> None:
                 try:
                     mask_flags = int(mask_value, 16)
                 except ValueError:
-                    print(f"Invalid mask value '{mask_value}' in rule for maskOld '{mask_old}'")
+                    logger.error(f"Invalid mask value '{mask_value}' in rule for maskOld '{mask_old}'")
                     mask_flags = 0
             else:
                 # Parse individual flag names
@@ -107,10 +131,18 @@ def parse_collision_mask_rules(filepath) -> None:
         COLLISIONS['rules'].append(CollisionRule(mask_old, outputs))
 
 
+def clear_collision_cache() -> None:
+    COLLISIONS["flags"].clear()
+    COLLISIONS["presets"].clear()
+    COLLISIONS["rules"].clear()
+    rebuild_collision_preset_enum_items()
+
+
 def populate_collision_cache() -> None:
     """Populate the COLLISIONS cache from XML files"""
-    data_path = Path(bpy.context.preferences.addons[base_package].preferences.fs_data_path)
-    shared_dir = data_path.parent / 'shared'
+    clear_collision_cache()
+
+    shared_dir = get_fs_data_path(as_path=True).parent / 'shared'
     flags_path = shared_dir / 'collisionMaskFlags.xml'
     rules_path = shared_dir / 'collisionMaskConversionRules.xml'
 
@@ -118,12 +150,14 @@ def populate_collision_cache() -> None:
     if flags_path.exists():
         parse_collision_mask_flags(flags_path)
     else:
-        print(f"Collision flags file not found: {flags_path}")
+        logger.error(f"Collision flags file not found: {flags_path}")
 
     if rules_path.exists():
         parse_collision_mask_rules(rules_path)
     else:
-        print(f"Collision rules file not found: {rules_path}")
+        logger.error(f"Collision rules file not found: {rules_path}")
+
+    rebuild_collision_preset_enum_items()
 
 
 def apply_rule_to_mask(rule: CollisionRule, is_trigger: bool) -> dict[str, str]:
@@ -137,7 +171,7 @@ def apply_rule_to_mask(rule: CollisionRule, is_trigger: bool) -> dict[str, str]:
             if flag in flag_map:
                 bitmask |= 1 << flag_map[flag]
             else:
-                print(f"Unknown flag '{flag}'.")
+                logger.error(f"Unknown flag '{flag}'.")
         return bitmask
 
     # Find mathcing output, in maskOld="1073741824" there is 2 outputs, one for trigger and one for non-trigger
@@ -148,7 +182,7 @@ def apply_rule_to_mask(rule: CollisionRule, is_trigger: bool) -> dict[str, str]:
         output = next((o for o in rule.outputs if o.is_trigger is None), None) or rule.outputs[0]
 
     if not output:
-        print("No outputs available in rule. Returning default values.")
+        logger.error("No outputs available in rule. Returning default values.")
         return {'group_hex': 'ff', 'mask_hex': 'ff'}
 
     group_value = 0
@@ -171,7 +205,7 @@ def apply_rule_to_mask(rule: CollisionRule, is_trigger: bool) -> dict[str, str]:
         if flag in COLLISIONS['flags']:
             mask_value &= ~(1 << COLLISIONS['flags'][flag])
         else:
-            print(f"Unknown withoutFlag '{flag}' in rule.")
+            logger.error(f"Unknown withoutFlag '{flag}' in rule.")
 
     return {'group_hex': f"{group_value:x}", 'mask_hex': f"{mask_value:x}"}
 
@@ -189,13 +223,13 @@ def convert_old_collision_masks(dummy) -> None:
             try:
                 old_mask_decimal = int(old_mask_hex, 16)  # Convert to decimal
             except ValueError:
-                print(f"Invalid collision mask '{old_mask_hex}' for object '{obj.name}', skipping.")
+                logger.error(f"Invalid collision mask '{old_mask_hex}' for object '{obj.name}', skipping.")
                 continue
 
             # Get all matching rules for this mask
             rule = rule_lookup.get(old_mask_decimal)
             if not rule:
-                print(f"No rule found for mask '{old_mask_hex}' for object '{obj.name}', skipping.")
+                logger.error(f"No rule found for mask '{old_mask_hex}' for object '{obj.name}', skipping.")
                 continue
 
             is_trigger = getattr(obj.i3d_attributes, 'trigger', False)

@@ -89,7 +89,7 @@ def i3d_property(layout, attributes, attribute: str, obj):
 
 def humanize_template(template: str) -> str:
     """Converts a template name to a human-readable format."""
-    return re.sub(r'(?<=[a-z0-9])([A-Z])', r' \1', template).title()
+    return re.sub(r'(?<=[a-z0-9])([A-Z])', r' \1', template.replace('_', ' ')).title()
 
 
 def detect_fs_version(path_str: str) -> str | None:
