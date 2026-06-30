@@ -448,7 +448,9 @@ class IndexedTriangleSet(Node):
             mat = obj.material_slots[mat_idx].material
             if mat is not None:
                 return mat
-        # Out of bounds
+        if not any(slot.material is not None for slot in obj.material_slots):
+            return fallback_material or self.i3d.get_default_material().blender_material
+
         if obj.name not in warned:
             self.logger.warning(
                 f"Object {obj.name!r} has a triangle referencing an empty or out-of-bounds material slot "
