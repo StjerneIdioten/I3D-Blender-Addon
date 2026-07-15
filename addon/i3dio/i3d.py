@@ -46,7 +46,7 @@ class I3D:
         self.conversion_matrix = conversion_matrix
         self.conversion_matrix_inv = conversion_matrix.inverted_safe()
 
-        self.shapes: dict[Union[str, int], Union[IndexedTriangleSet, NurbsCurve]] = {}
+        self.shapes: dict[Union[tuple[str, str], int], Union[IndexedTriangleSet, NurbsCurve]] = {}
         self.materials: dict[Union[str, int], Material] = {}
         self.files: dict[Union[str, int], File] = {}
         self.merge_groups: dict[int, MergeGroup] = {}
@@ -205,7 +205,8 @@ class I3D:
         bone_mapping: ChainMap | None = None,
     ) -> int:
         export_name = shape_name or evaluated_mesh.name
-        if export_name not in self.shapes:
+        shape_key = (IndexedTriangleSet.ELEMENT_TAG, export_name)
+        if shape_key not in self.shapes:
             shape_id = self._next_available_id('shape')
             indexed_triangle_set = IndexedTriangleSet(
                 shape_id,
@@ -217,23 +218,24 @@ class I3D:
                 bone_mapping=bone_mapping,
             )
             indexed_triangle_set.populate_xml_element()
-            # Store a reference to the shape from both it's name and its shape id
-            self.shapes.update(dict.fromkeys([shape_id, export_name], indexed_triangle_set))
+            # Store a reference to the shape from both its type/name and its shape ID.
+            self.shapes.update(dict.fromkeys([shape_id, shape_key], indexed_triangle_set))
             self.xml_elements['Shapes'].append(indexed_triangle_set.element)
             return shape_id
-        return self.shapes[export_name].id
+        return self.shapes[shape_key].id
 
     def add_curve(self, evaluated_curve: EvaluatedNurbsCurve, curve_name: str | None = None) -> int:
         name = curve_name or evaluated_curve.name
-        if name not in self.shapes:
+        curve_key = (NurbsCurve.ELEMENT_TAG, name)
+        if curve_key not in self.shapes:
             curve_id = self._next_available_id('shape')
             nurbs_curve = NurbsCurve(curve_id, self, evaluated_curve, curve_name)
             nurbs_curve.populate_xml_element()
-            # Store a reference to the curve from both its name and its curve id
-            self.shapes.update(dict.fromkeys([curve_id, name], nurbs_curve))
+            # Store a reference to the curve from both its type/name and its shape ID.
+            self.shapes.update(dict.fromkeys([curve_id, curve_key], nurbs_curve))
             self.xml_elements['Shapes'].append(nurbs_curve.element)
             return curve_id
-        return self.shapes[name].id
+        return self.shapes[curve_key].id
 
     def get_shape_by_id(self, shape_id: int):
         return self.shapes[shape_id]
