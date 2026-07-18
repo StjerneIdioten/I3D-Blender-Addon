@@ -91,8 +91,6 @@ def export_blend_to_i3d(operator, filepath: str, axis_forward, axis_up, settings
                         _export_active_scene_master_collection(i3d)
                     case 'ACTIVE_COLLECTION':
                         _export_active_collection(i3d)
-                    case 'ACTIVE_OBJECT':
-                        _export_active_object(i3d)
                     case 'SELECTED_OBJECTS':
                         _export_selected_objects(i3d)
 
@@ -152,14 +150,6 @@ def _export_collection_content(i3d: I3D, collection):
     # Then export objects in the collection.
     # `objects` contain every object, also children of other objects, so export only root ones.
     _export(i3d, [obj for obj in collection.objects if obj.parent is None])
-
-
-def _export_active_object(i3d: I3D):
-    logger.info("'Active Object' export is selected")
-    if bpy.context.active_object is not None:
-        _export(i3d, [bpy.context.active_object])
-    else:
-        logger.warning("No active object, aborting export")
 
 
 def _export_selected_objects(i3d: I3D):

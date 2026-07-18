@@ -101,7 +101,6 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         items=[
             ('ALL', "Everything", "Export everything from the scene master collection"),
             ('ACTIVE_COLLECTION', "Active Collection", "Export only the active collection and all its children"),
-            ('ACTIVE_OBJECT', "Active Object", "Export the active object and its children"),
             ('SELECTED_OBJECTS', "Selected Objects", "Export only selected objects (with optional children)"),
         ],
         default='SELECTED_OBJECTS',
