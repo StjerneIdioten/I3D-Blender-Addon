@@ -85,7 +85,7 @@ class Material(Node):
                     if input.is_linked and (source := input.links[0].from_node).bl_idname == "ShaderNodeTexImage":
                         gloss_path = self._image_path(source)
         else:
-            gloss_path = self._image_path(principled.specular_texture)
+            gloss_path = self._image_path(principled.specular_texture) or self._image_path(principled.roughness_texture)
 
         if gloss_path:
             self._write_texture_to_xml(gloss_path, 'Glossmap')
