@@ -230,6 +230,12 @@ class I3D_IO_OT_export(Operator, ExportHelper):
         name="Generate logfile", description="Generates a log file in the same folder as the exported i3d", default=True
     )
 
+    validate_export_core: BoolProperty(
+        name="Validate WIP export_core",
+        description="Run the new work-in-progress export_core pipeline before the legacy exporter",
+        default=False,
+    )
+
     object_sorting_prefix: StringProperty(
         name="Sorting Prefix",
         description="To allow some form of control over the output ordering of the objects in the I3D file it is "
@@ -386,6 +392,7 @@ def export_debug(layout, operator):
     if body:
         body.prop(operator, 'verbose_output')
         body.prop(operator, 'log_to_file')
+        body.prop(operator, 'validate_export_core')
 
 
 def export_i3d_mapping(layout, operator):
