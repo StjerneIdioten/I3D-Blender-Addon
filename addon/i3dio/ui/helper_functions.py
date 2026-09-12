@@ -6,8 +6,47 @@ from __future__ import annotations
 
 import re
 
+from ..i3d_attributes.resolve import UNAVAILABLE, ValueReader, dependencies_met, make_value_reader
 
-def i3d_property(layout, attributes, attribute: str, obj):
+
+def i3d_property(layout, attributes, attribute: str, obj, *, read_value: ValueReader | None = None):
+    if (schema := getattr(type(attributes), 'i3d_schema', None)) is None:
+        _legacy_i3d_property(layout, attributes, attribute, obj)
+        return
+
+    if read_value is None:
+        read_value = make_value_reader(attributes, schema, owner=obj, on_error=lambda _source, _error: None)
+    definition = schema[attribute]
+    enabled = dependencies_met(definition, read_value)
+    tracking = definition.tracking
+    tracked = tracking is not None and getattr(attributes, f"{attribute}_tracking")
+
+    row = layout.row()
+    row.enabled = enabled
+    field = row.row()
+    if enabled and tracked:
+        value = read_value(attribute)
+        row.alignment = 'RIGHT'
+        field.label(text=attributes.bl_rna.properties[attribute].name)
+        if value is UNAVAILABLE:
+            field.label(text=f"Unavailable: {tracking.member_path}", icon='ERROR')
+        else:
+            field.prop(obj, tracking.member_path, text='')
+            if tracking.mapping is not None:
+                field.label(text=f"'{value}' in GE")
+            field.label(text=f"Follows '{tracking.member_path}'")
+        field.enabled = False
+    else:
+        field.prop(attributes, attribute)
+
+    if tracking is not None:
+        # Keep the toggle usable if tracking fails, so the custom value can be selected.
+        row.prop(
+            attributes, f"{attribute}_tracking", icon='LOCKED' if tracked else 'UNLOCKED', icon_only=True, emboss=False
+        )
+
+
+def _legacy_i3d_property(layout, attributes, attribute: str, obj):
     i3d_map = attributes.i3d_map[attribute]
     row = layout.row()
     attrib_row = None

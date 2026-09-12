@@ -5,13 +5,13 @@ from __future__ import annotations  # Enables python 4.0 annotation typehints fx
 
 import math
 import xml.etree.ElementTree as ET  # Technically not following pep8, but this is the naming suggestion from the module
-from typing import Dict, Union
 
 import bpy
 import mathutils
 from idprop.types import IDPropertyArray
 
 from . import addon_logging, utility
+from .i3d_attributes.resolve import resolve_attributes
 
 logger = addon_logging.get_logger(__name__)
 
@@ -108,7 +108,7 @@ def write_attribute(element: XML_Element, attribute: str, value) -> None:
 
 
 # TODO: Clean up this very generic, but spaghetti ish implementation of i3d attributes
-def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Element, None]]) -> None:
+def write_legacy_i3d_properties(obj, property_group, elements: dict[str, XML_Element | None]) -> None:
     logger.info(f"Writing non-default properties from propertygroup: '{type(property_group).__name__}'")
     # Since blender properties are basically abusing the annotation system, we can also abuse this to create
     # a generic property export function by accessing the annotation dictionary
@@ -215,6 +215,28 @@ def write_i3d_properties(obj, property_group, elements: Dict[str, Union[XML_Elem
         properties_written += 1
 
     logger.info(f"Wrote '{properties_written}' properties")
+
+
+def write_i3d_properties(obj, property_group, elements) -> None:
+    if (schema := getattr(type(property_group), "i3d_schema", None)) is None:
+        write_legacy_i3d_properties(obj, property_group, elements)
+        return
+
+    logger.info("Writing non-default properties from property group: %r", type(property_group).__name__)
+
+    def report_error(source: str, error: Exception) -> None:
+        logger.error("Could not resolve I3D property %r: %s", source, error)
+
+    properties_written = 0
+
+    for attribute in resolve_attributes(property_group, schema, owner=obj, on_error=report_error):
+        if elements.get(attribute.target) is None:
+            raise ValueError(f"Missing I3D destination {attribute.target!r} for property {attribute.source!r}")
+
+        write_attribute(elements[attribute.target], attribute.name, attribute.value)
+        properties_written += 1
+
+    logger.info("Wrote %d properties", properties_written)
 
 
 def add_indentations(element: XML_Element, level: int = 0) -> None:

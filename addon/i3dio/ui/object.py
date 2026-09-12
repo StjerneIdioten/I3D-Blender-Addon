@@ -14,7 +14,8 @@ from bpy.props import (
 from bpy.types import Operator, Panel
 
 from ..constants import I3D_MAX
-from . import light, mesh, presets
+from ..i3d_attributes.mesh import I3DNodeShapeAttributes
+from . import light, presets
 from .collision_data import COLLISION_PRESET_CUSTOM, COLLISIONS, get_collision_preset_enum_items
 from .helper_functions import i3d_property
 
@@ -1211,15 +1212,14 @@ class I3D_IO_OT_Object_Add_Preset(AddPresetBase, Operator):
                 base_values.extend(
                     [
                         f"bpy.context.object.data.i3d_attributes.{name}"
-                        for name in mesh.I3DNodeShapeAttributes.i3d_map.keys()
+                        for name, _definition in I3DNodeShapeAttributes.i3d_schema.exported()
                     ]
                 )
             case 'LIGHT':
                 base_values.extend(
-                    [
-                        f"bpy.context.object.data.i3d_attributes.{name}"
-                        for name in light.I3DNodeLightAttributes.i3d_map.keys()
-                    ]
+                    presets.schema_preset_values(
+                        "bpy.context.object.data.i3d_attributes", light.I3DNodeLightAttributes.i3d_schema
+                    )
                 )
         return base_values
 

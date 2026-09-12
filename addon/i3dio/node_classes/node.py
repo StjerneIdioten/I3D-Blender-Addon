@@ -124,11 +124,9 @@ class SceneGraphNode(Node):
 
     def _write_properties(self):
         # Write general node properties (Transform properties in Giants Engine)
-        try:
-            xml_i3d.write_i3d_properties(self.blender_object, self.blender_object.i3d_attributes, self.xml_elements)
-        except AttributeError:
-            # Not all nodes has general node properties, such as collections.
-            pass
+        # Not all nodes have general node properties, such as collections.
+        if (attributes := getattr(self.blender_object, 'i3d_attributes', None)) is not None:
+            xml_i3d.write_i3d_properties(self.blender_object, attributes, self.xml_elements)
 
         # Try to write node specific properties, not all nodes have these (Such as cameras or collections)
         try:
@@ -137,10 +135,10 @@ class SceneGraphNode(Node):
             self.logger.debug(f'Is a "{type(self.blender_object).__name__}", which does not have "data"')
         else:
             if not isinstance(self, TransformGroupNode):
-                try:
-                    xml_i3d.write_i3d_properties(data, self.blender_object.data.i3d_attributes, self.xml_elements)
-                except AttributeError:
+                if (attributes := getattr(data, 'i3d_attributes', None)) is None:
                     self.logger.debug('Has no data specific attributes')
+                else:
+                    xml_i3d.write_i3d_properties(data, attributes, self.xml_elements)
 
     def _write_user_attributes(self):
         try:  # Only write attributes if list is not empty

@@ -5,8 +5,6 @@ import bpy
 from .. import __package__ as base_package
 from .. import xml_i3d
 from .collision_data import COLLISIONS
-from .mesh import I3DNodeShapeAttributes
-from .object import I3DNodeObjectAttributes
 
 classes = []
 
@@ -58,22 +56,37 @@ def is_valid_binary(value: str) -> bool:
     return all(c in "01" for c in value) and len(value) <= 32
 
 
-def is_data_attribute(obj: bpy.types.Object, target_prop: str) -> bool:
-    return hasattr(obj.data, "i3d_attributes") and hasattr(obj.data.i3d_attributes, target_prop)
+def find_i3d_attributes(obj: bpy.types.Object | None, target_prop: str) -> bpy.types.PropertyGroup | None:
+    if obj is None:
+        return None
+
+    for source in (getattr(obj, "data", None), obj):
+        attributes = getattr(source, "i3d_attributes", None)
+
+        if attributes is not None and hasattr(attributes, target_prop):
+            return attributes
+
+    return None
 
 
 def get_i3d_attribute(obj: bpy.types.Object, target_prop: str) -> str:
-    for attr_source in (obj.data, obj):
-        i3d_attributes = getattr(attr_source, "i3d_attributes", None)
-        if i3d_attributes and hasattr(i3d_attributes, target_prop):
-            return getattr(i3d_attributes, target_prop)
-    return "0"
+    if (attributes := find_i3d_attributes(obj, target_prop)) is None:
+        return "0"
+    return getattr(attributes, target_prop, "0")
 
 
 def set_i3d_attribute(obj: bpy.types.Object, target_prop: str, value: str) -> None:
-    attr_source = obj.data if hasattr(obj.data.i3d_attributes, target_prop) else obj
-    if hasattr(attr_source, "i3d_attributes"):
-        setattr(attr_source.i3d_attributes, target_prop, value)
+    if (attributes := find_i3d_attributes(obj, target_prop)) is not None:
+        setattr(attributes, target_prop, value)
+
+
+def get_rna_property_default(obj: bpy.types.Object, target_prop: str) -> str:
+    if (attributes := find_i3d_attributes(obj, target_prop)) is None:
+        return "0"
+    if (rna_property := attributes.bl_rna.properties.get(target_prop)) is None:
+        return "0"
+
+    return str(rna_property.default)
 
 
 def get_bit_names(target_prop: str) -> list[str]:
@@ -109,16 +122,13 @@ class I3D_IO_OT_handle_invalid_bit_mask(bpy.types.Operator):
 
     args: bpy.props.StringProperty(default="")
 
-    def execute(self, _context):
+    def execute(self, context):
         import json
 
         args = json.loads(self.args)
-        if is_data_attribute(bpy.context.object, args["target_prop"]):
-            default_prop_val = I3DNodeShapeAttributes.i3d_map.get(args["target_prop"], {}).get("default", "0")
-        else:
-            default_prop_val = I3DNodeObjectAttributes.i3d_map.get(args["target_prop"], {}).get("default", "0")
-        args["internal_value"] = str(default_prop_val)
-        # Hacky way to open the bit mask editor again with the appropriate values
+        args["internal_value"] = get_rna_property_default(context.object, args["target_prop"])
+
+        # Hacky way to reopen the bit-mask editor with the same arguments
         bpy.ops.i3dio.bit_mask_editor('INVOKE_DEFAULT', **args)
         return {'FINISHED'}
 

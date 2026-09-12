@@ -1,158 +1,11 @@
 import bpy
 from bl_operators.presets import AddPresetBase
-from bpy.props import (
-    BoolProperty,
-    EnumProperty,
-    IntProperty,
-    PointerProperty,
-    StringProperty,
-)
 from bpy.types import Operator, Panel
 
+from ..i3d_attributes.mesh import I3DNodeShapeAttributes
 from . import presets
 
-classes = []
 
-
-def register(cls):
-    classes.append(cls)
-    return cls
-
-
-@register
-class I3DNodeShapeAttributes(bpy.types.PropertyGroup):
-    i3d_map = {
-        'casts_shadows': {'name': 'castsShadows', 'default': False, 'blender_default': True},
-        'receive_shadows': {'name': 'receiveShadows', 'default': False, 'blender_default': True},
-        'non_renderable': {'name': 'nonRenderable', 'default': False},
-        'distance_blending': {'name': 'distanceBlending', 'default': True},
-        'rendered_in_viewports': {'name': 'renderedInViewports', 'default': True},
-        'is_occluder': {'name': 'occluder', 'default': False},
-        'terrain_decal': {'name': 'terrainDecal', 'default': False},
-        'cpu_mesh': {'name': 'meshUsage', 'default': '0', 'placement': 'IndexedTriangleSet'},
-        'double_sided': {'name': 'doubleSided', 'default': False},
-        'material_holder': {'name': 'materialHolder', 'default': False},
-        'nav_mesh_mask': {'name': 'buildNavMeshMask', 'default': '0', 'type': 'HEX'},
-        'decal_layer': {'name': 'decalLayer', 'default': 0},
-        'vertex_compression_range': {
-            'name': 'vertexCompressionRange',
-            'default': 'auto',
-            'placement': 'IndexedTriangleSet',
-        },
-    }
-
-    casts_shadows: BoolProperty(
-        name="Cast Shadowmap", description="Cast Shadowmap", default=i3d_map['casts_shadows']['blender_default']
-    )
-
-    receive_shadows: BoolProperty(
-        name="Receive Shadowmap", description="Receive Shadowmap", default=i3d_map['receive_shadows']['blender_default']
-    )
-
-    non_renderable: BoolProperty(
-        name="Non Renderable",
-        description="Don't render the mesh, used for collision boxes etc.",
-        default=i3d_map['non_renderable']['default'],
-    )
-
-    distance_blending: BoolProperty(
-        name="Distance Blending", description="Distance Blending", default=i3d_map['distance_blending']['default']
-    )
-
-    rendered_in_viewports: BoolProperty(
-        name="Rendered In Viewports",
-        description="Determines if the object is rendered in Giants Editor viewport or not",
-        default=i3d_map['rendered_in_viewports']['default'],
-    )
-
-    is_occluder: BoolProperty(name="Occluder", description="Is Occluder?", default=i3d_map['is_occluder']['default'])
-
-    terrain_decal: BoolProperty(
-        name="Terrain Decal",
-        description="If enabled, the shape will be rendered as a terrain decal",
-        default=i3d_map['terrain_decal']['default'],
-    )
-
-    cpu_mesh: EnumProperty(
-        name="CPU Mesh",
-        description="CPU Mesh",
-        items=[('0', 'Off', "Turns off CPU Mesh"), ('256', 'On', "Turns on CPU Mesh")],
-        default=i3d_map['cpu_mesh']['default'],
-    )
-
-    double_sided: BoolProperty(
-        name="Double Sided",
-        description="If enabled, the shape will be rendered from both sides",
-        default=i3d_map['double_sided']['default'],
-    )
-
-    material_holder: BoolProperty(
-        name="Material Holder",
-        description="Needs to be set if the material of this shape is to be used on any non-standard geometry "
-        "such as GEOMETRY_PARTICLE_SYSTEM or GEOMETRY_FILL_PLANE in order for the shaders to be properly precompiled",
-        default=i3d_map['material_holder']['default'],
-    )
-
-    nav_mesh_mask: StringProperty(
-        name="Nav Mesh Mask (Hex)",
-        description="Build Nav Mesh Mask",
-        default=i3d_map['nav_mesh_mask']['default'],
-    )
-
-    decal_layer: IntProperty(
-        name="Decal Layer",
-        description="Decal",
-        default=i3d_map['decal_layer']['default'],
-        max=3,
-        min=0,
-    )
-
-    vertex_compression_range: EnumProperty(
-        name="Vertex Compression Range",
-        description="Vertex Compression Range",
-        items=[
-            ('auto', 'Auto', "Auto"),
-            ('0.5', '0.5', "0.5"),
-            ('1.0', '1.0', "1.0"),
-            ('2.0', '2.0', "2.0"),
-            ('4.0', '4.0', "4.0"),
-            ('8.0', '8.0', "8.0"),
-            ('16.0', '16.0', "16.0"),
-            ('32.0', '32.0', "32.0"),
-            ('64.0', '64.0', "64.0"),
-            ('128.0', '128.0', "128.0"),
-            ('256.0', '256.0', "256.0"),
-        ],
-        default=i3d_map['vertex_compression_range']['default'],
-    )
-
-    bounding_volume_object: PointerProperty(
-        name="Bounding Volume Object",
-        description=(
-            "The object used to calculate bvCenter and bvRadius. If the bounding volume object shares origin with "
-            "the original object, then Giants Engine will always ignore the exported values and recalculate them itself"
-        ),
-        type=bpy.types.Object,
-        poll=lambda self, obj: obj.type == 'MESH' and obj.data != self.id_data,
-    )
-
-    color_export: EnumProperty(
-        name="Vertex Color Export",
-        description="Controls if vertex colors are exported for this mesh",
-        items=[
-            (
-                'AUTO',
-                "Auto (by Shader)",
-                "Export only if any applied shader on the material requires colors "
-                "and the mesh has a color attribute layer",
-            ),
-            ('IF_PRESENT', "If Layer Exists", "Export when a color attribute layer exists, regardless of shader"),
-        ],
-        default='AUTO',
-    )
-
-
-@register
 class I3D_IO_PT_Mesh_Presets(presets.PresetPanel, Panel):
     bl_label = "Mesh Presets"
     preset_operator = "script.execute_preset"
@@ -163,7 +16,6 @@ class I3D_IO_PT_Mesh_Presets(presets.PresetPanel, Panel):
         return presets.PresetSubdir() / 'mesh'
 
 
-@register
 class I3D_IO_OT_Mesh_Add_Preset(AddPresetBase, Operator):
     bl_idname = "i3dio.add_mesh_preset"
     bl_label = "Add a Mesh Preset"
@@ -171,12 +23,14 @@ class I3D_IO_OT_Mesh_Add_Preset(AddPresetBase, Operator):
 
     @property
     def preset_values(self):
-        return [f"bpy.context.object.data.i3d_attributes.{name}" for name in I3DNodeShapeAttributes.i3d_map.keys()]
+        return [
+            f"bpy.context.object.data.i3d_attributes.{name}"
+            for name, _definition in I3DNodeShapeAttributes.i3d_schema.exported()
+        ]
 
     preset_subdir = I3D_IO_PT_Mesh_Presets.preset_subdir
 
 
-@register
 class I3D_IO_PT_shape_attributes(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
@@ -223,13 +77,9 @@ class I3D_IO_PT_shape_attributes(Panel):
             panel.prop(mesh.i3d_attributes, 'bounding_volume_object')
 
 
-def register():
-    for cls in classes:
-        bpy.utils.register_class(cls)
-    bpy.types.Mesh.i3d_attributes = PointerProperty(type=I3DNodeShapeAttributes)
-
-
-def unregister():
-    del bpy.types.Mesh.i3d_attributes
-    for cls in classes:
-        bpy.utils.unregister_class(cls)
+_CLASSES = (
+    I3D_IO_PT_Mesh_Presets,
+    I3D_IO_OT_Mesh_Add_Preset,
+    I3D_IO_PT_shape_attributes,
+)
+register, unregister = bpy.utils.register_classes_factory(_CLASSES)
