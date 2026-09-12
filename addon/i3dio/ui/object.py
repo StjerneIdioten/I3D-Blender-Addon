@@ -1217,10 +1217,9 @@ class I3D_IO_OT_Object_Add_Preset(AddPresetBase, Operator):
                 )
             case 'LIGHT':
                 base_values.extend(
-                    [
-                        f"bpy.context.object.data.i3d_attributes.{name}"
-                        for name in light.I3DNodeLightAttributes.i3d_map.keys()
-                    ]
+                    presets.schema_preset_values(
+                        "bpy.context.object.data.i3d_attributes", light.I3DNodeLightAttributes.i3d_schema
+                    )
                 )
         return base_values
 

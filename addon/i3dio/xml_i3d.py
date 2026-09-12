@@ -230,8 +230,8 @@ def write_i3d_properties(obj, property_group, elements) -> None:
     properties_written = 0
 
     for attribute in resolve_attributes(property_group, schema, owner=obj, on_error=report_error):
-        if attribute.target not in elements:
-            elements[attribute.target] = SubElement(elements["Node"], attribute.target)
+        if elements.get(attribute.target) is None:
+            raise ValueError(f"Missing I3D destination {attribute.target!r} for property {attribute.source!r}")
 
         write_attribute(elements[attribute.target], attribute.name, attribute.value)
         properties_written += 1

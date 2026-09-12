@@ -35,8 +35,8 @@ def _is_number(value: object) -> bool:
     return isinstance(value, Real) and not isinstance(value, bool)  # bool is a subclass of int
 
 
-def _as_export_tuple(value: object) -> tuple[Any, ...] | None:
-    """Convert supported export sequences to tuples for componentwise comparison."""
+def as_export_tuple(value: object) -> tuple[Any, ...] | None:
+    """Copy supported vector-like values into a tuple, or return None for other types."""
     if isinstance(value, _EXPORT_SEQUENCE_TYPES):
         return tuple(value)
     return None
@@ -60,8 +60,8 @@ def isclose_value(a: object, b: object, *, abs_tol: float = FLOAT_EXPORT_TOLERAN
     - Supported vector-like values are compared componentwise.
     - Non-numeric values fall back to normal equality.
     """
-    a_seq = _as_export_tuple(a)
-    b_seq = _as_export_tuple(b)
+    a_seq = as_export_tuple(a)
+    b_seq = as_export_tuple(b)
     if a_seq is None and b_seq is None:
         return _isclose_item(a, b, abs_tol=abs_tol, rel_tol=rel_tol)
 
