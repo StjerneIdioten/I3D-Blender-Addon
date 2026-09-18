@@ -107,10 +107,7 @@ class Material(Node):
         self._export_shader_settings()
 
     def _write_properties(self):
-        try:
-            xml_i3d.write_i3d_properties(self.blender_material, self.i3d_attrs, self.xml_elements)
-        except AttributeError:
-            pass
+        xml_i3d.write_i3d_properties(self.blender_material, self.i3d_attrs, self.xml_elements)
 
     def _export_shader_settings(self) -> None:
         if self.i3d_attrs.shader_name != SHADER_DEFAULT:
