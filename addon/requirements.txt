@@ -1,1 +1,2 @@
-fake-bpy-module-4.3>=20250130
+# IDE completion for Blender 5.2; runtime tests use Blender's real bpy.
+fake-bpy-module-5.2>=20260730

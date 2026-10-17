@@ -1,0 +1,71 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [develop, master]
+  push:
+    branches: [develop, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-tests:
+    name: Lint tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - run: python -m pip install ruff
+      - run: ruff check tests
+      - run: ruff format --check tests
+
+  blender:
+    name: Blender ${{ matrix.version }} / Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["4.5", "latest"]
+    env:
+      BLENDER_USER_RESOURCES: ${{ github.workspace }}/.blender/tests/${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install Blender
+        uses: BradyAJohnston/setup-blender@9d0ba03aa0f7be59e09bdc70e08418a4298185f7 # v5
+        with:
+          version: ${{ matrix.version }}
+      - name: Build extension
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          blender --command extension build --source-dir addon/i3dio --output-dir dist
+      - name: Install and enable extension
+        run: blender --command extension install-file --repo user_default --enable dist/i3dio-0.0.0.zip
+      - name: Install pytest (isolated test directory)
+        run: python -m pip install --target tests/.deps "pytest>=8,<10"
+      - name: Run tests inside Blender
+        run: |
+          New-Item -ItemType Directory -Force tests/.results | Out-Null
+          blender --background --python-exit-code 1 --python tests/run_blender.py -- --junitxml=tests/.results/junit.xml --basetemp=tests/.results/tmp 2>&1 |
+            Tee-Object -FilePath tests/.results/blender.log
+          exit $LASTEXITCODE
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: blender-${{ matrix.version }}-failure
+          path: tests/.results/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7

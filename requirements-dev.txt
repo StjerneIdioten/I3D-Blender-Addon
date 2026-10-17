@@ -1,1 +1,3 @@
+-r addon/requirements.txt
 ruff
+pytest>=8,<10
