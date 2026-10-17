@@ -1,0 +1,57 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [develop, master]
+  push:
+    branches: [develop, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-tests:
+    name: Lint tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install ruff
+      - run: ruff check tests
+      - run: ruff format --check tests
+
+  blender:
+    name: Blender ${{ matrix.version }} / Windows
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["4.5", "latest"]
+    env:
+      BLENDER_USER_RESOURCES: ${{ github.workspace }}/.blender/tests/${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.11"
+      - name: Install Blender
+        uses: BradyAJohnston/setup-blender@9d0ba03aa0f7be59e09bdc70e08418a4298185f7 # v5
+        with:
+          version: ${{ matrix.version }}
+      - name: Build extension
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          blender --command extension build --source-dir addon/i3dio --output-dir dist
+      - name: Install and enable extension
+        run: blender --command extension install-file --repo user_default --enable dist/i3dio-0.0.0.zip
+      - name: Install pytest (isolated test directory)
+        run: python -m pip install --target tests/.deps "pytest>=8,<10"
+      - name: Run tests inside Blender
+        run: blender --background --python-exit-code 1 --python tests/run_blender.py

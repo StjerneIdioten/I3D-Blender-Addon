@@ -17,3 +17,6 @@ order-by-type = true
 
 [tool.ruff.format]
 quote-style = "preserve"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
