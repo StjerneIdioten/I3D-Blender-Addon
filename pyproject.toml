@@ -20,3 +20,5 @@ quote-style = "preserve"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Feature folders can reuse test filenames without import collisions.
+addopts = "--import-mode=importlib"

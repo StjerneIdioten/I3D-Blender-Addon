@@ -30,6 +30,7 @@ jobs:
   blender:
     name: Blender ${{ matrix.version }} / Windows
     runs-on: windows-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -54,4 +55,17 @@ jobs:
       - name: Install pytest (isolated test directory)
         run: python -m pip install --target tests/.deps "pytest>=8,<10"
       - name: Run tests inside Blender
-        run: blender --background --python-exit-code 1 --python tests/run_blender.py
+        run: |
+          New-Item -ItemType Directory -Force tests/.results | Out-Null
+          blender --background --python-exit-code 1 --python tests/run_blender.py -- --junitxml=tests/.results/junit.xml --basetemp=tests/.results/tmp 2>&1 |
+            Tee-Object -FilePath tests/.results/blender.log
+          exit $LASTEXITCODE
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: blender-${{ matrix.version }}-failure
+          path: tests/.results/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 7

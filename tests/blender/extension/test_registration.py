@@ -1,4 +1,4 @@
-"""Verify the package is installed and enabled, not just importable from source."""
+"""Installed-extension registration and exposed Blender types/operators."""
 
 import bpy
 
