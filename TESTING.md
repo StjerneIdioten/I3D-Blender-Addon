@@ -30,6 +30,11 @@ Blender 5.2. The unversioned/`latest` packages follow Blender's development buil
 Stubs provide editor completion; the integration tests need the real `bpy` inside
 Blender. Activating `.venv` does not install Blender or put `blender.exe` on PATH.
 
+The VS Code workspace suppresses Pylance's `reportMissingModuleSource` diagnostic:
+Blender modules such as `bpy` and `mathutils` have completion stubs in `.venv`,
+while their runtime implementations are supplied by Blender. Completion and
+unresolved-import checks remain enabled.
+
 ### Build, install, and test in Blender
 
 Use the full path to your installed Blender executable. PowerShell's `&` runs
@@ -68,7 +73,7 @@ Remove the temporary profile override with
 To select one test:
 
 ```powershell
-& $blender --background --python-exit-code 1 --python tests/run_blender.py -- -q tests/test_export.py
+& $blender --background --python-exit-code 1 --python tests/run_blender.py -- -q tests/blender/test_export.py
 ```
 
 To check the test code's style in the activated venv:
@@ -77,6 +82,13 @@ To check the test code's style in the activated venv:
 python -m ruff check tests
 python -m ruff format --check tests
 ```
+
+## Test layout
+
+Blender-dependent tests live in `tests/blender/`, including their `conftest.py`
+fixtures. The test runner defaults to this folder so later pure-Python tests
+can be run separately without importing `bpy`. Keep `.blend` scenes in
+`tests/fixtures/`; add `tests/unit/` when we have Blender-independent tests.
 
 ## Writing tests
 

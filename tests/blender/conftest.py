@@ -7,7 +7,7 @@ import bpy
 import pytest
 
 EXTENSION_MODULE = "bl_ext.user_default.i3dio"
-FIXTURES = Path(__file__).parent / "fixtures"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
 
 @pytest.fixture(scope="session")

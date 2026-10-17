@@ -6,6 +6,10 @@
         "BLENDER_USER_RESOURCES": "${workspaceFolder}/.blender"
     },
 
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingModuleSource": "none"
+    },
+
     "files.insertFinalNewline": true,
     "files.trimFinalNewlines": true,
 
