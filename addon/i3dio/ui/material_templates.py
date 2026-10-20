@@ -5,6 +5,7 @@ from dataclasses import dataclass, field, fields
 from pathlib import Path
 from typing import ClassVar
 
+import bmesh
 import bpy
 import bpy.utils.previews
 from bpy_extras.node_shader_utils import PrincipledBSDFWrapper
@@ -19,6 +20,15 @@ TEMPLATES_GROUP_NAMES: dict[str, str] = {}  # template_id -> friendly name
 MATERIAL_TEMPLATES: dict[str, MaterialTemplate] = {}
 BRAND_MATERIAL_TEMPLATES: dict[str, BrandMaterialTemplate] = {}
 preview_collections = {}
+
+ASSIGNMENT_MODES = (
+    ("AUTO", "Automatic", "Assign based on the current Blender context"),
+    ("SLOT", "Material Slot", "Add or activate a material slot"),
+    ("ACTIVE_SLOT", "Active Slot", "Replace the material in the active slot"),
+    ("SELECTED_OBJECTS", "Selected Objects", "Add material to selected mesh objects"),
+)
+
+ASSIGNMENT_MODE_KEY = "i3dio_template_assignment_mode"
 
 
 def _warn_invalid_template_attr(
@@ -320,61 +330,192 @@ def group_templates_by_category(templates: list[MaterialTemplate]) -> dict[str, 
     return grouped
 
 
+def create_template_material(template: MaterialTemplate) -> bpy.types.Material:
+    """Create a new material from a template."""
+    material = bpy.data.materials.new(name=f"{template.name}_mat")
+    ensure_base_color_texture(material)
+    material.i3d_attributes.shader_name = 'vehicleShader'
+    apply_template_to_material(material, template)
+    return material
+
+
+def ensure_material_slot(obj: bpy.types.Object, material: bpy.types.Material) -> int:
+    """Find or add a material slot and make it active."""
+    for index, slot in enumerate(obj.material_slots):
+        if slot.material == material:
+            obj.active_material_index = index
+            return index
+
+    index = obj.active_material_index
+    if index < len(obj.material_slots) and obj.material_slots[index].material is None:
+        obj.material_slots[index].material = material
+    else:
+        obj.data.materials.append(material)
+        index = len(obj.material_slots) - 1
+    obj.active_material_index = index
+    return index
+
+
+def resolve_assignment_mode(context: bpy.types.Context, mode: str) -> str:
+    if mode != 'AUTO':
+        return mode
+    if context.mode == 'EDIT_MESH':
+        return 'SELECTED_FACES'
+    if context.active_object and context.active_object.type == 'MESH':
+        return 'SLOT'
+    raise ValueError("An active mesh object is required")
+
+
+def get_assignment_objects(context: bpy.types.Context, mode: str) -> list[bpy.types.Object]:
+    """Validate the assignment context before creating a material."""
+    if mode in {'SLOT', 'ACTIVE_SLOT'}:
+        obj = context.active_object
+        if not obj or obj.type != 'MESH':
+            raise ValueError("An active mesh object is required")
+        return [obj]
+    if mode == 'SELECTED_OBJECTS':
+        objects = [obj for obj in context.selected_objects if obj.type == 'MESH']
+        if not objects:
+            raise ValueError("No mesh objects selected")
+        return objects
+    if mode == 'SELECTED_FACES':
+        if context.mode != 'EDIT_MESH':
+            raise ValueError("Selected Faces requires Mesh Edit Mode")
+        objects = [
+            obj
+            for obj in context.objects_in_mode_unique_data
+            if obj.type == 'MESH' and any(face.select for face in bmesh.from_edit_mesh(obj.data).faces)
+        ]
+        if not objects:
+            raise ValueError("No mesh faces selected")
+        return objects
+    raise ValueError(f"Unknown assignment mode: {mode}")
+
+
+def assign_template_material(material: bpy.types.Material, objects: list[bpy.types.Object], mode: str) -> None:
+    for obj in objects:
+        if mode == 'ACTIVE_SLOT' and obj.material_slots:
+            obj.material_slots[obj.active_material_index].material = material
+            continue
+
+        index = ensure_material_slot(obj, material)
+        if mode == 'SELECTED_FACES':
+            bm = bmesh.from_edit_mesh(obj.data)
+            for face in bm.faces:
+                if face.select:
+                    face.material_index = index
+            bmesh.update_edit_mesh(obj.data, loop_triangles=False, destructive=False)
+
+
 @register
 class I3D_IO_OT_create_material_from_template_popup(bpy.types.Operator):
     bl_idname = "i3dio.create_material_from_template_popup"
     bl_label = "Create Material from Template"
-    bl_description = "Create a new material based on a template"
-    bl_options = {'INTERNAL', 'UNDO'}
+    bl_description = "Browse material templates and create a material"
 
     assignment_mode: bpy.props.EnumProperty(
         name="Assignment Mode",
-        description="How to assign the created material",
-        items=[
-            ('SLOT', "Material Slot", "Add to new material slot"),
-            ('ACTIVE_OBJECT', "Active Object", "Assign to the active object"),
-            ('SELECTED_OBJECTS', "Selected Objects", "Assign to all selected objects"),
-            ('SELECTED_MESHES', "Selected Meshes", "Assign material to all selected triangles in selected meshes"),
-        ],
-        default='SLOT',
+        description="How the material will be assigned",
+        items=ASSIGNMENT_MODES,
+        default='AUTO',
     )
 
-    def draw(self, _context):
+    search: bpy.props.StringProperty(
+        name="Search", description="Filter material templates", options={'TEXTEDIT_UPDATE'}
+    )
+
+    def check(self, _context):
+        # Refresh the dialog when the search or assignment mode changes
+        return True
+
+    def draw_template_grid(self, layout, templates):
+        grid = layout.grid_flow(row_major=True, columns=0, even_columns=True, even_rows=True)
+        previews = preview_collections.get('material_templates')
+        for template in sorted(templates, key=lambda t: t.name.lower()):
+            cell = grid.column().box()
+            preview = previews.get(template.name) if previews else None
+
+            if preview:
+                cell.template_icon(preview.icon_id, scale=6.5)
+            else:
+                cell.label(text="No Preview", icon='MATERIAL')
+
+            op = cell.operator("i3dio.create_material_from_template", text=humanize_template(template.name))
+            op.template_name = template.name
+            op.assignment_mode = self.assignment_mode
+
+    def draw(self, context):
         layout = self.layout
-        box = layout.box()
-        box.label(text="Choose how the material will be assigned to objects:")
-        box.row().prop(self, "assignment_mode", expand=True)
 
-        grouped = group_templates_by_category(MATERIAL_TEMPLATES.values())
-        for main_cat, subdict in grouped.items():
-            header, main_panel = layout.panel(f"cat_{main_cat}", default_closed=False)
-            header.label(text=humanize_template(main_cat), icon='FILE_FOLDER')
-            if not main_panel:
-                continue
-            for subcat, templates in sorted(subdict.items()):
-                if subcat:
-                    subheader, subpanel = main_panel.panel(f"subcat_{main_cat}_{subcat}", default_closed=True)
-                    subheader.label(text=f"{humanize_template(subcat)}", icon='DOT')
-                    if not subpanel:
-                        continue
-                    target_layout = subpanel
-                else:
+        layout.prop(self, "assignment_mode", text="Assign")
+
+        if self.assignment_mode == 'AUTO':
+            descriptions = {'SELECTED_FACES': "Assign to selected faces", 'SLOT': "Add or activate a material slot"}
+            try:
+                mode = resolve_assignment_mode(context, self.assignment_mode)
+                description = descriptions[mode]
+            except ValueError:
+                description = "Select a mesh object to assign a material"
+
+            layout.label(text=description, icon='INFO')
+
+        row = layout.row()
+        row.activate_init = True
+        row.prop(self, "search", text="", icon='VIEWZOOM')
+
+        search = self.search.strip().casefold()
+
+        if search:
+            matches = [
+                template
+                for template in MATERIAL_TEMPLATES.values()
+                if search in humanize_template(template.name).casefold() or search in template.category.casefold()
+            ]
+
+            if matches:
+                self.draw_template_grid(layout, matches)
+            else:
+                layout.label(text="No matching templates", icon='INFO')
+
+        else:
+            grouped = group_templates_by_category(MATERIAL_TEMPLATES.values())
+
+            for main_cat, subdict in grouped.items():
+                header, main_panel = layout.panel(
+                    f"cat_{main_cat}",
+                    default_closed=main_cat != "Calibrated",
+                )
+                header.label(text=humanize_template(main_cat), icon='FILE_FOLDER')
+
+                if not main_panel:
+                    continue
+
+                for subcat, templates in sorted(subdict.items(), key=lambda item: item[0] or ""):
                     target_layout = main_panel
+                    if subcat:
+                        subheader, target_layout = main_panel.panel(
+                            f"subcat_{main_cat}_{subcat}",
+                            default_closed=True,
+                        )
+                        subheader.label(text=humanize_template(subcat), icon='DOT')
 
-                grid = target_layout.grid_flow(row_major=True, columns=5, even_columns=True, even_rows=True)
-                for template in sorted(templates, key=lambda t: t.name.lower()):
-                    cell = grid.column().box()
-                    icon_id = preview_collections['material_templates'].get(template.name).icon_id
-                    cell.template_icon(icon_id, scale=8.0)
-                    op = cell.operator("i3dio.create_material_from_template", text=humanize_template(template.name))
-                    op.template_name = template.name
-                    op.assignment_mode = self.assignment_mode
+                        if not target_layout:
+                            continue
+
+                    self.draw_template_grid(target_layout, templates)
+
         layout.row(align=True).template_popup_confirm("", text="", cancel_text="Close")
 
     def execute(self, context):
         return {'FINISHED'}
 
     def invoke(self, context: bpy.types.Context, _event):
+        if not MATERIAL_TEMPLATES:
+            self.report({'WARNING'}, "No material templates loaded. Check FS data path.")
+            return {'CANCELLED'}
+        saved_mode = context.window_manager.get(ASSIGNMENT_MODE_KEY, 'AUTO')
+        valid_modes = {mode[0] for mode in ASSIGNMENT_MODES}
+        self.assignment_mode = saved_mode if saved_mode in valid_modes else 'AUTO'
         return context.window_manager.invoke_props_dialog(self, width=800)
 
 
@@ -385,71 +526,30 @@ class I3D_IO_OT_create_material_from_template(bpy.types.Operator):
     bl_description = "Create a new material based on a template"
     bl_options = {'INTERNAL', 'UNDO'}
 
-    template_name: bpy.props.StringProperty(default="plasticPaintedShinyBlack", options={'HIDDEN'})
+    template_name: bpy.props.StringProperty(options={'HIDDEN'})
     assignment_mode: bpy.props.EnumProperty(
         name="Assignment Mode",
-        description="How to assign the created material",
-        items=[
-            ('SLOT', "Material Slot", "Add to new material slot"),
-            ('ACTIVE_OBJECT', "Active Object", "Assign to the active object"),
-            ('SELECTED_OBJECTS', "Selected Objects", "Assign to all selected objects"),
-            ('SELECTED_MESHES', "Selected Meshes", "Assign material to all selected triangles in selected meshes"),
-        ],
-        default='SLOT',
+        description="How the material will be assigned",
+        items=ASSIGNMENT_MODES,
+        default='AUTO',
     )
 
     def execute(self, context):
-        if not (template := get_template_by_name(self.template_name)):
-            self.report({'ERROR'}, f"Template '{self.template_name}' not found.")
+        if (template := get_template_by_name(self.template_name)) is None:
+            self.report({'ERROR'}, f"Template {self.template_name!r} not found.")
             return {'CANCELLED'}
-        mat_name = f"{template.name}_mat"
-        new_material = bpy.data.materials.get(mat_name)
-        if not new_material:
-            new_material = bpy.data.materials.new(name=mat_name)
-            ensure_base_color_texture(new_material)
-            new_material.i3d_attributes.shader_name = 'vehicleShader'
-            apply_template_to_material(new_material, template)
 
-        match self.assignment_mode:
-            case 'SLOT':
-                obj = context.active_object
-                if obj and new_material.name not in [mat.name for mat in obj.data.materials]:
-                    obj.data.materials.append(new_material)
-            case 'ACTIVE_OBJECT':
-                obj = context.active_object
-                if obj:
-                    obj.data.materials.clear()
-                    obj.data.materials.append(new_material)
-            case 'SELECTED_OBJECTS':
-                for obj in context.selected_objects:
-                    if obj.type == 'MESH':
-                        obj.data.materials.clear()
-                        obj.data.materials.append(new_material)
-            case 'SELECTED_MESHES':
-                original_mode = None
-                active_object = context.view_layer.objects.active
-                if active_object and active_object.mode != 'OBJECT' and bpy.ops.object.mode_set.poll():
-                    original_mode = active_object.mode
-                    bpy.ops.object.mode_set(mode='OBJECT')
+        try:
+            mode = resolve_assignment_mode(context, self.assignment_mode)
+            objects = get_assignment_objects(context, mode)
+        except ValueError as error:
+            self.report({'WARNING'}, str(error))
+            return {'CANCELLED'}
 
-                selected_meshes = [obj for obj in context.selected_objects if obj.type == 'MESH']
-                if not selected_meshes:
-                    self.report({'ERROR'}, "No selected mesh objects found.")
-                    return {'CANCELLED'}
-                for obj in selected_meshes:
-                    # Ensure the material is present
-                    if new_material.name not in [mat.name for mat in obj.data.materials]:
-                        obj.data.materials.append(new_material)
-                    mat_index = obj.data.materials.find(new_material.name)
-                    for poly in obj.data.polygons:
-                        if poly.select:
-                            poly.material_index = mat_index
-
-                if active_object and original_mode:
-                    if bpy.ops.object.mode_set.poll():
-                        bpy.ops.object.mode_set(mode=original_mode)
-
-        self.report({'INFO'}, f"Created material from template: {template.name}")
+        material = create_template_material(template)
+        assign_template_material(material, objects, mode)
+        context.window_manager[ASSIGNMENT_MODE_KEY] = self.assignment_mode
+        self.report({'INFO'}, f"Material ready: {material.name}")
         return {'FINISHED'}
 
 
@@ -551,12 +651,22 @@ class I3D_IO_OT_template_search_popup(bpy.types.Operator):
 _register, _unregister = bpy.utils.register_classes_factory(classes)
 
 
+def draw_material_template_menu(self, context):
+    self.layout.separator()
+    self.layout.operator_context = 'INVOKE_DEFAULT'
+    self.layout.operator(
+        'i3dio.create_material_from_template_popup', text="Create Material from Template...", icon='MATERIAL'
+    )
+
+
 def register():
     _register()
     bpy.app.handlers.load_post.append(parse_templates)
+    bpy.types.MATERIAL_MT_context_menu.append(draw_material_template_menu)
 
 
 def unregister():
+    bpy.types.MATERIAL_MT_context_menu.remove(draw_material_template_menu)
     _unregister()
     bpy.app.handlers.load_post.remove(parse_templates)
     for pcoll in preview_collections.values():
