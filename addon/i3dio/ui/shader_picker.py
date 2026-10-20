@@ -326,13 +326,12 @@ class I3D_IO_PT_material_shader(Panel):
         layout = self.layout
         layout.use_property_split = False
         layout.use_property_decorate = False
-        material = context.material
-        i3d_attributes = material.i3d_attributes
+
         data_path = get_fs_data_path()
         game_version = detect_fs_version(data_path) or ""
 
-        if game_version == "25":
-            layout.operator('i3dio.create_material_from_template_popup')  # TODO: Find a more suitable place for this
+        material = context.material
+        i3d_attributes = material.i3d_attributes
 
         main_props = layout.column(align=True)
         main_props.use_property_split = True
